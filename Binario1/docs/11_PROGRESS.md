@@ -2,6 +2,35 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-15 — Scheduled Demo Time-Window Fix
+
+Stato: completata. Prossima milestone: **Viaggi Tab MVP**.
+
+- **Causa**: il demo `.scheduledPadova` carica il sample bundled
+  `scheduled-padova-0600.sample.json` (fascia **06:00–06:59**). Alle 17:40
+  mostrava comunque le partenze del mattino ed **evidenziava** Bassano del Grappa
+  06:14 come "prossima partenza" → dato programmato presentato come corrente/live.
+- **Fix** (solo dati scheduled/sample; `.mock` invariato):
+  - Il sample espone metadati di finestra: `boardType`, `scheduledWindowStart`
+    `06:00`, `scheduledWindowEnd` `06:59`, `sourceKind` `scheduledSample`
+    → `StationBoardResponse.scheduledWindow` (`ScheduledSampleWindow`).
+  - Header: `Orario programmato · demo 06:00–06:59` /
+    `Scheduled timetable · demo 06:00–06:59` (nessun pallino live).
+  - **Nessun highlight "prossima/corrente"** quando l'ora locale è fuori dalla
+    finestra del sample: `imminentRowID == nil`; la sezione diventa
+    `Partenze programmate` / `Programmed departures` (righe comunque mostrate).
+  - **Niente rollover a domani**: le righe del mattino restano sul giorno di
+    riferimento (nessuna inferenza "domani" senza service-date esplicita).
+  - Invariati: stazione bloccata su Padova, `Cambia` disabilitato, nessun ritardo
+    finto (`delayMinutes`/`actualPlatform`/`expectedTime` nil, `status .scheduled`).
+  - `now` iniettabile nel view model per test deterministici della finestra.
+- File: `Mock/scheduled-padova-0600.sample.json` (+ mirror `mock/`),
+  `Services/ScheduledTrainBoardService.swift` (DTO + `sampleWindow`),
+  `Models/StationBoardResponse.swift` (`ScheduledSampleWindow`),
+  `ViewModel/StationBoardViewModel.swift`, `Views/StationBoardHeaderView.swift`,
+  `Views/StationBoardView.swift`, `Views/NextDeparturesSectionView.swift`,
+  `Localizable.xcstrings`, `Binario1Tests`.
+
 ## 2026-06-15 — Scheduled Padova = DEBUG-only Demo Mode
 
 Stato: completata. Prossima milestone: **Viaggi Tab MVP**.

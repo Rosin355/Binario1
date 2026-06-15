@@ -74,3 +74,13 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   `#else` → `.mock`). La produzione NON deve trattare l'orario programmato come
   verità ferroviaria in tempo reale; il demo scheduled resta confinato alle build
   di debug. RELEASE usa il mock.
+- **Il sample scheduled espone la sua natura demo/finestra**: i dati di sample
+  programmato portano `scheduledWindowStart/End` + `sourceKind = scheduledSample`
+  (→ `StationBoardResponse.scheduledWindow`); la UI mostra la fascia
+  (`… · demo 06:00–06:59`). Nessun pallino "live".
+- **Il sample scheduled NON è board corrente/live**: fuori dalla propria finestra
+  oraria non si evidenzia alcuna riga come "prossima/corrente" (`imminentRowID
+  == nil`) e la sezione diventa `Partenze programmate` / `Programmed departures`.
+  Le righe restano visibili come orario programmato, non come partenze imminenti.
+- **Niente inferenza automatica "domani"**: senza supporto service-date esplicito,
+  le righe del mattino non vengono spostate al giorno successivo.

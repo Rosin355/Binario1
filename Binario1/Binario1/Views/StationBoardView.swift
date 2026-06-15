@@ -23,6 +23,7 @@ struct StationBoardView: View {
                     lastUpdated: viewModel.lastUpdated,
                     isStale: viewModel.isStale,
                     isScheduled: viewModel.isScheduled,
+                    scheduledWindow: viewModel.scheduledWindow,
                     canChangeStation: viewModel.allowsStationChange,
                     isFavorite: isFavorite,
                     onToggleFavorite: { isFavorite.toggle() },
@@ -76,7 +77,9 @@ struct StationBoardView: View {
                 NextDeparturesSectionView(
                     rows: viewModel.featuredRows,
                     boardType: viewModel.boardType,
-                    imminentRowID: viewModel.imminentRowID
+                    imminentRowID: viewModel.imminentRowID,
+                    titleKey: viewModel.isScheduledSampleOutOfWindow
+                        ? LocalizedStringKey("section.programmedDepartures") : nil
                 )
 
                 TrainBoardListSectionView(

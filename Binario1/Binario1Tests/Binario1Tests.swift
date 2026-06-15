@@ -166,6 +166,10 @@ struct Binario1Tests {
       "stationName": "Padova",
       "source": "RFI Quadro Orario",
       "hourRange": "06.00-06.59",
+      "boardType": "departures",
+      "scheduledWindowStart": "06:00",
+      "scheduledWindowEnd": "06:59",
+      "sourceKind": "scheduledSample",
       "departures": [
         { "time": "06.05", "category": "REG", "trainNumber": "5928", "destination": "VENEZIA S. LUCIA", "plannedPlatform": "1", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null },
         { "time": "06.27", "category": "REG", "trainNumber": "5930", "destination": "CALALZO", "plannedPlatform": null, "operatorName": "Trenitalia", "periodicity": null, "notes": "Binario in assegnazione" },
@@ -272,5 +276,87 @@ struct Binario1Tests {
         let response = try await service.fetchBoard(stationId: "padova", type: .arrivals)
         #expect(response.isScheduled == false)     // arrivals not part of the scheduled spike
         #expect(response.boardType == .arrivals)
+    }
+
+    // MARK: - Scheduled sample time window (demo safety)
+
+    /// A fixed wall-clock instant in Europe/Rome, for deterministic window tests.
+    private static func romeDate(_ y: Int, _ mo: Int, _ d: Int, _ h: Int, _ mi: Int) -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Rome")!
+        return cal.date(from: DateComponents(year: y, month: mo, day: d, hour: h, minute: mi))!
+    }
+
+    /// Provider returning the inline Padova sample (which carries window metadata).
+    private struct SamplePadovaProvider: ScheduledTimetableProvider {
+        func load(stationId: String) async throws -> ScheduledTimetableDTO {
+            try JSONDecoder().decode(ScheduledTimetableDTO.self,
+                                     from: Data(Binario1Tests.sampleScheduledJSON.utf8))
+        }
+    }
+
+    @Test func scheduledSampleWindowMetadata() throws {
+        let ref = Self.romeDate(2026, 6, 15, 17, 40)            // afternoon
+        let response = ScheduledTimetableMapper.map(try decodeSampleScheduled(), referenceDate: ref)
+        let window = try #require(response.scheduledWindow)
+        #expect(window.startLabel == "06:00")
+        #expect(window.endLabel == "06:59")
+        #expect(window.isSample == true)
+        #expect(window.contains(Self.romeDate(2026, 6, 15, 6, 30)) == true)    // inside
+        #expect(window.contains(ref) == false)                                 // 17:40 outside
+        #expect(window.contains(Self.romeDate(2026, 6, 15, 5, 59)) == false)   // before window
+    }
+
+    @Test func scheduledSampleDoesNotRollMorningRowsToTomorrow() throws {
+        let ref = Self.romeDate(2026, 6, 15, 17, 40)
+        let response = ScheduledTimetableMapper.map(try decodeSampleScheduled(), referenceDate: ref)
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Europe/Rome")!
+        let earliest = try #require(response.rows.min(by: { $0.scheduledTime < $1.scheduledTime }))
+        // 06:05 stays on the reference day — no "tomorrow" inference — i.e. earlier than 17:40.
+        #expect(cal.isDate(earliest.scheduledTime, inSameDayAs: ref))
+        #expect(earliest.scheduledTime < ref)
+    }
+
+    @MainActor
+    @Test func noNextHighlightWhenScheduledSampleOutsideWindow() async {
+        let outside = Self.romeDate(2026, 6, 15, 17, 40)
+        let service = ScheduledTrainBoardService(
+            provider: SamplePadovaProvider(),
+            fallback: { let m = MockTrainBoardService(); m.artificialDelay = .zero; return m }(),
+            referenceDate: { outside }
+        )
+        let vm = StationBoardViewModel(service: service, station: .padova,
+                                       allowsStationChange: false, now: { outside })
+        await vm.refresh()
+        #expect(vm.isScheduled == true)
+        #expect(vm.isScheduledSampleOutOfWindow == true)
+        #expect(vm.imminentRowID == nil)            // nothing highlighted as current/next
+        #expect(!vm.featuredRows.isEmpty)           // rows still rendered (programmed)
+    }
+
+    @MainActor
+    @Test func nextHighlightWhenScheduledSampleInsideWindow() async {
+        let inside = Self.romeDate(2026, 6, 15, 6, 30)
+        let service = ScheduledTrainBoardService(
+            provider: SamplePadovaProvider(),
+            fallback: { let m = MockTrainBoardService(); m.artificialDelay = .zero; return m }(),
+            referenceDate: { inside }
+        )
+        let vm = StationBoardViewModel(service: service, station: .padova,
+                                       allowsStationChange: false, now: { inside })
+        await vm.refresh()
+        #expect(vm.isScheduledSampleOutOfWindow == false)
+        #expect(vm.imminentRowID != nil)            // within window → normal highlight
+    }
+
+    @MainActor
+    @Test func mockHighlightUnaffectedByWindowLogic() async {
+        let service = MockTrainBoardService(); service.artificialDelay = .zero
+        let vm = StationBoardViewModel(service: service, station: .bolognaCentrale)
+        await vm.refresh()
+        #expect(vm.isScheduled == false)
+        #expect(vm.scheduledWindow == nil)
+        #expect(vm.isScheduledSampleOutOfWindow == false)
+        #expect(vm.imminentRowID != nil)            // mock highlight unchanged
     }
 }

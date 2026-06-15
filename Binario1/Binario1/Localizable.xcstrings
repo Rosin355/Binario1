@@ -105,6 +105,18 @@
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Orario programmato" } }
       }
     },
+    "source.scheduledSampleWindow" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scheduled timetable · demo %1$@–%2$@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Orario programmato · demo %1$@–%2$@" } }
+      }
+    },
+    "section.programmedDepartures" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Programmed departures" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Partenze programmate" } }
+      }
+    },
     "action.changeStation.short" : {
       "localizations" : {
         "en" : {

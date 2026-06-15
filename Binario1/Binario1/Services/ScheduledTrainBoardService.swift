@@ -26,6 +26,10 @@ struct ScheduledTimetableDTO: Decodable {
     let stationName: String
     let source: String?
     let hourRange: String?
+    let boardType: String?              // "departures" — sample is departures-only
+    let scheduledWindowStart: String?   // "06:00" — programmed window start
+    let scheduledWindowEnd: String?     // "06:59" — programmed window end
+    let sourceKind: String?             // "scheduledSample" for bundled demo data
     let departures: [ScheduledDepartureDTO]
 }
 
@@ -93,6 +97,37 @@ enum ScheduledTimetableMapper {
         }
     }
 
+    /// Build the programmed-window metadata for a scheduled *sample*, anchored on
+    /// `referenceDate`'s day. Prefers the explicit window fields; falls back to a
+    /// "HH.MM-HH.MM" `hourRange`. Returns nil if no window can be determined.
+    static func sampleWindow(from dto: ScheduledTimetableDTO,
+                             referenceDate: Date,
+                             timezone: TimeZone) -> ScheduledSampleWindow? {
+        let startRaw: String?
+        let endRaw: String?
+        if let s = dto.scheduledWindowStart, let e = dto.scheduledWindowEnd {
+            startRaw = s; endRaw = e
+        } else if let range = dto.hourRange {
+            let parts = range.split(separator: "-").map { $0.trimmingCharacters(in: .whitespaces) }
+            startRaw = parts.count == 2 ? parts[0] : nil
+            endRaw = parts.count == 2 ? parts[1] : nil
+        } else {
+            startRaw = nil; endRaw = nil
+        }
+        guard let startRaw, let endRaw,
+              let start = time(startRaw, on: referenceDate, timezone: timezone),
+              let endMinute = time(endRaw, on: referenceDate, timezone: timezone) else { return nil }
+        // Include the whole ending minute (e.g. "06:59" → up to 06:59:59).
+        let normalize: (String) -> String = { $0.replacingOccurrences(of: ".", with: ":") }
+        return ScheduledSampleWindow(
+            startLabel: normalize(startRaw),
+            endLabel: normalize(endRaw),
+            start: start,
+            end: endMinute.addingTimeInterval(59),
+            isSample: dto.sourceKind == "scheduledSample"
+        )
+    }
+
     /// Parse "HH.MM" / "HH:MM" into a Date on `reference`'s day, in `timezone`.
     static func time(_ raw: String, on reference: Date, timezone: TimeZone) -> Date? {
         let parts = raw.replacingOccurrences(of: ".", with: ":").split(separator: ":")
@@ -152,7 +187,8 @@ enum ScheduledTimetableMapper {
             sourceUpdatedAt: nil,
             isStale: false,
             warningMessageKey: nil,
-            isScheduled: true
+            isScheduled: true,
+            scheduledWindow: sampleWindow(from: dto, referenceDate: referenceDate, timezone: timezone)
         )
     }
 }

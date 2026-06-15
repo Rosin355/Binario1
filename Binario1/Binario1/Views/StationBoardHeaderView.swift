@@ -17,6 +17,7 @@ struct StationBoardHeaderView: View {
     let lastUpdated: Date?
     let isStale: Bool
     var isScheduled: Bool = false     // programmed timetable (not live)
+    var scheduledWindow: ScheduledSampleWindow? = nil  // demo sample time window, if any
     var canChangeStation: Bool = true // false → station locked (single-station source)
     var isFavorite: Bool = false
     var onToggleFavorite: (() -> Void)?
@@ -102,11 +103,20 @@ struct StationBoardHeaderView: View {
         .accessibilityLabel(Text("accessibility.favorite"))
     }
 
+    /// Programmed-timetable label. For a demo *sample* it names the time window
+    /// ("Orario programmato · demo 06:00–06:59"); otherwise the plain scheduled label.
+    private var scheduledSourceLabel: Text {
+        if let w = scheduledWindow, w.isSample {
+            return Text(String(format: String(localized: "source.scheduledSampleWindow"), w.startLabel, w.endLabel))
+        }
+        return Text("source.scheduled")     // "Orario programmato" / "Scheduled timetable"
+    }
+
     @ViewBuilder
     private var updatedLabel: some View {
         if isScheduled {
-            // Scheduled timetable is not live — show a clear label, no live dot.
-            Text("source.scheduled")     // "Orario programmato" / "Scheduled timetable"
+            // Programmed timetable is NOT live — clear label, no live dot.
+            scheduledSourceLabel
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .foregroundStyle(BoardColors.amberDim)
                 .lineLimit(1)

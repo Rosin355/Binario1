@@ -3,7 +3,11 @@
   "stationName": "Padova",
   "source": "RFI Quadro Orario (programmed timetable)",
   "hourRange": "06.00-06.59",
-  "note": "Programmed/scheduled departures only — NOT live data. No real delays, cancellations or platform changes.",
+  "boardType": "departures",
+  "scheduledWindowStart": "06:00",
+  "scheduledWindowEnd": "06:59",
+  "sourceKind": "scheduledSample",
+  "note": "Programmed/scheduled departures only — NOT live data. No real delays, cancellations or platform changes. Demo sample limited to the 06:00–06:59 window; must not be presented as the current/live board.",
   "departures": [
     { "time": "06.05", "category": "REG", "trainNumber": "5928", "destination": "VENEZIA S. LUCIA", "plannedPlatform": "1", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null },
     { "time": "06.09", "category": "RV", "trainNumber": "2774", "destination": "BOLOGNA C.LE", "plannedPlatform": "3", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null },

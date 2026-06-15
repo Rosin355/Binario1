@@ -12,11 +12,14 @@ struct NextDeparturesSectionView: View {
     let rows: [TrainBoardRow]
     let boardType: BoardType
     let imminentRowID: TrainBoardRow.ID?
+    /// Optional title override (e.g. "Programmed departures" for an out-of-window
+    /// scheduled demo). Defaults to the board's "Next departures/arrivals" title.
+    var titleKey: LocalizedStringKey? = nil
 
     var body: some View {
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                BoardSectionHeader(titleKey: boardType.nextSectionTitleKey, systemImage: "tram.fill")
+                BoardSectionHeader(titleKey: titleKey ?? boardType.nextSectionTitleKey, systemImage: "tram.fill")
 
                 VStack(spacing: 0) {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in

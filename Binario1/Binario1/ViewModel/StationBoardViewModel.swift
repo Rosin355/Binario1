@@ -24,6 +24,9 @@ final class StationBoardViewModel {
     /// True when the board is showing a programmed/scheduled timetable (RFI Quadro
     /// Orario), not live data.
     private(set) var isScheduled = false
+    /// Programmed-sample window metadata (e.g. the Padova 06:00–06:59 demo), if the
+    /// current source is bundled sample data.
+    private(set) var scheduledWindow: ScheduledSampleWindow?
 
     /// Data is considered stale if older than this.
     private let staleThreshold: TimeInterval = 3 * 60
@@ -36,10 +39,16 @@ final class StationBoardViewModel {
     /// station title can never disagree with the board rows.
     let allowsStationChange: Bool
 
-    init(service: TrainBoardService, station: Station = .bolognaCentrale, allowsStationChange: Bool = true) {
+    /// Current-time source, injectable for deterministic tests of the scheduled
+    /// demo window. Defaults to the wall clock.
+    private let now: () -> Date
+
+    init(service: TrainBoardService, station: Station = .bolognaCentrale,
+         allowsStationChange: Bool = true, now: @escaping () -> Date = { Date() }) {
         self.service = service
         self.station = station
         self.allowsStationChange = allowsStationChange
+        self.now = now
     }
 
     // MARK: - Derived data
@@ -71,8 +80,19 @@ final class StationBoardViewModel {
         Array(sortedRows.dropFirst(2))
     }
 
+    /// A bundled scheduled *sample* whose programmed window does not include the
+    /// current local time. Its rows are a timetable demo, not current departures,
+    /// so nothing should be presented as the next/current train.
+    var isScheduledSampleOutOfWindow: Bool {
+        guard let window = scheduledWindow, window.isSample else { return false }
+        return !window.contains(now())
+    }
+
     /// The highlighted train — the 3rd featured card and the first (selected) list row.
     var imminentRowID: TrainBoardRow.ID? {
+        // A scheduled sample outside its demo window must not present any row as the
+        // current/next departure (e.g. don't highlight a 06:14 train at 17:40).
+        if isScheduledSampleOutOfWindow { return nil }
         let featured = featuredRows
         return featured.count >= 3 ? featured[2].id : featured.last?.id
     }
@@ -95,6 +115,7 @@ final class StationBoardViewModel {
             sourceIsStale = response.isStale
             warningMessageKey = response.warningMessageKey
             isScheduled = response.isScheduled
+            scheduledWindow = response.scheduledWindow
             errorMessageKey = nil
         } catch {
             errorMessageKey = "error.dataUnavailable"
