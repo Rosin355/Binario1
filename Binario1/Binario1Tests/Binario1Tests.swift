@@ -119,6 +119,31 @@ struct Binario1Tests {
         #expect(vm.isStale == true)
     }
 
+    // MARK: - Station-change locking (source-mode consistency)
+
+    @MainActor
+    @Test func lockedStationStaysFixed() async {
+        let service = MockTrainBoardService()
+        service.artificialDelay = .zero
+        // Single-station scheduled source: station change is locked.
+        let vm = StationBoardViewModel(service: service, station: .padova, allowsStationChange: false)
+        #expect(vm.allowsStationChange == false)
+        await vm.changeStation()                       // must be a no-op
+        #expect(vm.station.id == Station.padova.id)    // title stays PADOVA
+    }
+
+    @MainActor
+    @Test func unlockedStationCanChange() async {
+        let service = MockTrainBoardService()
+        service.artificialDelay = .zero
+        // Mock mode keeps the default: station change allowed.
+        let vm = StationBoardViewModel(service: service, station: .bolognaCentrale)
+        #expect(vm.allowsStationChange == true)
+        let before = vm.station.id
+        await vm.changeStation()
+        #expect(vm.station.id != before)               // carousel still advances
+    }
+
     // MARK: - Scheduled timetable (Padova / RFI Quadro Orario spike)
 
     private static let sampleScheduledJSON = """

@@ -23,6 +23,7 @@ struct StationBoardView: View {
                     lastUpdated: viewModel.lastUpdated,
                     isStale: viewModel.isStale,
                     isScheduled: viewModel.isScheduled,
+                    canChangeStation: viewModel.allowsStationChange,
                     isFavorite: isFavorite,
                     onToggleFavorite: { isFavorite.toggle() },
                     onChangeStation: { Task { await viewModel.changeStation() } }

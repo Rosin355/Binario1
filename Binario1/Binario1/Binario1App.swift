@@ -28,6 +28,17 @@ enum AppEnvironment {
         case .scheduledPadova, .remoteWithMockFallback: return .padova
         }
     }
+
+    /// Whether the header `Cambia` action may switch stations. A single fixed
+    /// station source (`.scheduledPadova` = Padova Quadro Orario) MUST stay
+    /// locked, otherwise the station title could disagree with the board rows.
+    /// `.remoteWithMockFallback` is reserved for a future multi-station remote.
+    static var allowsStationChange: Bool {
+        switch sourceMode {
+        case .mock, .remoteWithMockFallback: return true
+        case .scheduledPadova:               return false
+        }
+    }
 }
 
 @main
@@ -37,7 +48,8 @@ struct Binario1App: App {
             StationBoardView(
                 viewModel: StationBoardViewModel(
                     service: AppEnvironment.makeTrainBoardService(),
-                    station: AppEnvironment.initialStation
+                    station: AppEnvironment.initialStation,
+                    allowsStationChange: AppEnvironment.allowsStationChange
                 )
             )
         }

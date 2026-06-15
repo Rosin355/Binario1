@@ -31,9 +31,15 @@ final class StationBoardViewModel {
     private let service: TrainBoardService
     private var isRefreshing = false
 
-    init(service: TrainBoardService, station: Station = .bolognaCentrale) {
+    /// Whether the header `Cambia` action may switch stations. A single fixed
+    /// station source (e.g. the Padova scheduled timetable) locks this so the
+    /// station title can never disagree with the board rows.
+    let allowsStationChange: Bool
+
+    init(service: TrainBoardService, station: Station = .bolognaCentrale, allowsStationChange: Bool = true) {
         self.service = service
         self.station = station
+        self.allowsStationChange = allowsStationChange
     }
 
     // MARK: - Derived data
@@ -105,6 +111,9 @@ final class StationBoardViewModel {
     /// Cycle to the next mock station (drives the header station-change flip and
     /// exercises long-name layout). The board data remains mock.
     func changeStation() async {
+        // Single-station sources (e.g. Padova scheduled timetable) stay put so the
+        // station title and the board rows can never disagree.
+        guard allowsStationChange else { return }
         let all = Station.demoStations
         let next = (all.firstIndex(of: station).map { $0 + 1 } ?? 0) % all.count
         station = all[next]

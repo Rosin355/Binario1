@@ -61,3 +61,11 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   `ScheduledTimetableProvider`; le view consumano solo modelli normalizzati.
 - Spike corrente: solo Padova (RFI id `1861`), solo partenze, provider = sample
   bundled del Quadro Orario parsato (lo scraping HTML RFI reale è lavoro futuro).
+- **Modalità scheduled single-station = nessun mismatch titolo/dati**: quando la
+  sorgente è una singola stazione fissa (`.scheduledPadova` = Padova) la
+  selezione stazione DEVE restare bloccata; titolo (`PADOVA`) e righe devono
+  sempre coincidere. `AppEnvironment.allowsStationChange` governa il controllo
+  `Cambia` (visibile ma disabilitato + hint VoiceOver `accessibility.stationLocked`)
+  e `StationBoardViewModel.changeStation()` è un no-op se bloccato. `.mock` resta
+  multi-stazione (carosello demo attivo); `.remoteWithMockFallback` è riservato a
+  una futura sorgente remota multi-stazione.

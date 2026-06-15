@@ -83,6 +83,22 @@
         }
       }
     },
+    "accessibility.stationLocked" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Station locked to the scheduled timetable"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stazione bloccata sull'orario programmato"
+          }
+        }
+      }
+    },
     "source.scheduled" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Scheduled timetable" } },

@@ -27,6 +27,12 @@ Stato: completata (spike). Prossima milestone: **Viaggi Tab MVP**.
   `Orario programmato` / `Scheduled timetable` al posto di "Aggiornato ●".
 - Config sorgente: `AppEnvironment.sourceMode` (`.mock` default,
   `.scheduledPadova`, `.remoteWithMockFallback`). Reversibile.
+- **Coerenza single-station**: in `.scheduledPadova` la selezione stazione è
+  **bloccata su Padova**. `Cambia` resta visibile ma **disabilitato** (icona
+  lucchetto, dimmato, hint VoiceOver `accessibility.stationLocked`) e
+  `StationBoardViewModel.changeStation()` è un **no-op** quando bloccato → titolo
+  (`PADOVA`) e righe non possono mai divergere. In `.mock` il cambio stazione
+  resta attivo (carosello demo). Governato da `AppEnvironment.allowsStationChange`.
 
 ### File
 - Nuovi: `Models/BoardSourceMode.swift`, `Services/ScheduledTrainBoardService.swift`,
@@ -40,8 +46,8 @@ Stato: completata (spike). Prossima milestone: **Viaggi Tab MVP**.
 ### Limiti noti (spike)
 - Solo Padova `1861`, solo partenze, una fascia oraria; provider = sample
   bundled (l'HTML scraping RFI reale è lavoro successivo). Nessun layer real-time.
-- In `.scheduledPadova`, `Cambia` cicla comunque le stazioni demo (header) ma i
-  dati restano Padova — limite noto dello spike.
+- (Risolto) Il mismatch titolo/dati in `.scheduledPadova` — `Cambia` ora è
+  bloccato su Padova (vedi "Coerenza single-station" sopra).
 
 ### Build / test
 - Build: OK. Unit test (`Binario1Tests`): verde (inclusi i nuovi test scheduled).

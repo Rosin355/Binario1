@@ -17,6 +17,7 @@ struct StationBoardHeaderView: View {
     let lastUpdated: Date?
     let isStale: Bool
     var isScheduled: Bool = false     // programmed timetable (not live)
+    var canChangeStation: Bool = true // false → station locked (single-station source)
     var isFavorite: Bool = false
     var onToggleFavorite: (() -> Void)?
     var onChangeStation: (() -> Void)?
@@ -47,28 +48,39 @@ struct StationBoardHeaderView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder
     private var changeButton: some View {
-        Button {
+        // When the station is locked (single-station scheduled source) the control
+        // stays visible but disabled and dimmed, with a VoiceOver hint explaining why.
+        let button = Button {
             onChangeStation?()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "arrow.triangle.2.circlepath")
+                Image(systemName: canChangeStation ? "arrow.triangle.2.circlepath" : "lock.fill")
                     .font(.system(size: 11, weight: .semibold))
                 Text("action.changeStation.short")     // "Cambia" / "Change"
                     .font(BoardFont.text(12, .semibold))
                     .lineLimit(1)
             }
-            .foregroundStyle(BoardColors.amber)
+            .foregroundStyle(canChangeStation ? BoardColors.amber : BoardColors.amberDim.opacity(0.55))
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(BoardColors.amber.opacity(0.5), lineWidth: 1)
+                    .stroke((canChangeStation ? BoardColors.amber : BoardColors.amberDim)
+                        .opacity(canChangeStation ? 0.5 : 0.3), lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!canChangeStation)
         .accessibilityLabel(Text("accessibility.changeStation"))
+
+        if canChangeStation {
+            button
+        } else {
+            button.accessibilityHint(Text("accessibility.stationLocked"))
+        }
     }
 
     private var favoriteButton: some View {
