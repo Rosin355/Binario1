@@ -9,9 +9,23 @@ import SwiftUI
 
 /// Composition root. Selects the board data source.
 enum AppEnvironment {
-    /// Flip to `.scheduledPadova` to drive the Home board from the RFI Quadro
-    /// Orario programmed timetable (scheduled data, mock fallback). Default `.mock`.
+    /// Active board data source, resolved per build configuration:
+    /// **DEBUG → `.scheduledPadova`, RELEASE → `.mock`**.
+    ///
+    /// `.scheduledPadova` is a **DEBUG-only local demo**: the Home / Partenze
+    /// board previews the RFI "Quadro Orario" *programmed* timetable for Padova.
+    /// This is **scheduled data, NOT live data** — it has no real delays,
+    /// cancellations or real-time platform changes, and it must **never** be
+    /// presented as real-time railway truth. RELEASE builds fall back to `.mock`
+    /// so this demo source can never become the production default.
+    ///
+    /// For UI work, set the active value to `.mock` (bundled Bologna mock board,
+    /// station carousel enabled).
+    #if DEBUG
+    static let sourceMode: BoardSourceMode = .scheduledPadova
+    #else
     static let sourceMode: BoardSourceMode = .mock
+    #endif
 
     static func makeTrainBoardService() -> TrainBoardService {
         switch sourceMode {

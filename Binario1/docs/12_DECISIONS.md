@@ -69,3 +69,8 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   e `StationBoardViewModel.changeStation()` è un no-op se bloccato. `.mock` resta
   multi-stazione (carosello demo attivo); `.remoteWithMockFallback` è riservato a
   una futura sorgente remota multi-stazione.
+- **`.scheduledPadova` = sorgente DEBUG/demo, mai default di produzione**:
+  `AppEnvironment.sourceMode` è risolto per build (`#if DEBUG` → `.scheduledPadova`,
+  `#else` → `.mock`). La produzione NON deve trattare l'orario programmato come
+  verità ferroviaria in tempo reale; il demo scheduled resta confinato alle build
+  di debug. RELEASE usa il mock.

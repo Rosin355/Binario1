@@ -144,6 +144,20 @@ struct Binario1Tests {
         #expect(vm.station.id != before)               // carousel still advances
     }
 
+    // MARK: - Source mode (DEBUG demo vs RELEASE)
+
+    @Test func sourceModeMatchesBuildConfiguration() {
+        #if DEBUG
+        // DEBUG = local Padova scheduled demo; station selection is locked.
+        #expect(AppEnvironment.sourceMode == .scheduledPadova)
+        #expect(AppEnvironment.allowsStationChange == false)
+        #else
+        // RELEASE = bundled mock board; station carousel enabled.
+        #expect(AppEnvironment.sourceMode == .mock)
+        #expect(AppEnvironment.allowsStationChange == true)
+        #endif
+    }
+
     // MARK: - Scheduled timetable (Padova / RFI Quadro Orario spike)
 
     private static let sampleScheduledJSON = """

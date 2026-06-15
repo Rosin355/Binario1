@@ -2,6 +2,25 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-15 — Scheduled Padova = DEBUG-only Demo Mode
+
+Stato: completata. Prossima milestone: **Viaggi Tab MVP**.
+
+- `AppEnvironment.sourceMode` ora risolto per build:
+  **DEBUG → `.scheduledPadova`** (demo orario programmato Padova),
+  **RELEASE → `.mock`** (board Bologna mock). La sorgente demo non può così
+  diventare il default di produzione.
+- `.scheduledPadova` resta **solo orario programmato RFI "Quadro Orario", NON
+  dati live**: niente ritardi/cancellazioni/cambi binario real-time; non va
+  presentato come dato in tempo reale. Comportamento invariato: stazione bloccata
+  su Padova, `Cambia` disabilitato/dimmato, `Orario programmato` / `Scheduled
+  timetable`, nessun ritardo finto, nessun pallino "live".
+- `.mock` invariato: carosello stazioni attivo, righe mock, nessun label
+  scheduled (a meno che il mock non sia esplicitamente scheduled).
+- File: `Binario1App.swift` (blocco `#if DEBUG`), `Binario1Tests` (test
+  `sourceModeMatchesBuildConfiguration`). UI/layout, dati mock e sample scheduled
+  invariati.
+
 ## 2026-06-15 — Padova Scheduled Timetable Spike
 
 Stato: completata (spike). Prossima milestone: **Viaggi Tab MVP**.
