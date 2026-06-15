@@ -2,6 +2,51 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-15 — Viaggi Tab MVP
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents** (Viaggi
+diventa la base per suggerimenti, App Intents e notifiche — non in questo MVP).
+
+### Cosa
+- Secondo tab **Viaggi** (dashboard commuter personale), accanto a **Partenze** e
+  **Info**. Navigazione root a 3 tab (`RootTabView`, `TabView` con `Tab`), Viaggi
+  in seconda posizione. Niente `Tab(role: .search)` (Search è milestone futura).
+- `TripsView` data-driven: header (BINARIO1 / VIAGGI / sottotitolo + `+`), filtro
+  segmentato (Oggi / Salvati / Recenti), sezione **Tratte salvate** (2 card),
+  **Prossimo viaggio utile** (card centrale, binario molto leggibile), **Recenti**
+  (3 righe compatte), e 3 **azioni rapide** placeholder (Nuovo viaggio / Segui
+  treno / Avvisi).
+- **Solo dati mock** (`MockTripsService`): nessuna API, nessuna persistenza,
+  nessun dato live. Orari ancorati al giorno corrente (Europe/Rome).
+- Riuso del design system esistente (`BoardColors`/`BoardFont`/`.ledGlow`,
+  `PlatformBadgeView`, `BoardSectionHeader`, `BoardBackgroundView`, formatter):
+  nessuna duplicazione di costanti di stile.
+- Accessibilità: label VoiceOver complete per card salvate, card utile e righe
+  recenti (nome stazione completo, orari, binario, durata, stato).
+- Localizzazione IT/EN completa (tab, header, filtri, sezioni, azioni, label
+  viaggio, accessibilità).
+
+### File
+- Nuovi modelli: `Models/Journey.swift` (`SavedJourney`, `SuggestedJourney`,
+  `RecentJourney`, `JourneyStatus`, `JourneyDirection`, `TripsFilter`, `TripsData`),
+  `Models/JourneyDisplayData.swift`.
+- Nuovo service: `Services/TripsService.swift` (`TripsService`, `MockTripsService`).
+- Nuovo view model: `ViewModel/TripsViewModel.swift` (`@Observable`).
+- Nuove view: `Views/TripsView.swift`, `TripsHeaderView`, `TripsFilterControl`,
+  `SavedJourneyCardView`, `UsefulJourneyCardView`, `RecentJourneyRowView`,
+  `TripsQuickActionsView`, `JourneyStatusBadgeView`, `JourneyPlatformBadgeView`,
+  `RootTabView`, `InfoView`.
+- Modificati: `Binario1App.swift` (root → `RootTabView`),
+  `Views/NextDeparturesSectionView.swift` (`BoardSectionHeader` + `trailingKey`
+  opzionale, additivo), `Localizable.xcstrings`, `Binario1Tests`.
+- Home / Partenze: **nessuna regressione** (solo aggiunta opzionale additiva al
+  componente condiviso `BoardSectionHeader`).
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata
+  dall'instabilità CoreSimulator in questa sessione (problema d'ambiente, non di
+  codice); i nuovi test Trips sono deterministici (clock fisso Europe/Rome).
+
 ## 2026-06-15 — Scheduled Demo Time-Window Fix
 
 Stato: completata. Prossima milestone: **Viaggi Tab MVP**.

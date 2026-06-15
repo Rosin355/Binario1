@@ -33,6 +33,22 @@
         }
       }
     },
+    "accessibility.duration.minutes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d minutes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d minuti"
+          }
+        }
+      }
+    },
     "accessibility.favorite" : {
       "localizations" : {
         "en" : {
@@ -45,6 +61,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aggiungi ai preferiti"
+          }
+        }
+      }
+    },
+    "accessibility.journey.platformClause" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " Platform %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " Binario %@."
+          }
+        }
+      }
+    },
+    "accessibility.journey.recent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Train %1$@, from %2$@ to %3$@, departure %4$@, duration %5$@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treno %1$@, da %2$@ a %3$@, partenza %4$@, durata %5$@."
+          }
+        }
+      }
+    },
+    "accessibility.journey.saved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ to %2$@ trip, from %3$@ to %4$@, next departure %5$@, platform %6$@, duration %7$@, %8$@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaggio %1$@ verso %2$@, da %3$@ a %4$@, prossima partenza %5$@, binario %6$@, durata %7$@, %8$@."
+          }
+        }
+      }
+    },
+    "accessibility.journey.useful" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trip from %1$@ to %2$@, departure %3$@, arrival %4$@, train %5$@, platform %6$@, duration %7$@, %8$@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaggio da %1$@ a %2$@, partenza %3$@, arrivo %4$@, treno %5$@, binario %6$@, durata %7$@, %8$@."
           }
         }
       }
@@ -97,24 +177,6 @@
             "value" : "Stazione bloccata sull'orario programmato"
           }
         }
-      }
-    },
-    "source.scheduled" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scheduled timetable" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Orario programmato" } }
-      }
-    },
-    "source.scheduledSampleWindow" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scheduled timetable · demo %1$@–%2$@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Orario programmato · demo %1$@–%2$@" } }
-      }
-    },
-    "section.programmedDepartures" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Programmed departures" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Partenze programmate" } }
       }
     },
     "action.changeStation.short" : {
@@ -331,7 +393,6 @@
       }
     },
     "disclaimer.officialDisplays" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -392,6 +453,171 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "STAZIONE DI"
+          }
+        }
+      }
+    },
+    "info.mockNote" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo data. No real-time data."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dati dimostrativi. Nessun dato in tempo reale."
+          }
+        }
+      }
+    },
+    "info.tagline" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Railway board and your personal trips area."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabellone ferroviario e area viaggi personale."
+          }
+        }
+      }
+    },
+    "journey.arrival" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrival"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrivo"
+          }
+        }
+      }
+    },
+    "journey.duration" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duration"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata"
+          }
+        }
+      }
+    },
+    "journey.home" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Home"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Casa"
+          }
+        }
+      }
+    },
+    "journey.nextDeparture" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next departure"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prossima partenza"
+          }
+        }
+      }
+    },
+    "journey.platform" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Platform"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Binario"
+          }
+        }
+      }
+    },
+    "journey.status" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stato"
+          }
+        }
+      }
+    },
+    "journey.train" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Train"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Treno"
+          }
+        }
+      }
+    },
+    "journey.work" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Work"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lavoro"
           }
         }
       }
@@ -594,6 +820,54 @@
         }
       }
     },
+    "section.programmedDepartures" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programmed departures"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partenze programmate"
+          }
+        }
+      }
+    },
+    "source.scheduled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scheduled timetable"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orario programmato"
+          }
+        }
+      }
+    },
+    "source.scheduledSampleWindow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scheduled timetable · demo %1$@–%2$@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orario programmato · demo %1$@–%2$@"
+          }
+        }
+      }
+    },
     "status.arrived" : {
       "localizations" : {
         "en" : {
@@ -754,6 +1028,54 @@
         }
       }
     },
+    "tab.departures" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Departures"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partenze"
+          }
+        }
+      }
+    },
+    "tab.info" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info"
+          }
+        }
+      }
+    },
+    "tab.trips" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trips"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaggi"
+          }
+        }
+      }
+    },
     "ticker.message" : {
       "localizations" : {
         "en" : {
@@ -766,6 +1088,214 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "VIAGGIATE CON NOI.     BUON VIAGGIO DA BINARIO1.     "
+          }
+        }
+      }
+    },
+    "trips.action.alerts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alerts"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avvisi"
+          }
+        }
+      }
+    },
+    "trips.action.followTrain" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow train"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segui treno"
+          }
+        }
+      }
+    },
+    "trips.action.newTrip" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New trip"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuovo viaggio"
+          }
+        }
+      }
+    },
+    "trips.brand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BINARIO1"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BINARIO1"
+          }
+        }
+      }
+    },
+    "trips.filter.recent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recenti"
+          }
+        }
+      }
+    },
+    "trips.filter.saved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvati"
+          }
+        }
+      }
+    },
+    "trips.filter.today" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oggi"
+          }
+        }
+      }
+    },
+    "trips.section.recent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recenti"
+          }
+        }
+      }
+    },
+    "trips.section.saved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved routes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tratte salvate"
+          }
+        }
+      }
+    },
+    "trips.section.useful" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Best next trip"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prossimo viaggio utile"
+          }
+        }
+      }
+    },
+    "trips.seeAll" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See all"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vedi tutti"
+          }
+        }
+      }
+    },
+    "trips.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your saved and suggested routes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le tue tratte salvate e suggerite"
+          }
+        }
+      }
+    },
+    "trips.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trips"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viaggi"
           }
         }
       }

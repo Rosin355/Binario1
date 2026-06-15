@@ -47,6 +47,24 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - **Carosello stazioni mock** dietro `Cambia`: solo per demo/test layout nomi
   lunghi; i dati del tabellone restano mock.
 
+## Viaggi (Trips)
+
+- **`Viaggi` è una dashboard commuter personale, NON un secondo tabellone**:
+  risponde a "cosa conta per me come pendolare?" (tratte salvate, prossimo viaggio
+  utile, recenti) — non a "cosa succede in stazione?". Più card-based della Home,
+  ma stessa identità Binario1 (nero, ambra, texture/glow, badge binario/stato
+  riusati).
+- **Solo dati mock in questa milestone**: nessuna API, nessuna persistenza,
+  nessun dato live. `TripsService`/`MockTripsService` dietro protocollo per
+  sostituzione futura; formatting/accessibilità nel display layer
+  (`JourneyDisplayData`), fuori dalle view.
+- **Niente AI, notifiche, Live Activities, pagamenti o API reali** ora. `Viaggi`
+  sarà la base per smart suggestions, App Intents e flussi di notifica in futuro.
+- **Navigazione a 3 tab** (Partenze / Viaggi / Info), Viaggi secondo. Search
+  rinviata (no `Tab(role: .search)` ora).
+- **Riuso del design system**: `BoardSectionHeader` esteso in modo additivo
+  (`trailingKey` opzionale per "Vedi tutti") invece di duplicare lo stile.
+
 ## Sorgenti dati
 
 - **RFI "Quadro Orario" = solo orario PROGRAMMATO/scheduled**, mai presentato

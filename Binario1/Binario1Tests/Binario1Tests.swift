@@ -359,4 +359,92 @@ struct Binario1Tests {
         #expect(vm.isScheduledSampleOutOfWindow == false)
         #expect(vm.imminentRowID != nil)            // mock highlight unchanged
     }
+
+    // MARK: - Viaggi (Trips) dashboard
+
+    @MainActor
+    @Test func mockTripsServiceLoadsDashboard() async throws {
+        let service = MockTripsService(); service.artificialDelay = .zero
+        let data = try await service.loadTrips()
+        #expect(data.saved.count == 2)
+        #expect(data.suggested != nil)
+        #expect(data.recent.count == 3)
+        #expect(data.saved.first?.direction == .homeToWork)
+        #expect(data.saved.first?.origin == "Montegrotto Terme")
+        #expect(data.saved.first?.status == .onTime)
+        #expect(data.saved.last?.status == .delayed(minutes: 12))
+        #expect(data.suggested?.destination == "Venezia Santa Lucia")
+        #expect(data.suggested?.platform == "6")
+    }
+
+    @Test func savedJourneyDisplayDataFormatting() {
+        let j = SavedJourney(
+            id: "x", direction: .homeToWork,
+            origin: "Montegrotto Terme", destination: "Padova",
+            departure: Self.romeDate(2026, 6, 15, 7, 18),
+            platform: "2", durationMinutes: 37, status: .onTime, isFavorite: true
+        )
+        let d = JourneyDisplayData.make(j)
+        #expect(d.departureText == "07:18")
+        #expect(d.durationText == "37 min")
+        #expect(d.routeText == "Montegrotto Terme → Padova")
+        #expect(d.platformDisplay == "2")
+        #expect(d.accessibilityLabel.contains("Montegrotto Terme"))   // full name read out
+        #expect(d.accessibilityLabel.contains("Padova"))
+    }
+
+    @Test func suggestedJourneyDisplayDataHasArrivalAndTrain() {
+        let j = SuggestedJourney(
+            id: "u", origin: "Padova", destination: "Venezia Santa Lucia",
+            departure: Self.romeDate(2026, 6, 15, 17, 45),
+            arrival: Self.romeDate(2026, 6, 15, 18, 13),
+            category: "REG", trainNumber: "1722", platform: "6",
+            durationMinutes: 28, status: .onTime
+        )
+        let d = JourneyDisplayData.make(j)
+        #expect(d.departureText == "17:45")
+        #expect(d.arrivalText == "18:13")
+        #expect(d.trainText == "REG 1722")
+        #expect(d.platformDisplay == "6")
+    }
+
+    @Test func recentJourneyDisplayDataIncludesPlatformInAccessibility() {
+        let j = RecentJourney(
+            id: "r", origin: "Bologna Centrale", destination: "Padova",
+            departure: Self.romeDate(2026, 6, 15, 8, 32),
+            category: "FR", trainNumber: "8602", durationMinutes: 62, platform: "5"
+        )
+        let d = JourneyDisplayData.make(j)
+        #expect(d.departureText == "08:32")
+        #expect(d.trainText == "FR 8602")
+        #expect(d.accessibilityLabel.contains("FR 8602"))
+    }
+
+    @Test func journeyStatusCriticality() {
+        #expect(JourneyStatus.onTime.isCritical == false)
+        #expect(JourneyStatus.delayed(minutes: 3).isCritical == false)
+        #expect(JourneyStatus.delayed(minutes: 12).isCritical == true)
+        #expect(JourneyStatus.cancelled.isCritical == true)
+    }
+
+    @MainActor
+    @Test func tripsViewModelLoadsAndFilters() async {
+        let service = MockTripsService(); service.artificialDelay = .zero
+        let vm = TripsViewModel(service: service)
+        await vm.load()
+        #expect(vm.hasData)
+        #expect(vm.savedJourneys.count == 2)
+        #expect(vm.recentJourneys.count == 3)
+        #expect(vm.errorMessageKey == nil)
+
+        // Today shows all sections.
+        vm.selectFilter(.today)
+        #expect(vm.showsSuggestedSection && vm.showsSavedSection && vm.showsRecentSection)
+        // Saved shows only saved.
+        vm.selectFilter(.saved)
+        #expect(vm.showsSavedSection && !vm.showsSuggestedSection && !vm.showsRecentSection)
+        // Recent shows only recent.
+        vm.selectFilter(.recent)
+        #expect(vm.showsRecentSection && !vm.showsSavedSection && !vm.showsSuggestedSection)
+    }
 }

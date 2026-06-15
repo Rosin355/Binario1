@@ -59,13 +59,7 @@ enum AppEnvironment {
 struct Binario1App: App {
     var body: some Scene {
         WindowGroup {
-            StationBoardView(
-                viewModel: StationBoardViewModel(
-                    service: AppEnvironment.makeTrainBoardService(),
-                    station: AppEnvironment.initialStation,
-                    allowsStationChange: AppEnvironment.allowsStationChange
-                )
-            )
+            RootTabView()
         }
     }
 }

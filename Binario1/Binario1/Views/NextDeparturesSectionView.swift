@@ -49,10 +49,12 @@ struct NextDeparturesSectionView: View {
     }
 }
 
-/// Small amber section header with an optional leading icon.
+/// Small amber section header with an optional leading icon and an optional
+/// trailing label (e.g. "See all" on the Viaggi dashboard).
 struct BoardSectionHeader: View {
     let titleKey: LocalizedStringKey
     var systemImage: String?
+    var trailingKey: LocalizedStringKey? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -67,6 +69,14 @@ struct BoardSectionHeader: View {
                 .textCase(.uppercase)
                 .foregroundStyle(BoardColors.amber)
                 .ledGlow(BoardColors.amber, radius: 2, opacity: 0.3)
+            if let trailingKey {
+                Spacer(minLength: 8)
+                Text(trailingKey)
+                    .font(BoardFont.text(11, .semibold))
+                    .tracking(0.4)
+                    .textCase(.uppercase)
+                    .foregroundStyle(BoardColors.amberDim)
+            }
         }
         .lineLimit(1)
         .minimumScaleFactor(0.7)
