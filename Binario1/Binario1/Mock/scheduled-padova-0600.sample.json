@@ -1,0 +1,18 @@
+{
+  "stationId": "1861",
+  "stationName": "Padova",
+  "source": "RFI Quadro Orario (programmed timetable)",
+  "hourRange": "06.00-06.59",
+  "note": "Programmed/scheduled departures only — NOT live data. No real delays, cancellations or platform changes.",
+  "departures": [
+    { "time": "06.05", "category": "REG", "trainNumber": "5928", "destination": "VENEZIA S. LUCIA", "plannedPlatform": "1", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null },
+    { "time": "06.09", "category": "RV", "trainNumber": "2774", "destination": "BOLOGNA C.LE", "plannedPlatform": "3", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null },
+    { "time": "06.14", "category": "REG", "trainNumber": "17231", "destination": "BASSANO DEL GRAPPA", "plannedPlatform": "4 OV", "operatorName": "Trenitalia", "periodicity": "Feriale", "notes": null },
+    { "time": "06.20", "category": "FRECCIAROSSA", "trainNumber": "9802", "destination": "ROMA TERMINI", "plannedPlatform": "5", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null },
+    { "time": "06.27", "category": "REG", "trainNumber": "5930", "destination": "CALALZO-PIEVE DI CADORE", "plannedPlatform": null, "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": "Binario in assegnazione" },
+    { "time": "06.34", "category": "RV", "trainNumber": "2280", "destination": "VERONA P.N.", "plannedPlatform": "2", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null },
+    { "time": "06.41", "category": "ITALO", "trainNumber": "9902", "destination": "MILANO C.LE", "plannedPlatform": "6", "operatorName": "Italo", "periodicity": "Giornaliero", "notes": null },
+    { "time": "06.48", "category": "REG", "trainNumber": "5932", "destination": "VENEZIA S. LUCIA", "plannedPlatform": "1", "operatorName": "Trenitalia", "periodicity": "Feriale", "notes": null },
+    { "time": "06.55", "category": null, "trainNumber": "17105", "destination": "MONSELICE", "plannedPlatform": "4", "operatorName": "Trenitalia", "periodicity": "Giornaliero", "notes": null }
+  ]
+}

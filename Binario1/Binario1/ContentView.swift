@@ -7,11 +7,12 @@
 
 import SwiftUI
 
+/// Thin wrapper around the main board screen (kept for previews / hosting).
 struct ContentView: View {
     var body: some View {
-        TabelloneView()
-            .preferredColorScheme(.dark)
-            .statusBarHidden(false)
+        StationBoardView(
+            viewModel: StationBoardViewModel(service: MockTrainBoardService())
+        )
     }
 }
 
