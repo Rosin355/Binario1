@@ -22,18 +22,18 @@ struct TripsHeaderView: View {
                 searchButton
             }
 
-            // Row 2 — LED board title
-            LEDText(text: titleText, size: 40, color: BoardColors.ledPrimary, glow: 0.55)
+            // Row 2 — LED board title (hero weight)
+            LEDText(text: titleText, size: 42, color: BoardColors.ledPrimary, glow: 0.55)
                 .accessibilityElement()
                 .accessibilityLabel(Text("trips.title"))
 
-            // Row 3 — subtitle + last-updated
+            // Row 3 — subtitle + last-updated (single line, like the mockup)
             HStack(alignment: .firstTextBaseline) {
                 Text("trips.subtitle")
                     .font(BoardFont.text(13))
                     .foregroundStyle(BoardColors.amberDim)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Spacer(minLength: 10)
                 updatedLabel
             }

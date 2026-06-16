@@ -36,7 +36,7 @@ struct TripsQuickActionsView: View {
                     .fill(BoardColors.panel)
                     .overlay(
                         RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .stroke(BoardColors.border.opacity(0.7), lineWidth: 1)
+                            .stroke(BoardColors.border.opacity(0.55), lineWidth: 1)
                     )
             )
             .contentShape(Rectangle())

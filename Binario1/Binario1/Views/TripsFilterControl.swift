@@ -45,7 +45,7 @@ struct TripsFilterControl: View {
                 .minimumScaleFactor(0.7)
                 .foregroundStyle(isOn ? BoardColors.background : BoardColors.amberDim)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 9)
                 .background {
                     if isOn {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -59,7 +59,7 @@ struct TripsFilterControl: View {
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     .stroke(BoardColors.amberBright.opacity(0.6), lineWidth: 1)
                             )
-                            .shadow(color: BoardColors.amber.opacity(0.5), radius: 5, y: 1)
+                            .shadow(color: BoardColors.amber.opacity(0.4), radius: 3, y: 1)
                             .matchedGeometryEffect(id: "tripseg", in: indicator)
                     }
                 }

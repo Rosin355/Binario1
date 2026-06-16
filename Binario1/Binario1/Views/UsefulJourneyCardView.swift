@@ -24,7 +24,7 @@ struct UsefulJourneyCardView: View {
                         LEDText(text: data.departureText, size: 40, animatesNumeric: true)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(data.destinationBoard)
-                                .font(BoardFont.text(17, .bold))
+                                .font(BoardFont.text(18, .bold))
                                 .foregroundStyle(BoardColors.amberBright)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)

@@ -2,6 +2,29 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-16 — Viaggi Visual Fidelity Pass
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
+
+### Cosa (solo polish visivo Viaggi; struttura/dati invariati)
+- Header: titolo LED `VIAGGI` più grande (42), sottotitolo su **una riga**
+  (`lineLimit(1)` + scale) così `Aggiornato HH:mm ●` resta allineato.
+- Filtro: pill selezionata con glow più pulito (raggio 5→3, opacità 0.5→0.4) e
+  controllo leggermente più alto (padding 8→9), meno "over-glow".
+- Useful card: destinazione leggermente più prominente (17→18).
+- Quick actions: bordo più sottile (0.55) per un look railway-control premium.
+- Nessuna nuova feature/colore; mock e Home/Partenze/Cerca invariati.
+
+### File
+- Modificati: `Views/TripsHeaderView.swift`, `Views/TripsFilterControl.swift`,
+  `Views/UsefulJourneyCardView.swift`, `Views/TripsQuickActionsView.swift`.
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente). Nessun mockup Viaggi nel repo + simulatore
+  non avviabile → fedeltà rifinita per costruzione sul mockup condiviso, non con
+  screenshot.
+
 ## 2026-06-15 — Viaggi Numeric Alignment and Animation Polish
 
 Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
