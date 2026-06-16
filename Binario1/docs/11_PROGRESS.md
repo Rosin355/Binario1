@@ -2,6 +2,40 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-16 — Fix Partenze tab-entry title animation
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
+
+### Bug
+- Tornando su Partenze da un altro tab, il titolo stazione si **bloccava sul primo
+  carattere** (es. solo `P` invece di `PADOVA`). Causa: il restart usava
+  `.id(token)` (remount) + reveal **per-carattere** con `Task` staggerati; in
+  `FlipCharacter.startFlip` la cancellazione durante il delay usciva **senza**
+  impostare il glifo finale → i caratteri successivi restavano vuoti.
+
+### Fix (solo lifecycle animazione; stile LED invariato)
+- Riscritto `DotMatrixStationTitleView` con un **reveal deterministico**: un solo
+  `.task(id:)` (token tab + nome stazione) guida un contatore `revealed`; ogni
+  glifo si accende con un leggero flip 3D (asse `(x:0, y:1, z:0)`) quando il
+  contatore lo supera. Il loop **finisce sempre** a `totalReal` e imposta il titolo
+  pieno anche se cancellato → **mai parziale**.
+- Rimosso `.id(token)` dal titolo in `StationBoardHeaderView`; il token è ora
+  passato nel componente. Reduce Motion → titolo pieno immediato.
+- Rendering LED invariato (Text ambra + texture punti + glow, font 34/22, colori).
+- Nessun reload dati (il token tocca solo il `.task` del titolo); nessuna modifica
+  a Viaggi/Cerca, scheduledPadova, righe/lista, ordine tab.
+
+### File
+- Riscritto: `Views/DotMatrixStationTitleView.swift`. Modificato:
+  `Views/StationBoardHeaderView.swift` (no `.id`, passa token). `Binario1Tests`:
+  `stationTitleResolvesToFullName`. `RootTabView`/`StationBoardView` invariati
+  (il token già fluisce).
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente). Determinismo del reveal verificato per
+  costruzione (final state garantito) + build.
+
 ## 2026-06-16 — Viaggi pixel-fidelity polish
 
 Stato: completata. Riferimento: `References/mockup-viaggi.png`. Prossima

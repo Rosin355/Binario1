@@ -525,4 +525,20 @@ struct Binario1Tests {
         #expect(useful.platformDisplay == "6")
         #expect(useful.durationText == "28 min")
     }
+
+    // MARK: - Station title (reveal target = full name)
+
+    /// The animated title reveal completes to `totalReal` characters, which equals
+    /// the full station title. Guards the "stuck on first character" regression by
+    /// pinning the title the reveal must reach.
+    @Test func stationTitleResolvesToFullName() {
+        let padova = StationNameFormatter.boardTitle(for: "Padova")
+        #expect(padova.primary == "PADOVA")
+        #expect(padova.secondary == "")
+        #expect(padova.primary.count == 6)        // reveal must reach 6 → full "PADOVA", not "P"
+
+        let bologna = StationNameFormatter.boardTitle(for: "Bologna Centrale")
+        #expect(bologna.primary == "BOLOGNA")
+        #expect(bologna.secondary == "CENTRALE")
+    }
 }

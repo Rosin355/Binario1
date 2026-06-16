@@ -25,8 +25,6 @@ struct StationBoardHeaderView: View {
     var onToggleFavorite: (() -> Void)?
     var onChangeStation: (() -> Void)?
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Row 1 — station context label + updated + favorite
@@ -42,10 +40,7 @@ struct StationBoardHeaderView: View {
 
             // Row 2 — static dot-matrix station title + change-station action
             HStack(alignment: .bottom, spacing: 10) {
-                DotMatrixStationTitleView(stationName: stationName)
-                    // Remounting the title replays its reveal flip. Gated off under
-                    // Reduce Motion (constant id → no restart, no motion).
-                    .id(reduceMotion ? 0 : animationToken)
+                DotMatrixStationTitleView(stationName: stationName, animationToken: animationToken)
                 Spacer(minLength: 8)
                 if onChangeStation != nil { changeButton.padding(.bottom, 4) }
             }
