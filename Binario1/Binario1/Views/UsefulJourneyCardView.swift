@@ -21,7 +21,7 @@ struct UsefulJourneyCardView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     // Time + destination
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        LEDText(text: data.departureText, size: 40)
+                        LEDText(text: data.departureText, size: 40, animatesNumeric: true)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(data.destinationBoard)
                                 .font(BoardFont.text(17, .bold))
@@ -39,18 +39,19 @@ struct UsefulJourneyCardView: View {
 
                     // Detail grid
                     HStack(spacing: 0) {
-                        detail("journey.duration", data.durationText)
+                        detail("journey.duration", data.durationText, numeric: true)
                         gridSeparator
                         detail("journey.train", data.trainText ?? "--")
                         gridSeparator
-                        detail("journey.arrival", data.arrivalText ?? "--")
+                        detail("journey.arrival", data.arrivalText ?? "--", numeric: true)
                     }
                 }
 
                 Spacer(minLength: 8)
 
                 JourneyPlatformBadgeView(platform: journey.platform, numberSize: 46,
-                                         color: BoardColors.amberBright, alignment: .center)
+                                         color: BoardColors.amberBright, alignment: .center,
+                                         animatesNumeric: true)
             }
 
             Rectangle().fill(BoardColors.gridLine).frame(height: 1)
@@ -80,7 +81,8 @@ struct UsefulJourneyCardView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private func detail(_ captionKey: LocalizedStringKey, _ value: String) -> some View {
+    @ViewBuilder
+    private func detail(_ captionKey: LocalizedStringKey, _ value: String, numeric: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(captionKey)
                 .font(BoardFont.text(8, .semibold))
@@ -89,13 +91,23 @@ struct UsefulJourneyCardView: View {
                 .foregroundStyle(BoardColors.amberDim)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(value)
-                .font(BoardFont.text(14, .semibold))
-                .foregroundStyle(BoardColors.amber)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            detailValue(value, numeric: numeric)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func detailValue(_ value: String, numeric: Bool) -> some View {
+        let base = Text(value)
+            .font(BoardFont.text(14, .semibold))
+            .foregroundStyle(BoardColors.amber)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+        if numeric {
+            base.boardNumericTransition(value)
+        } else {
+            base
+        }
     }
 
     private var gridSeparator: some View {

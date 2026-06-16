@@ -14,15 +14,13 @@ struct RecentJourneyRowView: View {
 
     private var data: JourneyDisplayData { .make(journey) }
 
-    private var trainAndDuration: String {
-        if let train = data.trainText { return "\(train) · \(data.durationText)" }
-        return data.durationText
-    }
-
     var body: some View {
         HStack(spacing: 12) {
-            LEDText(text: data.departureText, size: 17, color: BoardColors.amberBright)
-                .frame(width: 52, alignment: .leading)
+            // Reliable Text-based time (no dot renderer): always one line, fixed
+            // column width, monospaced digits → never wraps ("08:32" stays intact).
+            BoardNumberText(text: data.departureText, size: 17, weight: .bold,
+                            color: BoardColors.amberBright, glow: 0.28)
+                .frame(width: 56, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(data.boardRoute)
@@ -31,18 +29,26 @@ struct RecentJourneyRowView: View {
                     .foregroundStyle(BoardColors.amberBright)
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
-                Text(trainAndDuration)
-                    .font(BoardFont.text(11))
-                    .foregroundStyle(BoardColors.amberDim)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                // "CAT NUM · duration" — only the numeric duration rolls.
+                HStack(spacing: 4) {
+                    if let train = data.trainText {
+                        Text(train)
+                        Text(verbatim: "·")
+                    }
+                    Text(data.durationText)
+                        .boardNumericTransition(data.durationText)
+                }
+                .font(BoardFont.text(11))
+                .foregroundStyle(BoardColors.amberDim)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             }
 
             Spacer(minLength: 6)
 
             if data.hasPlatform {
                 JourneyPlatformBadgeView(platform: data.platformDisplay, numberSize: 16,
-                                         captionSize: 7, alignment: .trailing)
+                                         captionSize: 7, alignment: .trailing, animatesNumeric: true)
             }
 
             Image(systemName: "chevron.right")

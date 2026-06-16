@@ -15,6 +15,7 @@ struct JourneyPlatformBadgeView: View {
     var captionSize: CGFloat = 8
     var color: Color = BoardColors.platform
     var alignment: HorizontalAlignment = .leading
+    var animatesNumeric: Bool = false
 
     private var value: String { platform?.isEmpty == false ? platform! : "--" }
 
@@ -25,7 +26,7 @@ struct JourneyPlatformBadgeView: View {
                 .tracking(1)
                 .textCase(.uppercase)
                 .foregroundStyle(BoardColors.amberDim)
-            LEDText(text: value, size: numberSize, color: color, glow: 0.5)
+            LEDText(text: value, size: numberSize, color: color, glow: 0.5, animatesNumeric: animatesNumeric)
         }
         .accessibilityHidden(true)
     }

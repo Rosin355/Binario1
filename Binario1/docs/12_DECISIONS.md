@@ -74,6 +74,25 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - **Info/About diventerà un'area secondaria** (settings/info) più avanti;
   `InfoView` resta nel codice ma non è più un tab primario.
 - **Cerca è mock-only** in questa fase (catalogo locale, nessuna API/AI).
+- **L'animazione intro di Partenze riparte al rientro nel tab**: `RootTabView`
+  traccia il tab e incrementa un token su `.departures`; il token applica `.id`
+  **solo al titolo** per rieseguire il reveal. NON ricaricare dati né resettare lo
+  scroll; sotto Reduce Motion il restart è disattivato.
+
+## Numeri dinamici (board)
+
+- **I valori numerici dinamici usano `.contentTransition(.numericText(value:))`**
+  (helper `BoardNumberText` / `.boardNumericTransition` / `LEDText.animatesNumeric`);
+  il roll è **no-op con Reduce Motion**. Applicato ai numeri Viaggi (orari, binari,
+  durata, ritardo).
+- **Mai sui nomi/label non numeriche**: niente transizione numerica su nomi
+  stazione/tratta, destinazioni, categorie treno (REG/RV/FR/ICN), titolo LED o
+  label statiche.
+- **Orari delle righe compatte sempre su una riga**: Text affidabile con
+  `monospacedDigit` + `lineLimit(1)` + colonna a larghezza fissa (non il
+  dot-renderer `LEDText`, che in colonne strette può andare a capo).
+- Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
+  `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
 ## Sorgenti dati
 

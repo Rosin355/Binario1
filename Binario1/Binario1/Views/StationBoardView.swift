@@ -12,6 +12,9 @@ import SwiftUI
 struct StationBoardView: View {
     @State var viewModel: StationBoardViewModel
     @State private var isFavorite = false
+    /// Bumped when the Partenze tab is (re)entered → replays the title intro
+    /// animation without reloading data.
+    var animationToken: Int = 0
 
     var body: some View {
         ZStack {
@@ -25,6 +28,7 @@ struct StationBoardView: View {
                     isScheduled: viewModel.isScheduled,
                     scheduledWindow: viewModel.scheduledWindow,
                     canChangeStation: viewModel.allowsStationChange,
+                    animationToken: animationToken,
                     isFavorite: isFavorite,
                     onToggleFavorite: { isFavorite.toggle() },
                     onChangeStation: { Task { await viewModel.changeStation() } }

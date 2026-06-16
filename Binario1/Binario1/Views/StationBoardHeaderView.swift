@@ -19,9 +19,13 @@ struct StationBoardHeaderView: View {
     var isScheduled: Bool = false     // programmed timetable (not live)
     var scheduledWindow: ScheduledSampleWindow? = nil  // demo sample time window, if any
     var canChangeStation: Bool = true // false → station locked (single-station source)
+    /// Increment to replay the title's intro animation (e.g. on Partenze tab entry).
+    var animationToken: Int = 0
     var isFavorite: Bool = false
     var onToggleFavorite: (() -> Void)?
     var onChangeStation: (() -> Void)?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -39,6 +43,9 @@ struct StationBoardHeaderView: View {
             // Row 2 — static dot-matrix station title + change-station action
             HStack(alignment: .bottom, spacing: 10) {
                 DotMatrixStationTitleView(stationName: stationName)
+                    // Remounting the title replays its reveal flip. Gated off under
+                    // Reduce Motion (constant id → no restart, no motion).
+                    .id(reduceMotion ? 0 : animationToken)
                 Spacer(minLength: 8)
                 if onChangeStation != nil { changeButton.padding(.bottom, 4) }
             }

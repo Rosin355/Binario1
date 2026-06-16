@@ -40,21 +40,30 @@ struct SavedJourneyCardView: View {
 
             Rectangle().fill(BoardColors.gridLine).frame(height: 1)
 
-            // Detail row — 4 aligned columns
-            HStack(alignment: .top, spacing: 8) {
-                column("journey.nextDeparture") {
-                    LEDText(text: data.departureText, size: 22)
+            // Detail row — a clean 4-column board grid: labels aligned on top,
+            // values aligned on one shared text baseline. 07:18 is the largest
+            // value; the platform is smaller so it doesn't dominate the row.
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                GridRow {
+                    detailLabel("journey.nextDeparture")
+                    detailLabel("journey.platform")
+                    detailLabel("journey.duration")
+                    detailLabel("journey.status")
                 }
-                column("journey.platform") {
-                    LEDText(text: data.platformDisplay, size: 22, color: BoardColors.platform)
-                }
-                column("journey.duration") {
+                GridRow(alignment: .firstTextBaseline) {
+                    LEDText(text: data.departureText, size: 22, animatesNumeric: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    LEDText(text: data.platformDisplay, size: 18, color: BoardColors.platform, animatesNumeric: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Text(data.durationText)
-                        .font(BoardFont.text(15, .semibold))
+                        .font(BoardFont.text(14, .semibold))
                         .foregroundStyle(BoardColors.amberDim)
-                }
-                column("journey.status") {
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .boardNumericTransition(data.durationText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     JourneyStatusBadgeView(status: journey.status, fontSize: 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -90,20 +99,15 @@ struct SavedJourneyCardView: View {
         + Text(LocalizedStringKey(journey.direction.destinationRoleKey))
     }
 
-    @ViewBuilder
-    private func column<Content: View>(_ captionKey: LocalizedStringKey,
-                                       @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(captionKey)
-                .font(BoardFont.text(8, .semibold))
-                .tracking(0.8)
-                .textCase(.uppercase)
-                .foregroundStyle(BoardColors.amberDim)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            content()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    private func detailLabel(_ key: LocalizedStringKey) -> some View {
+        Text(key)
+            .font(BoardFont.text(8, .semibold))
+            .tracking(0.8)
+            .textCase(.uppercase)
+            .foregroundStyle(BoardColors.amberDim)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

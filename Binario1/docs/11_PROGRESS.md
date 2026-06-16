@@ -2,6 +2,79 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-15 — Viaggi Numeric Alignment and Animation Polish
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
+
+### Cosa
+- **Allineamento riga dettaglio card salvate**: la riga `PROSSIMA PARTENZA /
+  BINARIO / DURATA / STATO` ora è una `Grid` a 4 colonne: etichette allineate in
+  alto, valori allineati sulla stessa baseline (`GridRow(alignment:.firstTextBaseline)`).
+  `07:18` resta il valore più grande; il binario è più piccolo (18 vs 22) e non
+  domina; `37 min` e `In orario` sono sulla stessa riga visiva.
+- **Animazione Partenze al rientro nel tab**: `RootTabView` traccia `selectedTab`
+  (`AppTab`) con `TabView(selection:)` + `Tab(value:)`; al rientro su `.departures`
+  incrementa `departuresAnimationToken`, passato a `StationBoardView` →
+  `StationBoardHeaderView`, che applica `.id(token)` **solo al titolo** (non al
+  board) per rieseguire il reveal. **Nessun reload dati** (la `.task` dipende da
+  `boardType`, non dal token), scroll non resettato. **Reduce Motion**: `.id`
+  costante → nessun restart/motion.
+- **Transizioni numeriche testabili (DEBUG)**: nuova `NumericTransitionPreviewView`
+  (solo `#if DEBUG`, non in produzione) con valori campione (time 07:18→07:22,
+  platform 2→4→6, duration 37→42→51, delay 0→12→35) e bottone *Test numeric
+  animation* che aggiorna i valori in `withAnimation(.snappy)` → i numeri rollano.
+- Transizioni numeriche confermate solo su valori numerici dinamici (orari,
+  binari, durata, ritardo); nomi/categorie/titolo restano statici. Reduce Motion
+  rispettato ovunque.
+
+### File
+- Modificati: `Views/SavedJourneyCardView.swift` (Grid + baseline),
+  `Views/StationBoardHeaderView.swift` + `Views/StationBoardView.swift`
+  (`animationToken`), `Views/RootTabView.swift` (`AppTab` + selection + token).
+- Nuovo (DEBUG): `Views/NumericTransitionPreviewView.swift`.
+- `Binario1Tests`: stringhe display Viaggi corrette (time/binario/durata/ritardo).
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente, non codice). Allineamento e no-wrap
+  verificati a livello di layout (Grid + baseline, monospaced, lineLimit) e build.
+
+## 2026-06-15 — Viaggi Numeric Text Polish
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
+
+### Cosa
+- **Fix wrapping orari `Recenti`**: gli orari (`08:32`, `09:15`, `07:50`) andavano
+  a capo (`08:3` / `2`) perché `LEDText` (dot) in una colonna stretta (52pt) si
+  spezzava. Ora gli orari delle righe compatte usano `BoardNumberText` (Text
+  affidabile, `monospacedDigit` + `lineLimit(1)` + `minimumScaleFactor`, colonna
+  fissa 56pt, glow) → **sempre una riga**.
+- **Helper numerico riusabile** (`Views/BoardNumberText.swift`):
+  - `BoardNumber.value(from:)` — chiave roll dai digit di una stringa.
+  - `BoardNumberText` — label numerica affidabile a una riga con transizione.
+  - `.boardNumericTransition(_/value:)` — aggiunge `.contentTransition(.numericText(value:))`
+    a un Text numerico esistente.
+  - `LEDText.animatesNumeric` — transizione opzionale sui numeri LED (titolo
+    `VIAGGI` resta statico).
+  - Tutto **no-op con Reduce Motion** (valore finale senza rolling).
+- **Applicato ai numeri Viaggi**: orari/binari/durata/ritardo (saved, useful,
+  recent). Il **numero treno resta statico** (categoria+numero non è puro numerico).
+  Dati mock statici → nessun roll ora; pronto per dati dinamici futuri.
+- **Home/Partenze invariata**: l'helper è scoped a Viaggi (`PlatformBadgeView`/
+  `DelayBadgeView`/righe board non toccati); estensione futura documentata.
+
+### File
+- Nuovo: `Views/BoardNumberText.swift`. Modificati: `Views/LEDText.swift`
+  (`animatesNumeric` + `lineLimit(1)`), `Views/RecentJourneyRowView.swift`,
+  `Views/SavedJourneyCardView.swift`, `Views/UsefulJourneyCardView.swift`,
+  `Views/JourneyPlatformBadgeView.swift`, `Views/JourneyStatusBadgeView.swift`,
+  `Binario1Tests` (chiave numerica + formato orari recenti).
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente, non codice). Wrapping verificato a livello
+  di layout (colonna fissa + monospaced + lineLimit) e build.
+
 ## 2026-06-15 — Restore approved Home LED title
 
 Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.

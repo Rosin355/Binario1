@@ -45,6 +45,7 @@ struct JourneyStatusBadgeView: View {
                 .minimumScaleFactor(0.8)
         case .delayed(let m):
             badge(Text(String(format: String(localized: "status.delay.short"), m)))
+                .boardNumericTransition(value: Double(m))
         case .cancelled:
             badge(Text("status.cancelled"))
         }

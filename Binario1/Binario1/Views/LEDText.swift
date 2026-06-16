@@ -19,14 +19,24 @@ struct LEDText: View {
     var glow: Double = 0.5
     var dotOpacity: Double = 0.42
     var tracking: CGFloat = 0
+    /// Set true for dynamic NUMERIC values (times/platforms) to roll digits on
+    /// change. Leave false for the static board title. No-op under Reduce Motion.
+    var animatesNumeric: Bool = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var font: Font { .system(size: size, weight: weight, design: .monospaced) }
+    private var transition: ContentTransition {
+        animatesNumeric && !reduceMotion ? .numericText(value: BoardNumber.value(from: text)) : .identity
+    }
 
     var body: some View {
         Text(text)
             .font(font)
             .tracking(tracking)
             .foregroundStyle(color)
+            .lineLimit(1)
+            .contentTransition(transition)
             .shadow(color: color.opacity(glow), radius: size * 0.085)
             .shadow(color: color.opacity(glow * 0.4), radius: size * 0.2)
             .overlay { dots }

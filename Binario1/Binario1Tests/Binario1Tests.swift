@@ -480,4 +480,49 @@ struct Binario1Tests {
         #expect(vm.isSearching == false)
         #expect(vm.hasResults)
     }
+
+    // MARK: - Numeric text polish
+
+    @Test func boardNumberDerivesRollingKeyFromDigits() {
+        #expect(BoardNumber.value(from: "07:18") == 718)
+        #expect(BoardNumber.value(from: "17:46") == 1746)
+        #expect(BoardNumber.value(from: "+12 min") == 12)
+        #expect(BoardNumber.value(from: "37 min") == 37)
+        #expect(BoardNumber.value(from: "6") == 6)
+        #expect(BoardNumber.value(from: "--") == 0)        // no digits → 0, no crash
+    }
+
+    @Test func recentJourneyTimesAreSingleLineHHmm() {
+        let ref = Self.romeDate(2026, 6, 15, 12, 0)
+        for journey in MockTripsService.sample(on: ref).recent {
+            let t = JourneyDisplayData.make(journey).departureText
+            #expect(t.count == 5)                          // "HH:mm" — fixed width
+            #expect(t.contains(":"))
+            #expect(!t.contains(" "))                       // single token (no wrap-inducing spaces)
+            #expect(!t.contains("\n"))
+        }
+    }
+
+    /// The alignment/numeric polish is view-layer only — the underlying display
+    /// strings (time/platform/duration/delay) must stay exactly correct.
+    @Test func viaggiDisplayStringsRemainCorrect() {
+        let data = MockTripsService.sample(on: Self.romeDate(2026, 6, 15, 12, 0))
+
+        let homeWork = JourneyDisplayData.make(data.saved[0])
+        #expect(homeWork.departureText == "07:18")
+        #expect(homeWork.platformDisplay == "2")
+        #expect(homeWork.durationText == "37 min")
+
+        let workHome = JourneyDisplayData.make(data.saved[1])
+        #expect(workHome.departureText == "17:46")
+        #expect(workHome.platformDisplay == "4")
+        #expect(workHome.durationText == "39 min")
+        #expect(data.saved[1].status == .delayed(minutes: 12))
+
+        let useful = JourneyDisplayData.make(data.suggested!)
+        #expect(useful.departureText == "17:45")
+        #expect(useful.arrivalText == "18:13")
+        #expect(useful.platformDisplay == "6")
+        #expect(useful.durationText == "28 min")
+    }
 }
