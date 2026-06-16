@@ -30,7 +30,7 @@ struct TripsQuickActionsView: View {
             }
             .foregroundStyle(BoardColors.amber)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
+            .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .fill(BoardColors.panel)

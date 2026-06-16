@@ -17,7 +17,7 @@ struct TripsView: View {
             BoardBackgroundView()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 14) {
                     TripsHeaderView(lastUpdated: viewModel.lastUpdated, onSearch: {})
 
                     TripsFilterControl(
@@ -49,7 +49,7 @@ struct TripsView: View {
         } else {
             if viewModel.showsSavedSection {
                 section("trips.section.saved", icon: "bookmark.fill") {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 10) {
                         ForEach(viewModel.savedJourneys) { SavedJourneyCardView(journey: $0) }
                     }
                 }
@@ -100,7 +100,7 @@ struct TripsView: View {
                                         trailingKey: LocalizedStringKey? = nil,
                                         trailingAction: (() -> Void)? = nil,
                                         @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             BoardSectionHeader(titleKey: titleKey, systemImage: icon,
                                trailingKey: trailingKey, trailingAction: trailingAction)
             content()

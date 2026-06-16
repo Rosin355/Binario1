@@ -15,7 +15,7 @@ struct SavedJourneyCardView: View {
     private var data: JourneyDisplayData { .make(journey) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 13) {
+        VStack(alignment: .leading, spacing: 11) {
             // Identity row
             HStack(alignment: .top, spacing: 12) {
                 directionIcon
@@ -43,7 +43,7 @@ struct SavedJourneyCardView: View {
             // Detail row — a clean 4-column board grid: labels aligned on top,
             // values aligned on one shared text baseline. 07:18 is the largest
             // value; the platform is smaller so it doesn't dominate the row.
-            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
                 GridRow {
                     detailLabel("journey.nextDeparture")
                     detailLabel("journey.platform")
@@ -67,7 +67,7 @@ struct SavedJourneyCardView: View {
                 }
             }
         }
-        .padding(14)
+        .padding(13)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(BoardColors.panel)
@@ -87,10 +87,10 @@ struct SavedJourneyCardView: View {
                 .fill(BoardColors.amber.opacity(0.12))
                 .overlay(Circle().stroke(BoardColors.amber.opacity(0.55), lineWidth: 1.2))
             Image(systemName: journey.direction == .homeToWork ? "house.fill" : "briefcase.fill")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(BoardColors.amber)
         }
-        .frame(width: 44, height: 44)
+        .frame(width: 38, height: 38)
     }
 
     private var directionTitle: Text {

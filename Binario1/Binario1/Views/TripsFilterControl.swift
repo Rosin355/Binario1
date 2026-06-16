@@ -45,7 +45,7 @@ struct TripsFilterControl: View {
                 .minimumScaleFactor(0.7)
                 .foregroundStyle(isOn ? BoardColors.background : BoardColors.amberDim)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
+                .padding(.vertical, 8)
                 .background {
                     if isOn {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)

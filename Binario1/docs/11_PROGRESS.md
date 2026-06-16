@@ -2,6 +2,34 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-16 — Viaggi pixel-fidelity polish
+
+Stato: completata. Riferimento: `References/mockup-viaggi.png`. Prossima
+milestone: **Smart Suggestions / App Intents**.
+
+### Cosa (solo Viaggi; struttura, dati, Home/Partenze/Cerca invariati)
+- **Densità verticale** avvicinata al mockup (lo schermo era troppo arioso):
+  spaziatura tra sezioni 18→14, header sezione→contenuto 10→8, gap card salvate
+  12→10.
+- **Card salvate** più compatte: icona circolare 44→38, padding 14→13, spacing
+  interno 13→11, griglia dettagli verticalSpacing 4→3. Gerarchia invariata
+  (orario valore più forte, binario bilanciato).
+- **Useful card** più densa (resta il centerpiece con bordo/glow ambra): spacing
+  interni 12→10, padding 16→14.
+- **Filtro** e **quick actions** leggermente più compatti (padding verticale 9→8
+  e 11→10).
+- Identità LED ambra, transizioni numeriche, orari Recenti su una riga: invariati.
+
+### File
+- Modificati: `Views/TripsView.swift`, `Views/SavedJourneyCardView.swift`,
+  `Views/UsefulJourneyCardView.swift`, `Views/TripsFilterControl.swift`,
+  `Views/TripsQuickActionsView.swift`.
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente). Fedeltà rifinita sul mockup in repo;
+  niente screenshot perché il simulatore non si avvia in questa sessione.
+
 ## 2026-06-16 — Viaggi Visual Fidelity Pass
 
 Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.

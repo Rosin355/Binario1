@@ -16,9 +16,9 @@ struct UsefulJourneyCardView: View {
     private var data: JourneyDisplayData { .make(journey) }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     // Time + destination
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         LEDText(text: data.departureText, size: 40, animatesNumeric: true)
@@ -66,7 +66,7 @@ struct UsefulJourneyCardView: View {
                     .ledGlow(BoardColors.amber, radius: 3, opacity: 0.4)
             }
         }
-        .padding(16)
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(BoardColors.panel)
