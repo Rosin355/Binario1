@@ -559,22 +559,22 @@ struct Binario1Tests {
         <tbody>
           <tr class="riga">
             <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
-            <td><img src="/i/REG.png" alt="Regionale" /></td>
+            <td><img src="/i/REG.png" alt="Categoria Regionale" /></td>
             <td>5928</td><td>VENEZIA SANTA LUCIA</td><td>17:18</td><td>0</td><td>1</td><td></td>
           </tr>
           <tr class="riga">
             <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
-            <td><img src="/i/FR.png" alt="Frecciarossa" /></td>
+            <td><img src="/i/AV.png" alt="Categoria Alta Velocita&#39;" /></td>
             <td>9402</td><td>ROMA TERMINI</td><td>17:25</td><td>10</td><td>5</td><td>In stazione</td>
           </tr>
           <tr class="riga lampeggia">
             <td><img src="/i/italo.png" alt="Italo" /></td>
-            <td><img src="/i/ITA.png" alt="Italo" /></td>
+            <td><img src="/i/ITA.png" alt="Categoria Italo" /></td>
             <td>9902</td><td>MILANO CENTRALE</td><td>17:34</td><td>0</td><td></td><td></td>
           </tr>
           <tr class="riga">
             <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
-            <td><img src="/i/RV.png" alt="Regionale Veloce" /></td>
+            <td><img src="/i/RV.png" alt="Categoria Regionale Veloce" /></td>
             <td>2774</td><td>BOLOGNA CENTRALE</td><td>17:41</td><td>Cancellato</td><td>3</td><td>Treno cancellato</td>
           </tr>
         </tbody>
@@ -612,7 +612,7 @@ struct Binario1Tests {
         #expect(venezia?.destination == "VENEZIA SANTA LUCIA")
         #expect(venezia?.time == "17:18")
         #expect(venezia?.platform == "1")
-        #expect(venezia?.category == "Regionale")
+        #expect(venezia?.category == "Categoria Regionale")   // parser keeps the raw (decoded) label
         // Missing platform stays missing (not fabricated).
         let italo = board.rows.first { $0.trainNumber == "9902" }
         #expect(italo?.platform == nil)
@@ -649,6 +649,16 @@ struct Binario1Tests {
         let cancelled = response.rows.first { $0.trainNumber == "2774" }
         #expect(cancelled?.status == .cancelled)
         #expect(cancelled?.category == "RV")
+
+        // Verbose "Categoria Alta Velocita&#39;" → compact "AV".
+        let av = response.rows.first { $0.trainNumber == "9402" }
+        #expect(av?.category == "AV")
+
+        // No mapped category leaks the raw RFI label or HTML entities.
+        for r in response.rows {
+            #expect(!r.category.contains("Categoria"))
+            #expect(!r.category.contains("&#"))
+        }
     }
 
     @Test func rfiParserAndMapperHandleEmptyHTMLSafely() {
@@ -679,6 +689,37 @@ struct Binario1Tests {
         let response = try await service.fetchBoard(stationId: "padova", type: .departures)
         #expect(!response.rows.isEmpty)                 // fell back to mock
         #expect(response.sourceKind != .rfiLive)
+    }
+
+    @Test func rfiParserDecodesHTMLEntities() {
+        let board = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
+        let av = board.rows.first { $0.trainNumber == "9402" }
+        #expect(av?.category?.contains("&#") == false)  // entity decoded by the parser
+        #expect(av?.category?.contains("'") == true)    // &#39; → apostrophe
+    }
+
+    @Test func htmlEntityDecoderDecodesNumericAndNamed() {
+        #expect(HTMLEntityDecoder.decode("Velocita&#39;") == "Velocita'")
+        #expect(HTMLEntityDecoder.decode("Velocit&#224;") == "Velocità")
+        #expect(HTMLEntityDecoder.decode("A&amp;B") == "A&B")
+        #expect(HTMLEntityDecoder.decode("plain text") == "plain text")
+    }
+
+    @Test func rfiCategoryNormalizerMapsVerboseLabels() {
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria RV") == "RV")
+        #expect(RFITrainCategoryNormalizer.normalize("CATEGORIA RV") == "RV")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Regionale") == "REG")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Regionale Veloce") == "RV")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Alta Velocita&#39;") == "AV")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Alta Velocità") == "AV")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Frecciarossa") == "FR")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Intercity") == "IC")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Intercity Notte") == "ICN")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Italo") == "ITA")
+        #expect(RFITrainCategoryNormalizer.normalize("Categoria Qualcosa Di Molto Strano") == "UNK")
+        #expect(RFITrainCategoryNormalizer.normalize(nil) == "UNK")
+        #expect(RFITrainCategoryNormalizer.normalize("") == "UNK")
+        #expect(RFITrainCategoryNormalizer.normalize("REG") == "REG")
     }
 #endif
 }

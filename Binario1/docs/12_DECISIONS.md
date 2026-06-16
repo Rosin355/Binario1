@@ -103,6 +103,11 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   service/parser (mai nelle view o nel view model). I test si basano su **fixture**,
   non sulla rete. RELEASE resta `.mock`: lo spike non spedisce finché affidabilità
   e architettura prodotto/legale non sono riviste.
+- **Le label specifiche della sorgente vanno normalizzate prima dei modelli app**:
+  il parser RFI decodifica le entità HTML e converte le categorie verbose
+  (`Categoria Alta Velocita&#39;`) in **sigle compatte** (`AV`, `RV`, `REG`, `FR`,
+  `IC`, `ITA`…) prima della mappatura. La UI non riceve **mai** stringhe categoria
+  grezze; le sigle compatte sono il contratto di display a livello app.
 - **RFI "Quadro Orario" = solo orario PROGRAMMATO/scheduled**, mai presentato
   come verità live. Niente ritardi/cancellazioni/cambi binario real-time.
   Le righe scheduled hanno `status = .scheduled`, `delayMinutes`/`actualPlatform`/

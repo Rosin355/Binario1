@@ -42,6 +42,8 @@ struct FeaturedTrainRowView: View {
                         Text(row.category)
                             .font(BoardFont.category(13).italic())
                             .foregroundStyle(BoardColors.amber)
+                            .lineLimit(1)
+                            .fixedSize()
                         Text(row.trainNumber)
                             .font(BoardFont.text(12))
                             .foregroundStyle(BoardColors.amberDim)

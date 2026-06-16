@@ -95,16 +95,16 @@ enum RFIStationMonitorParser {
     // MARK: - Helpers
 
     private static func imgAltOrText(_ cellHTML: String) -> String? {
-        if let alt = firstGroup(in: cellHTML, pattern: "alt=\"([^\"]*)\""), !alt.isEmpty { return alt }
-        if let title = firstGroup(in: cellHTML, pattern: "title=\"([^\"]*)\""), !title.isEmpty { return title }
+        // alt/title run through `clean` so HTML entities (e.g. &#39;) are decoded too.
+        if let alt = firstGroup(in: cellHTML, pattern: "alt=\"([^\"]*)\""), let c = clean(alt) { return c }
+        if let title = firstGroup(in: cellHTML, pattern: "title=\"([^\"]*)\""), let c = clean(title) { return c }
         return clean(cellHTML)
     }
 
-    /// Strip tags & entities, collapse whitespace; nil if empty.
+    /// Strip tags, decode HTML entities, collapse whitespace; nil if empty.
     static func clean(_ s: String) -> String? {
         var t = s.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
-        t = t.replacingOccurrences(of: "&nbsp;", with: " ")
-        t = t.replacingOccurrences(of: "&amp;", with: "&")
+        t = HTMLEntityDecoder.decode(t)
         t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         t = t.trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t

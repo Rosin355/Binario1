@@ -2,6 +2,45 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-16 — Normalize RFI train categories
+
+Stato: completata. Prossima milestone: **verifica parser su HTML RFI reale**.
+
+### Bug (su iPhone reale)
+- Le categorie RFI arrivavano verbose: `Categoria RV`, `Categoria Alta
+  Velocita&#39;`, ecc. → card con testo lungo, lista compatta troncata `CATE...`,
+  entità HTML non decodificate (`&#39;`).
+
+### Fix (solo parser/normalizzazione)
+- Nuovo `HTMLEntityDecoder` (entità numeriche `&#39;`/`&#224;` + alcune named) e
+  `RFITrainCategoryNormalizer`: decodifica entità → normalizza apostrofi/accenti →
+  rimuove il prefisso `Categoria` → mappa alle sigle compatte
+  (Regionale→REG, Regionale Veloce→RV, Alta Velocità/Velocita'→AV, Frecciarossa→FR,
+  Frecciargento→FA, Frecciabianca→FB, Intercity→IC, Intercity Notte→ICN, Italo→ITA,
+  Eurocity→EC, Euronight→EN). Sconosciute lunghe → `UNK` (mai stringhe lunghe).
+- Il parser ora **decodifica le entità** in `clean` e negli `alt` immagine, così
+  nessuna cella (categoria, destinazione…) espone `&#…`.
+- `RFILiveMapper.category` delega al normalizzatore (+ log DEBUG `raw→normalized`).
+- UI: aggiunto `lineLimit(1)` alla categoria della card "Prossime partenze"
+  (la lista compatta aveva già `lineLimit(1)` + colonna fissa). Numero treno resta
+  separato dalla categoria. Nessun redesign.
+
+### Test
+- Normalizzatore (tutti i casi: RV/REG/AV/FR/IC/ICN/ITA, sconosciuto→UNK,
+  nil/empty→UNK), decoder HTML, e fixture RFI aggiornata con `Categoria …` +
+  `&#39;`: asserzioni che nessuna `TrainBoardRow.category` contiene `Categoria` o
+  `&#`, riga AV→`AV`, riga RV→`RV`. Niente rete.
+
+### File
+- Nuovo: `Services/RFITrainCategoryNormalizer.swift` (`#if DEBUG`).
+- Modificati: `Services/RFIStationMonitorParser.swift` (decode entità),
+  `Services/RFILiveBoardService.swift` (delega + log), `Views/FeaturedTrainRowView.swift`
+  (`lineLimit(1)` categoria), `Binario1Tests` + fixture `rfi-padova-departures.sample.html`.
+
+### Build / test
+- Build: OK (Debug e Release). Test target: compila. Esecuzione unit test bloccata
+  da instabilità CoreSimulator (ambiente).
+
 ## 2026-06-16 — RFI live Padova spike
 
 Stato: completata (spike tecnico). Prossima milestone: **verifica parser su HTML

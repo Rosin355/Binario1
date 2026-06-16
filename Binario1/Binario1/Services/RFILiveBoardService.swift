@@ -16,17 +16,14 @@ import Foundation
 
 enum RFILiveMapper {
 
-    /// Normalize an RFI category label/code to a compact board code; unknown values
-    /// are kept as-is (already a code) rather than invented.
+    /// Compact board code from a verbose RFI category label, via the dedicated
+    /// normalizer (decodes entities, strips "Categoria", maps to codes, else "UNK").
     static func category(from raw: String?) -> String {
-        guard let value = raw?.trimmingCharacters(in: .whitespaces).uppercased(), !value.isEmpty else { return "" }
-        let map: [String: String] = [
-            "REGIONALE": "REG", "REGIONALE VELOCE": "RV",
-            "FRECCIAROSSA": "FR", "FRECCIARGENTO": "FA", "FRECCIABIANCA": "FB",
-            "INTERCITY": "IC", "INTERCITY NOTTE": "ICN", "EUROCITY": "EC", "EURONIGHT": "EN",
-            "ITALO": "ITA",
-        ]
-        return map[value] ?? value
+        let code = RFITrainCategoryNormalizer.normalize(raw)
+        if let raw, raw != code {
+            print("[RFILive] category raw=\"\(raw)\" normalized=\"\(code)\"")
+        }
+        return code
     }
 
     /// A real, positive delay in minutes — or nil. "0", "", non-numeric → no delay
