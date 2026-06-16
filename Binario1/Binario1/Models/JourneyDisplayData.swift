@@ -23,13 +23,33 @@ struct JourneyDisplayData: Equatable {
     var routeText: String { "\(origin) → \(destination)" }
     var hasPlatform: Bool { platform?.isEmpty == false }
     var platformDisplay: String { hasPlatform ? platform! : "--" }
+
+    // MARK: - Board (uppercase, abbreviated) display strings
+    // The board cards/rows show compact UPPERCASE station names; the full names
+    // remain in `routeText` and `accessibilityLabel`.
+
+    var originBoard: String { Self.shortStation(origin) }
+    var destinationBoard: String { Self.shortStation(destination) }
+    var boardRoute: String { "\(originBoard) → \(destinationBoard)" }
+
+    /// Uppercase + the abbreviations seen on real boards (S.M.N., S. LUCIA, T.).
+    /// Intentionally keeps "CENTRALE" full, matching the design reference.
+    static func shortStation(_ name: String) -> String {
+        var r = name.uppercased()
+        r = r.replacingOccurrences(of: "SANTA MARIA NOVELLA", with: "S.M.N.")
+        r = r.replacingOccurrences(of: "SANTA LUCIA", with: "S. LUCIA")
+        let map = ["TERME": "T.", "SANTA": "S.", "SAN": "S."]
+        return r.split(separator: " ").map { map[String($0)] ?? String($0) }.joined(separator: " ")
+    }
 }
 
 extension JourneyDisplayData {
 
     // MARK: - Helpers
 
-    private static func durationText(_ minutes: Int) -> String { "\(minutes) min" }
+    private static func durationText(_ minutes: Int) -> String {
+        String(format: String(localized: "journey.duration.value"), minutes)
+    }
 
     private static func spokenDuration(_ minutes: Int) -> String {
         String(format: String(localized: "accessibility.duration.minutes"), minutes)

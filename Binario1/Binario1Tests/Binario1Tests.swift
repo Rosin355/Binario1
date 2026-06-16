@@ -447,4 +447,37 @@ struct Binario1Tests {
         vm.selectFilter(.recent)
         #expect(vm.showsRecentSection && !vm.showsSavedSection && !vm.showsSuggestedSection)
     }
+
+    // MARK: - Cerca (Search)
+
+    @MainActor
+    @Test func cercaViewModelFilters() {
+        let vm = CercaViewModel()
+        // Idle: not searching, everything shown.
+        #expect(vm.isSearching == false)
+        #expect(vm.hasResults)
+        #expect(vm.stations.contains("Padova"))
+
+        // Case-insensitive query narrows across sections.
+        vm.query = "venezia"
+        #expect(vm.isSearching)
+        #expect(vm.stations.contains("Venezia Santa Lucia"))
+        #expect(vm.routes.contains("Padova → Venezia Santa Lucia"))
+        #expect(vm.trains.isEmpty)
+
+        // Train number query matches only trains.
+        vm.query = "1722"
+        #expect(vm.trains.contains("REG 1722"))
+        #expect(vm.stations.isEmpty)
+        #expect(vm.routes.isEmpty)
+
+        // No match → no results.
+        vm.query = "zzzz"
+        #expect(!vm.hasResults)
+
+        // Whitespace-only query is treated as idle.
+        vm.query = "   "
+        #expect(vm.isSearching == false)
+        #expect(vm.hasResults)
+    }
 }

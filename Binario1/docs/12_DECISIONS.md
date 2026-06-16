@@ -6,18 +6,18 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 
 - **Brand `Binario1` rimosso dall'header**: si confondeva col numero di binario.
   L'header usa un contesto stazione: `STAZIONE DI` (IT) / `STATION` (EN).
-- **Titolo stazione = dot-matrix STATICO** (`DotMatrixStationTitleView` /
-  `StaticDotMatrixText`), stile LED ferroviario luminoso. **Nessuna animazione
-  del titolo per ora.** Sostituisce gli esperimenti animati (LED scan,
-  split-flap, FlipBoard a slot fissi), tutti rimossi.
-  - Rationale: più pulito, premium e leggibile; meno "finto" delle celle
-    meccaniche; nessun rischio di glitch/ghosting/overlap di rendering.
-  - Glifi composti da punti LED a gradiente (no box per carattere, no celle),
-    glow leggero, overscan verticale → seconda riga mai tagliata. Aggiornamento
-    istantaneo al cambio stazione; nome completo nelle accessibility label.
-  - Un'eventuale animazione del titolo sarà riconsiderata in futuro solo dopo
-    che il design statico è perfetto.
-  - Resto della Home invariato, stile Binario1 esistente.
+- **Titolo stazione = LED/dot-matrix ANIMATO approvato** (`DotMatrixStationTitleView`):
+  base `Text` sempre visibile + griglia di punti LED mascherata (additiva) + glow,
+  stile LED ferroviario luminoso. **Animazione = flip 3D per carattere** (asse
+  `(x:0, y:1, z:0)`, stagger `index*0.1`), eseguita sia come **reveal alla prima
+  comparsa** sia al cambio stazione; Reduce Motion → aggiornamento istantaneo.
+  - Glifi a punti LED (no box/celle per carattere); nome completo nelle
+    accessibility label; resto della Home invariato.
+  - Supera/scarta gli esperimenti rifiutati (split-flap, FlipBoard a celle,
+    renderer Canvas/sampling che poteva risultare invisibile).
+  - **Evitare regressioni nell'area header/titolo** quando si implementano
+    feature non correlate: in `.scheduledPadova` la stazione è bloccata, quindi
+    il flip deve comunque animarsi via reveal (il titolo non deve restare statico).
 - **Affidabilità del renderer del titolo**: il titolo DEVE usare un'implementazione
   `Text`/SwiftUI sempre visibile come base, non un renderer complesso
   (ImageRenderer/Canvas/sampling) che può risultare vuoto/invisibile. Eventuale
@@ -64,6 +64,16 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   rinviata (no `Tab(role: .search)` ora).
 - **Riuso del design system**: `BoardSectionHeader` esteso in modo additivo
   (`trailingKey` opzionale per "Vedi tutti") invece di duplicare lo stile.
+
+## Navigazione (tab)
+
+- **Tre tab primari: Partenze · Viaggi · Cerca.** Il terzo tab è **Cerca**
+  (ricerca), non Info, e usa il ruolo nativo `Tab(role: .search)`.
+- **La ricerca è primaria** perché gli utenti spesso iniziano cercando una
+  stazione, una tratta o un treno: merita un punto d'accesso di primo livello.
+- **Info/About diventerà un'area secondaria** (settings/info) più avanti;
+  `InfoView` resta nel codice ma non è più un tab primario.
+- **Cerca è mock-only** in questa fase (catalogo locale, nessuna API/AI).
 
 ## Sorgenti dati
 

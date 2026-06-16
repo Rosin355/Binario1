@@ -100,7 +100,11 @@ private struct FlipCharacter: View {
     var body: some View {
         glyph
             .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
-            .onAppear { if !didAppear { shown = target; didAppear = true } }     // no flip on first show
+            .onAppear {                                   // reveal: play the approved flip on first show
+                guard !didAppear else { return }
+                didAppear = true
+                startFlip(to: target)
+            }
             .onChange(of: target) { _, new in startFlip(to: new) }
             .onDisappear { flip?.cancel() }
     }

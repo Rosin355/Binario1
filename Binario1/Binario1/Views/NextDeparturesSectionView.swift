@@ -55,6 +55,7 @@ struct BoardSectionHeader: View {
     let titleKey: LocalizedStringKey
     var systemImage: String?
     var trailingKey: LocalizedStringKey? = nil
+    var trailingAction: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -71,16 +72,36 @@ struct BoardSectionHeader: View {
                 .ledGlow(BoardColors.amber, radius: 2, opacity: 0.3)
             if let trailingKey {
                 Spacer(minLength: 8)
-                Text(trailingKey)
-                    .font(BoardFont.text(11, .semibold))
-                    .tracking(0.4)
-                    .textCase(.uppercase)
-                    .foregroundStyle(BoardColors.amberDim)
+                trailing(trailingKey)
             }
         }
         .lineLimit(1)
         .minimumScaleFactor(0.7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder
+    private func trailing(_ key: LocalizedStringKey) -> some View {
+        if let trailingAction {
+            Button(action: trailingAction) { trailingLabel(key) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(key))
+                .accessibilityAddTraits(.isButton)
+        } else {
+            trailingLabel(key)
+        }
+    }
+
+    private func trailingLabel(_ key: LocalizedStringKey) -> some View {
+        HStack(spacing: 3) {
+            Text(key)
+                .font(BoardFont.text(11, .semibold))
+                .tracking(0.4)
+                .textCase(.uppercase)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+        }
+        .foregroundStyle(BoardColors.amberDim)
     }
 }

@@ -25,6 +25,10 @@ enum BoardColors {
     static let delay       = Color(red: 1.0,  green: 0.22, blue: 0.07)      // big delays / cancelled
     static let cancelled   = Color(red: 1.0,  green: 0.22, blue: 0.07)
 
+    // On-time status (Viaggi): a railway green dot/label, used sparingly.
+    static let statusGreen    = Color(red: 0.36, green: 0.86, blue: 0.40)
+    static let statusGreenDim = Color(red: 0.24, green: 0.62, blue: 0.30)
+
     static let border      = Color(red: 0.42, green: 0.24, blue: 0.05)      // card / box borders
     static let borderDim   = Color(red: 0.24, green: 0.14, blue: 0.03)
     static let gridLine    = Color(red: 0.19, green: 0.10, blue: 0.02)      // dividers

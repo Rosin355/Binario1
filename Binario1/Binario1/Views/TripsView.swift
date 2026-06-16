@@ -3,8 +3,8 @@
 //  Binario1
 //
 //  Viaggi — the personal commuter dashboard: saved routes, the best next trip,
-//  recent journeys and quick actions. Keeps the Binario1 board identity (matte
-//  black, amber, subtle texture/glow) but is more card-based than the board.
+//  recent journeys and quick actions. Section order matches the design:
+//  Tratte salvate → Prossimo viaggio utile → Recenti → quick actions.
 //
 
 import SwiftUI
@@ -18,7 +18,7 @@ struct TripsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    TripsHeaderView(onNewTrip: {})
+                    TripsHeaderView(lastUpdated: viewModel.lastUpdated, onSearch: {})
 
                     TripsFilterControl(
                         selected: viewModel.selectedFilter,
@@ -47,22 +47,23 @@ struct TripsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
         } else {
-            if viewModel.showsSuggestedSection, let suggested = viewModel.suggestedJourney {
-                section("trips.section.useful", icon: "star.fill") {
-                    UsefulJourneyCardView(journey: suggested)
-                }
-            }
-
             if viewModel.showsSavedSection {
-                section("trips.section.saved", icon: "bookmark.fill", trailingKey: "trips.seeAll") {
+                section("trips.section.saved", icon: "bookmark.fill") {
                     VStack(spacing: 12) {
                         ForEach(viewModel.savedJourneys) { SavedJourneyCardView(journey: $0) }
                     }
                 }
             }
 
+            if viewModel.showsSuggestedSection, let suggested = viewModel.suggestedJourney {
+                section("trips.section.useful", icon: "clock.fill") {
+                    UsefulJourneyCardView(journey: suggested)
+                }
+            }
+
             if viewModel.showsRecentSection {
-                section("trips.section.recent", icon: "clock.arrow.circlepath", trailingKey: "trips.seeAll") {
+                section("trips.section.recent", icon: "clock.arrow.circlepath",
+                        trailingKey: "trips.seeAll", trailingAction: {}) {
                     recentPanel
                 }
             }
@@ -97,9 +98,11 @@ struct TripsView: View {
     private func section<Content: View>(_ titleKey: LocalizedStringKey,
                                         icon: String,
                                         trailingKey: LocalizedStringKey? = nil,
+                                        trailingAction: (() -> Void)? = nil,
                                         @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            BoardSectionHeader(titleKey: titleKey, systemImage: icon, trailingKey: trailingKey)
+            BoardSectionHeader(titleKey: titleKey, systemImage: icon,
+                               trailingKey: trailingKey, trailingAction: trailingAction)
             content()
         }
     }

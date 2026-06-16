@@ -2,9 +2,11 @@
 //  JourneyStatusBadgeView.swift
 //  Binario1
 //
-//  Status chip for a journey, in the board's amber / red-orange language (mirrors
-//  DelayBadgeView styling). On-time / cancelled use localized labels; a delay
-//  shows "+N min". Hidden from VoiceOver — the parent card carries the full label.
+//  Journey status indicator: a colored dot + label, matching the design.
+//   • On time  → green dot + green "In orario" (no box)
+//   • Delayed  → red dot + red-outlined "+N min" badge
+//   • Cancelled→ red dot + red-outlined "CANC" badge
+//  Hidden from VoiceOver — the parent card carries the full spoken label.
 //
 
 import SwiftUI
@@ -13,39 +15,62 @@ struct JourneyStatusBadgeView: View {
     let status: JourneyStatus
     var fontSize: CGFloat = 13
 
-    private var tint: Color { status.isCritical ? BoardColors.delay : BoardColors.amber }
-
     var body: some View {
-        label
-            .font(BoardFont.text(fontSize, .bold))
-            .foregroundStyle(tint)
-            .ledGlow(tint, radius: 3, opacity: 0.4)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(tint.opacity(status.isCritical ? 0.16 : 0.10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .stroke(tint.opacity(0.85), lineWidth: 1)
-                    )
-            )
-            .fixedSize()
-            .accessibilityHidden(true)
+        HStack(spacing: 6) {
+            Circle()
+                .fill(dotColor)
+                .frame(width: 7, height: 7)
+                .shadow(color: dotColor.opacity(0.7), radius: 3)
+            content
+        }
+        .fixedSize()
+        .accessibilityHidden(true)
+    }
+
+    private var dotColor: Color {
+        switch status {
+        case .onTime:              return BoardColors.statusGreen
+        case .delayed, .cancelled: return BoardColors.delay
+        }
     }
 
     @ViewBuilder
-    private var label: some View {
+    private var content: some View {
         switch status {
-        case .onTime:         Text("status.onTime")
-        case .delayed(let m): Text(verbatim: "+\(m) min")
-        case .cancelled:      Text("status.cancelled")
+        case .onTime:
+            Text("status.onTime")
+                .font(BoardFont.text(fontSize, .semibold))
+                .foregroundStyle(BoardColors.statusGreen)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        case .delayed(let m):
+            badge(Text(String(format: String(localized: "status.delay.short"), m)))
+        case .cancelled:
+            badge(Text("status.cancelled"))
         }
+    }
+
+    private func badge(_ text: Text) -> some View {
+        text
+            .font(BoardFont.text(fontSize, .bold))
+            .foregroundStyle(BoardColors.delay)
+            .ledGlow(BoardColors.delay, radius: 3, opacity: 0.4)
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(BoardColors.delay.opacity(0.14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .stroke(BoardColors.delay.opacity(0.9), lineWidth: 1)
+                    )
+            )
     }
 }
 
 #Preview {
-    HStack(spacing: 12) {
+    VStack(alignment: .leading, spacing: 14) {
         JourneyStatusBadgeView(status: .onTime)
         JourneyStatusBadgeView(status: .delayed(minutes: 12))
         JourneyStatusBadgeView(status: .cancelled)

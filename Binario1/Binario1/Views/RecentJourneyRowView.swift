@@ -2,8 +2,9 @@
 //  RecentJourneyRowView.swift
 //  Binario1
 //
-//  A compact recent-journey row: departure time, route, train, duration, optional
-//  platform and a chevron affordance.
+//  A compact recent-journey row, matching the design: strong LED time column,
+//  board route on the main line, "category number · duration" on the secondary
+//  line, an optional binario on the right, and a chevron affordance.
 //
 
 import SwiftUI
@@ -13,36 +14,35 @@ struct RecentJourneyRowView: View {
 
     private var data: JourneyDisplayData { .make(journey) }
 
+    private var trainAndDuration: String {
+        if let train = data.trainText { return "\(train) · \(data.durationText)" }
+        return data.durationText
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            Text(data.departureText)
-                .font(BoardFont.digits(18))
-                .foregroundStyle(BoardColors.amber)
-                .ledGlow(BoardColors.amber, radius: 2, opacity: 0.25)
-                .frame(width: 54, alignment: .leading)
+            LEDText(text: data.departureText, size: 17, color: BoardColors.amberBright)
+                .frame(width: 52, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(data.routeText)
-                    .font(BoardFont.text(14, .semibold))
+                Text(data.boardRoute)
+                    .font(BoardFont.text(13.5, .semibold))
+                    .tracking(0.2)
                     .foregroundStyle(BoardColors.amberBright)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                HStack(spacing: 6) {
-                    if let train = data.trainText {
-                        Text(train)
-                            .font(BoardFont.text(11, .semibold))
-                            .foregroundStyle(BoardColors.amberDim)
-                    }
-                    Text(data.durationText)
-                        .font(BoardFont.text(11))
-                        .foregroundStyle(BoardColors.amberFaint)
-                }
+                    .minimumScaleFactor(0.55)
+                Text(trainAndDuration)
+                    .font(BoardFont.text(11))
+                    .foregroundStyle(BoardColors.amberDim)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
 
             Spacer(minLength: 6)
 
             if data.hasPlatform {
-                PlatformBadgeView(platform: data.platformDisplay, numberSize: 15)
+                JourneyPlatformBadgeView(platform: data.platformDisplay, numberSize: 16,
+                                         captionSize: 7, alignment: .trailing)
             }
 
             Image(systemName: "chevron.right")
@@ -60,7 +60,11 @@ struct RecentJourneyRowView: View {
 
 #Preview {
     VStack(spacing: 0) {
-        ForEach(MockTripsService.sample(on: Date()).recent) { RecentJourneyRowView(journey: $0) }
+        let rows = MockTripsService.sample(on: Date()).recent
+        ForEach(Array(rows.enumerated()), id: \.element.id) { i, j in
+            RecentJourneyRowView(journey: j)
+            if i < rows.count - 1 { Rectangle().fill(BoardColors.gridLine).frame(height: 1) }
+        }
     }
     .background(BoardColors.panel)
     .padding()

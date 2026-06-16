@@ -21,6 +21,8 @@ final class TripsViewModel {
     private(set) var recentJourneys: [RecentJourney] = []
     private(set) var isLoading = false
     private(set) var errorMessageKey: String?
+    /// When the dashboard was last (mock-)refreshed — shown as "Aggiornato HH:mm".
+    private(set) var lastUpdated: Date?
 
     private let service: TripsService
 
@@ -54,6 +56,7 @@ final class TripsViewModel {
             savedJourneys = data.saved
             suggestedJourney = data.suggested
             recentJourneys = data.recent
+            lastUpdated = Date()
             errorMessageKey = nil
         } catch {
             errorMessageKey = "error.dataUnavailable"

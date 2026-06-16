@@ -2,6 +2,107 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-15 — Restore approved Home LED title
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
+
+### Cosa (solo area titolo Home)
+- Ripristinata l'**animazione** del titolo stazione LED/dot-matrix già approvato
+  (`DotMatrixStationTitleView`, flip 3D per carattere, asse `(x:0, y:1, z:0)`,
+  stagger per indice, rispetta Reduce Motion).
+- **Causa della regressione**: il renderer non era cambiato (è quello approvato:
+  `Text` affidabile + griglia di punti LED mascherata + glow), ma il flip partiva
+  solo `onChange` della stazione; con `.scheduledPadova` la stazione è bloccata su
+  Padova → il flip non scattava mai → titolo "statico".
+- **Fix**: il flip approvato ora parte anche come **reveal alla prima comparsa**
+  (`onAppear`), riusando lo stesso meccanismo `startFlip` — nessun renderer nuovo,
+  nessuna variante. Padova "accende" i caratteri a cascata; in mock il flip al
+  cambio stazione resta.
+- Nessuna modifica a: righe board, `.scheduledPadova`, label
+  `Orario programmato · demo 06:00–06:59`, segmented Partenze/Arrivi, ticker,
+  Viaggi, Cerca, navigazione.
+
+### File
+- Modificato: `Views/DotMatrixStationTitleView.swift` (solo `FlipCharacter.onAppear`).
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente, non codice).
+
+## 2026-06-15 — Native Search Tab
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
+
+### Cosa
+- Il terzo tab primario passa da **Info** a **Cerca**, usando il ruolo nativo
+  SwiftUI `Tab(role: .search)`. Nuovo ordine tab: **Partenze · Viaggi · Cerca**.
+- Nuova `CercaView` con `.searchable` nativo (dentro `NavigationStack`): da inattiva
+  mostra tre voci categoria (Cerca stazione / tratta / treno); durante la ricerca
+  mostra risultati **mock** raggruppati in Stazioni / Tratte / Treni, oppure
+  `Nessun risultato`. `CercaViewModel` (`@Observable`) filtra un catalogo mock
+  (case-insensitive). **Solo mock**: niente API, AI, notifiche, persistenza.
+- `InfoView` **non rimossa**: resta nel codice per una futura area secondaria
+  settings/about (non è più un tab primario).
+- Localizzazione IT/EN: `tab.search`, `search.station/route/train`,
+  `search.stations/routes/trains`, `search.noResults`, `search.prompt`.
+- Partenze e Viaggi invariati.
+
+### File
+- Nuovi: `Views/CercaView.swift`, `ViewModel/CercaViewModel.swift`.
+- Modificati: `Views/RootTabView.swift` (Info → Cerca `.search`),
+  `Localizable.xcstrings`, `Binario1Tests` (filtro ricerca).
+- `Views/InfoView.swift`: invariata, non più referenziata come tab.
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente, non codice).
+
+## 2026-06-15 — Viaggi Visual Fidelity Pass
+
+Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.
+
+### Cosa (solo UI Viaggi; Home/Partenze invariata)
+- Refinement pixel-oriented del tab Viaggi sul mockup di riferimento. Dati e
+  architettura invariati.
+- **Header**: brand `Binario [1]` (cifra in box), titolo LED dot-matrix `VIAGGI`
+  (nuovo primitivo riusabile `LEDText`), sottotitolo, **bottone cerca circolare**
+  (placeholder, no logica Search) e `Aggiornato HH:mm ●` (mostrato solo dopo il
+  caricamento).
+- **Filtro**: pill selezionata con gradiente ambra brillante + testo scuro + glow,
+  transizione animata (`matchedGeometryEffect`).
+- **Ordine sezioni** allineato al mockup: Tratte salvate → Prossimo viaggio utile
+  → Recenti → azioni rapide.
+- **Card salvate**: icona circolare casa/lavoro, stella, titolo + rotta board
+  UPPERCASE abbreviata, griglia a 4 colonne allineate (Partenza/Binario/Durata/
+  Stato). **Stato**: pallino verde + `In orario` / pallino rosso + badge `+12 min`.
+- **Prossimo viaggio utile**: orario LED grande + destinazione + `da ORIGINE`,
+  griglia Durata/Treno/Arrivo con separatori, **binario LED grande** a destra,
+  barra inferiore con pallino verde `In orario` + icona treno; bordo ambra bright.
+- **Recenti**: righe compatte (ora LED, rotta board, `CAT NUM · durata`, binario,
+  chevron) con `Vedi tutti ›` azionabile nell'header sezione.
+- **Azioni rapide**: pill compatte orizzontali (icona + testo).
+- **Tab bar**: icone tram/suitcase/info, aspetto scuro opaco + tint ambra.
+- Nuovo colore `BoardColors.statusGreen` per lo stato "in orario".
+
+### Verifica / fix
+- Review multi-agente di fedeltà al mockup; applicati fix: stringhe `min`/`+N min`
+  localizzate (`journey.duration.value`, `status.delay.short`), `Vedi tutti`
+  azionabile + chevron + VoiceOver, header timestamp non finto, allineamento
+  colonne, highlight bright sulla card centrale.
+
+### File
+- Nuovi: `Views/LEDText.swift`. Modificati: `Views/TripsHeaderView`,
+  `TripsFilterControl`, `SavedJourneyCardView`, `UsefulJourneyCardView`,
+  `RecentJourneyRowView`, `TripsQuickActionsView`, `JourneyStatusBadgeView`,
+  `JourneyPlatformBadgeView`, `TripsView`, `RootTabView`,
+  `NextDeparturesSectionView` (`BoardSectionHeader` + `trailingAction`, additivo),
+  `Models/JourneyDisplayData` (rotta board), `ViewModel/TripsViewModel`
+  (`lastUpdated`), `DesignSystem/BoardTheme` (verde), `Localizable.xcstrings`.
+
+### Build / test
+- Build: OK (Debug). Test target: compila. Esecuzione unit test bloccata da
+  instabilità CoreSimulator (ambiente, non codice).
+
 ## 2026-06-15 — Viaggi Tab MVP
 
 Stato: completata. Prossima milestone: **Smart Suggestions / App Intents** (Viaggi
