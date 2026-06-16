@@ -36,6 +36,13 @@ struct StationBoardView: View {
                 )
                 .padding(.top, 2)
 
+                #if DEBUG
+                if AppEnvironment.sourceMode == .rfiLivePadova {
+                    RFILiveDiagnosticsBanner()
+                        .padding(.bottom, 2)
+                }
+                #endif
+
                 BoardTypeSegmentedControl(
                     selected: viewModel.boardType,
                     onSelect: { type in

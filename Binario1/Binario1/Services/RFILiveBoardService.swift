@@ -108,16 +108,24 @@ final class RFILiveBoardService: TrainBoardService, @unchecked Sendable {
     private let fetcher: RFIMonitorFetching
     private let fallback: TrainBoardService
     private let referenceDate: @Sendable () -> Date
+    private let captureHTML: Bool
+    private let recordDiagnostics: @Sendable (RFIStationMonitorDiagnostics) -> Void
 
     /// RFI live monitor placeId for Padova (distinct from the PRM scheduled id 1861).
     private let padovaPlaceId = "2000"
 
     init(fetcher: RFIMonitorFetching = RFIStationMonitorClient(),
          fallback: TrainBoardService = MockTrainBoardService(),
-         referenceDate: @escaping @Sendable () -> Date = { Date() }) {
+         referenceDate: @escaping @Sendable () -> Date = { Date() },
+         captureHTML: Bool = true,
+         recordDiagnostics: (@Sendable (RFIStationMonitorDiagnostics) -> Void)? = nil) {
         self.fetcher = fetcher
         self.fallback = fallback
         self.referenceDate = referenceDate
+        self.captureHTML = captureHTML
+        self.recordDiagnostics = recordDiagnostics ?? { diagnostics in
+            Task { @MainActor in RFILiveDiagnosticsStore.shared.record(diagnostics) }
+        }
     }
 
     func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
@@ -125,19 +133,41 @@ final class RFILiveBoardService: TrainBoardService, @unchecked Sendable {
         guard type == .departures else {
             return try await fallback.fetchBoard(stationId: stationId, type: type)
         }
+        let url = RFIStationMonitorClient.monitorURL(placeId: padovaPlaceId, arrivals: false)
         do {
-            let html = try await fetcher.fetchMonitorHTML(placeId: padovaPlaceId, arrivals: false)
-            let board = RFIStationMonitorParser.parse(html)
+            let result = try await fetcher.fetchMonitor(placeId: padovaPlaceId, arrivals: false)
+            let capturedPath = captureHTML ? RFIRawHTMLCapture.save(result.html) : nil
+            let board = RFIStationMonitorParser.parse(result.html)
             let response = RFILiveMapper.map(board, referenceDate: referenceDate())
-            guard !response.rows.isEmpty else {
-                print("[RFILive] parsed 0 rows → mock fallback")
+
+            if response.rows.isEmpty {
+                record(url: result.url, status: result.statusCode, contentType: result.contentType,
+                       bytes: result.byteCount, rows: 0, usedFallback: true,
+                       source: "fallback-after-empty-parse", error: nil, path: capturedPath)
+                print("[RFILive] RFI FETCH OK BUT PARSE FAILED (0 rows) → fallback · \(result.url)")
                 return try await fallback.fetchBoard(stationId: stationId, type: type)
             }
+
+            record(url: result.url, status: result.statusCode, contentType: result.contentType,
+                   bytes: result.byteCount, rows: response.rows.count, usedFallback: false,
+                   source: "live", error: nil, path: capturedPath)
+            print("[RFILive] RFI LIVE OK · \(response.rows.count) rows · \(result.byteCount) bytes · \(result.contentType ?? "?")")
             return response
         } catch {
-            print("[RFILive] fetch/parse failed: \(error) → mock fallback")
+            record(url: url, status: nil, contentType: nil, bytes: 0, rows: 0, usedFallback: true,
+                   source: "fallback-after-fetch-error", error: "\(error)", path: nil)
+            print("[RFILive] RFI FETCH FAILED → fallback: \(error)")
             return try await fallback.fetchBoard(stationId: stationId, type: type)
         }
+    }
+
+    private func record(url: URL, status: Int?, contentType: String?, bytes: Int, rows: Int,
+                        usedFallback: Bool, source: String, error: String?, path: String?) {
+        recordDiagnostics(RFIStationMonitorDiagnostics(
+            url: url, statusCode: status, contentType: contentType, receivedByteCount: bytes,
+            parsedRowCount: rows, usedFallback: usedFallback, renderedSource: source,
+            errorDescription: error, capturedHTMLPath: path, capturedAt: Date()
+        ))
     }
 }
 #endif

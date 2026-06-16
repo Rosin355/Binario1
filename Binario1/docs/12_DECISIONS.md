@@ -108,6 +108,12 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   (`Categoria Alta Velocita&#39;`) in **sigle compatte** (`AV`, `RV`, `REG`, `FR`,
   `IC`, `ITA`…) prima della mappatura. La UI non riceve **mai** stringhe categoria
   grezze; le sigle compatte sono il contratto di display a livello app.
+- **In DEBUG il mode RFI non fa MAI fallback silenzioso**: ogni esito (live /
+  fetch-ok-parse-vuoto / fetch-fallito) è registrato in `RFIStationMonitorDiagnostics`
+  e mostrato (banner DEBUG + console). La validazione della sorgente live richiede
+  il **capture dell'HTML grezzo** (Documents, solo DEBUG); l'HTML catturato può
+  diventare una fixture **sanitizzata**, ma non viene mai committato automaticamente
+  né caricato. Nessuna diagnostica/capture in RELEASE.
 - **RFI "Quadro Orario" = solo orario PROGRAMMATO/scheduled**, mai presentato
   come verità live. Niente ritardi/cancellazioni/cambi binario real-time.
   Le righe scheduled hanno `status = .scheduled`, `delayMinutes`/`actualPlatform`/

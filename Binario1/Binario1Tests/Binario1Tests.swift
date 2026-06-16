@@ -586,10 +586,23 @@ struct Binario1Tests {
     private struct StubMonitorFetcher: RFIMonitorFetching {
         var html: String? = nil
         var failing: Bool = false
-        func fetchMonitorHTML(placeId: String, arrivals: Bool) async throws -> String {
+        func fetchMonitor(placeId: String, arrivals: Bool) async throws -> RFIMonitorFetchResult {
             if failing { throw TrainBoardServiceError.resourceMissing }
-            return html ?? ""
+            let h = html ?? ""
+            return RFIMonitorFetchResult(
+                html: h,
+                url: RFIStationMonitorClient.monitorURL(placeId: placeId, arrivals: arrivals),
+                statusCode: 200, contentType: "text/html", byteCount: h.utf8.count
+            )
         }
+    }
+
+    /// Thread-safe capture box for the diagnostics recorder closure.
+    private final class DiagBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: RFIStationMonitorDiagnostics?
+        var value: RFIStationMonitorDiagnostics? { lock.lock(); defer { lock.unlock() }; return stored }
+        func set(_ d: RFIStationMonitorDiagnostics) { lock.lock(); stored = d; lock.unlock() }
     }
 
     @Test func rfiMonitorURLBuildsPadovaDepartures() {
@@ -675,7 +688,8 @@ struct Binario1Tests {
         let service = RFILiveBoardService(
             fetcher: StubMonitorFetcher(html: Self.rfiPadovaFixtureHTML),
             fallback: mock,
-            referenceDate: { ref }
+            referenceDate: { ref },
+            captureHTML: false
         )
         let response = try await service.fetchBoard(stationId: "padova", type: .departures)
         #expect(response.sourceKind == .rfiLive)
@@ -685,10 +699,56 @@ struct Binario1Tests {
 
     @Test func rfiServiceFallsBackToMockOnFailure() async throws {
         let mock = MockTrainBoardService(); mock.artificialDelay = .zero
-        let service = RFILiveBoardService(fetcher: StubMonitorFetcher(failing: true), fallback: mock)
+        let service = RFILiveBoardService(fetcher: StubMonitorFetcher(failing: true), fallback: mock, captureHTML: false)
         let response = try await service.fetchBoard(stationId: "padova", type: .departures)
         #expect(!response.rows.isEmpty)                 // fell back to mock
         #expect(response.sourceKind != .rfiLive)
+    }
+
+    @Test func rfiDiagnosticsReportsLiveSuccess() async throws {
+        let box = DiagBox()
+        let ref = Self.romeDate(2026, 6, 16, 17, 0)
+        let mock = MockTrainBoardService(); mock.artificialDelay = .zero
+        let service = RFILiveBoardService(
+            fetcher: StubMonitorFetcher(html: Self.rfiPadovaFixtureHTML),
+            fallback: mock, referenceDate: { ref },
+            captureHTML: false, recordDiagnostics: { box.set($0) }
+        )
+        let response = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(response.sourceKind == .rfiLive)
+        #expect(box.value?.usedFallback == false)
+        #expect(box.value?.renderedSource == "live")
+        #expect(box.value?.parsedRowCount == 4)
+        #expect((box.value?.receivedByteCount ?? 0) > 0)
+        #expect(box.value?.statusCode == 200)
+    }
+
+    @Test func rfiDiagnosticsReportsEmptyParseFallback() async throws {
+        let box = DiagBox()
+        let mock = MockTrainBoardService(); mock.artificialDelay = .zero
+        let service = RFILiveBoardService(
+            fetcher: StubMonitorFetcher(html: "<html><body>no table here</body></html>"),
+            fallback: mock, captureHTML: false, recordDiagnostics: { box.set($0) }
+        )
+        _ = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(box.value?.usedFallback == true)
+        #expect(box.value?.renderedSource == "fallback-after-empty-parse")
+        #expect(box.value?.parsedRowCount == 0)
+        #expect((box.value?.receivedByteCount ?? 0) > 0)
+    }
+
+    @Test func rfiDiagnosticsReportsFetchErrorFallback() async throws {
+        let box = DiagBox()
+        let mock = MockTrainBoardService(); mock.artificialDelay = .zero
+        let service = RFILiveBoardService(
+            fetcher: StubMonitorFetcher(failing: true),
+            fallback: mock, captureHTML: false, recordDiagnostics: { box.set($0) }
+        )
+        _ = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(box.value?.usedFallback == true)
+        #expect(box.value?.renderedSource == "fallback-after-fetch-error")
+        #expect(box.value?.errorDescription != nil)
+        #expect(box.value?.statusCode == nil)
     }
 
     @Test func rfiParserDecodesHTMLEntities() {

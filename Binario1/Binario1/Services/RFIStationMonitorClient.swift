@@ -13,9 +13,18 @@
 #if DEBUG
 import Foundation
 
-/// Abstraction over "fetch the RFI monitor HTML" so it can be stubbed in tests.
+/// HTML plus the response metadata the diagnostics layer needs.
+struct RFIMonitorFetchResult: Sendable {
+    let html: String
+    let url: URL
+    let statusCode: Int?
+    let contentType: String?
+    let byteCount: Int
+}
+
+/// Abstraction over "fetch the RFI monitor" so it can be stubbed in tests.
 protocol RFIMonitorFetching: Sendable {
-    func fetchMonitorHTML(placeId: String, arrivals: Bool) async throws -> String
+    func fetchMonitor(placeId: String, arrivals: Bool) async throws -> RFIMonitorFetchResult
 }
 
 final class RFIStationMonitorClient: RFIMonitorFetching, @unchecked Sendable {
@@ -35,8 +44,9 @@ final class RFIStationMonitorClient: RFIMonitorFetching, @unchecked Sendable {
         return components.url!
     }
 
-    func fetchMonitorHTML(placeId: String, arrivals: Bool) async throws -> String {
-        var request = URLRequest(url: Self.monitorURL(placeId: placeId, arrivals: arrivals))
+    func fetchMonitor(placeId: String, arrivals: Bool) async throws -> RFIMonitorFetchResult {
+        let url = Self.monitorURL(placeId: placeId, arrivals: arrivals)
+        var request = URLRequest(url: url)
         request.timeoutInterval = 15
         request.setValue("Mozilla/5.0 (iPhone; Binario1 spike)", forHTTPHeaderField: "User-Agent")
         request.setValue("text/html", forHTTPHeaderField: "Accept")
@@ -46,9 +56,15 @@ final class RFIStationMonitorClient: RFIMonitorFetching, @unchecked Sendable {
             throw TrainBoardServiceError.resourceMissing
         }
         // RFI pages are usually UTF-8; fall back to Latin-1 for stray bytes.
-        if let html = String(data: data, encoding: .utf8) { return html }
-        if let html = String(data: data, encoding: .isoLatin1) { return html }
-        throw TrainBoardServiceError.resourceMissing
+        let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? ""
+        guard !html.isEmpty else { throw TrainBoardServiceError.resourceMissing }
+        return RFIMonitorFetchResult(
+            html: html,
+            url: url,
+            statusCode: http.statusCode,
+            contentType: http.value(forHTTPHeaderField: "Content-Type"),
+            byteCount: data.count
+        )
     }
 }
 #endif

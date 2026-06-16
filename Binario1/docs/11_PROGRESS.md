@@ -2,6 +2,47 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-16 — RFI live diagnostics
+
+Stato: completata (tooling DEBUG). Prossima milestone: **girare su iPhone reale e
+salvare una fixture reale (sanitizzata) dal capture**.
+
+### Cosa (solo DEBUG; nessun cambiamento di produzione)
+- Nuova diagnostica `.rfiLivePadova`: niente più fallback silenzioso in DEBUG.
+- `RFIStationMonitorDiagnostics` (url, status, content-type, byte ricevuti, righe
+  parsate, fallback sì/no, `renderedSource`, errore, path HTML catturato) +
+  `RFILiveDiagnosticsStore` (`@Observable`, singleton, solo DEBUG).
+- Client: `fetchMonitor` ora restituisce `RFIMonitorFetchResult` (html + status +
+  content-type + byteCount). Il service popola la diagnostica:
+  - live → `usedFallback=false`, `renderedSource="live"`.
+  - fetch ok ma 0 righe → `"fallback-after-empty-parse"`.
+  - fetch fallito → `"fallback-after-fetch-error"`.
+- **Capture HTML grezzo** (solo DEBUG) in Documents:
+  `rfi-padova-live-latest.html` + `rfi-padova-live-YYYYMMDD-HHmmss.html`, path
+  loggato in console. Mai in RELEASE, mai committato/caricato.
+- **Banner DEBUG** sotto l'header (solo se `.rfiLivePadova`): es.
+  `DEBUG RFI: 200 · 48 KB · 12 rows · live` / `… · 0 rows · fallback` /
+  `DEBUG RFI: error · fallback` (rosso se fallback). Console logga URL, content-type,
+  path capture, errore.
+- Diagnostica iniettabile (`recordDiagnostics`) per test deterministici; di default
+  scrive nello store osservato dalla UI.
+
+### File
+- Nuovi: `Services/RFILiveDiagnostics.swift`, `Views/RFILiveDiagnosticsBanner.swift`
+  (entrambi `#if DEBUG`).
+- Modificati: `Services/RFIStationMonitorClient.swift` (`RFIMonitorFetchResult`),
+  `Services/RFILiveBoardService.swift` (diagnostica + capture), `Views/StationBoardView.swift`
+  (banner DEBUG), `Binario1Tests`.
+
+### Build / test
+- Build: OK (Debug e Release; in Release nessuna diagnostica/capture, tutto escluso).
+- Test target: compila. Esecuzione unit test bloccata da instabilità CoreSimulator
+  (ambiente). Test diagnostica via stub: live/empty/error, byteCount, rowCount.
+
+### Prossimo
+- Eseguire su iPhone reale; usare l'HTML catturato per verificare il parser e,
+  se serve, salvarne una versione **sanitizzata** come fixture (mai auto-commit).
+
 ## 2026-06-16 — Normalize RFI train categories
 
 Stato: completata. Prossima milestone: **verifica parser su HTML RFI reale**.
