@@ -96,6 +96,13 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 
 ## Sorgenti dati
 
+- **I dati reali partono come adapter DEBUG isolato** (`RFILiveBoardService`,
+  `.rfiLivePadova`, monitor RFI live placeId 2000): il monitor RFI è trattato come
+  **sorgente online, non una garanzia assoluta**. La UI consuma solo
+  `StationBoardResponse` normalizzato; il parsing HTML resta **isolato** nel layer
+  service/parser (mai nelle view o nel view model). I test si basano su **fixture**,
+  non sulla rete. RELEASE resta `.mock`: lo spike non spedisce finché affidabilità
+  e architettura prodotto/legale non sono riviste.
 - **RFI "Quadro Orario" = solo orario PROGRAMMATO/scheduled**, mai presentato
   come verità live. Niente ritardi/cancellazioni/cambi binario real-time.
   Le righe scheduled hanno `status = .scheduled`, `delayMinutes`/`actualPlatform`/

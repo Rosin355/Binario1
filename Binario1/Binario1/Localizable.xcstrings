@@ -1008,6 +1008,24 @@
         }
       }
     },
+    "board.destinationUnavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Destination unavailable" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Destinazione non disponibile" } }
+      }
+    },
+    "source.rfiLive" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online monitor" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Monitor RFI online" } }
+      }
+    },
+    "source.rfiLiveUpdated" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online monitor · updated %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Monitor RFI online · aggiornato %@" } }
+      }
+    },
     "source.scheduled" : {
       "localizations" : {
         "en" : {

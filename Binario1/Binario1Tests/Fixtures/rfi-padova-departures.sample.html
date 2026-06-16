@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<!--
+  Representative (NOT verbatim) sample of the RFI live station-monitor "Monitor"
+  page for Padova departures. Used by Binario1Tests to exercise the parser without
+  live network. The real RFI HTML may differ and the parser selectors will need
+  verification against the live page — that is the point of the spike.
+  Endpoint: https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?arrivals=False&placeId=2000
+-->
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <title>Monitor Partenze - PADOVA</title>
+</head>
+<body>
+  <div id="nomestazione">PADOVA</div>
+  <div id="aggiornamento">Aggiornato alle 17:12</div>
+  <table id="monitor">
+    <thead>
+      <tr>
+        <th>Vettore</th><th>Categoria</th><th>Treno</th><th>Destinazione</th>
+        <th>Orario</th><th>Ritardo</th><th>Binario</th><th>Info</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="riga">
+        <td><img src="/img/trenitalia.png" alt="Trenitalia" /></td>
+        <td><img src="/img/cat/REG.png" alt="Regionale" /></td>
+        <td>5928</td>
+        <td>VENEZIA SANTA LUCIA</td>
+        <td>17:18</td>
+        <td>0</td>
+        <td>1</td>
+        <td></td>
+      </tr>
+      <tr class="riga">
+        <td><img src="/img/trenitalia.png" alt="Trenitalia" /></td>
+        <td><img src="/img/cat/FR.png" alt="Frecciarossa" /></td>
+        <td>9402</td>
+        <td>ROMA TERMINI</td>
+        <td>17:25</td>
+        <td>10</td>
+        <td>5</td>
+        <td>In stazione</td>
+      </tr>
+      <tr class="riga lampeggia">
+        <td><img src="/img/italo.png" alt="Italo" /></td>
+        <td><img src="/img/cat/ITA.png" alt="Italo" /></td>
+        <td>9902</td>
+        <td>MILANO CENTRALE</td>
+        <td>17:34</td>
+        <td>0</td>
+        <td></td>
+        <td></td>
+      </tr>
+      <tr class="riga">
+        <td><img src="/img/trenitalia.png" alt="Trenitalia" /></td>
+        <td><img src="/img/cat/RV.png" alt="Regionale Veloce" /></td>
+        <td>2774</td>
+        <td>BOLOGNA CENTRALE</td>
+        <td>17:41</td>
+        <td>Cancellato</td>
+        <td>3</td>
+        <td>Treno cancellato</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

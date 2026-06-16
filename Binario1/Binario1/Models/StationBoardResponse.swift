@@ -23,6 +23,16 @@ struct StationBoardResponse: Equatable {
     /// label the demo window and avoid presenting an out-of-window sample as the
     /// current/next departure.
     var scheduledWindow: ScheduledSampleWindow? = nil
+    /// Where this board came from — drives the header source label
+    /// (mock "Aggiornato", scheduled demo, or "Monitor RFI online").
+    var sourceKind: BoardSourceKind = .mock
+}
+
+/// The origin of a board response, for the UI source label only.
+enum BoardSourceKind: Equatable {
+    case mock
+    case scheduledSample
+    case rfiLive
 }
 
 /// Metadata describing a programmed-timetable *sample* window (demo data).

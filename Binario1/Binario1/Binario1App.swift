@@ -10,19 +10,16 @@ import SwiftUI
 /// Composition root. Selects the board data source.
 enum AppEnvironment {
     /// Active board data source, resolved per build configuration:
-    /// **DEBUG → `.scheduledPadova`, RELEASE → `.mock`**.
+    /// **DEBUG → `.rfiLivePadova` (real-data spike), RELEASE → `.mock`**.
     ///
-    /// `.scheduledPadova` is a **DEBUG-only local demo**: the Home / Partenze
-    /// board previews the RFI "Quadro Orario" *programmed* timetable for Padova.
-    /// This is **scheduled data, NOT live data** — it has no real delays,
-    /// cancellations or real-time platform changes, and it must **never** be
-    /// presented as real-time railway truth. RELEASE builds fall back to `.mock`
-    /// so this demo source can never become the production default.
-    ///
-    /// For UI work, set the active value to `.mock` (bundled Bologna mock board,
-    /// station carousel enabled).
+    /// `.rfiLivePadova` is a **DEBUG-only** adapter that reads the RFI live station
+    /// monitor for Padova (live monitor placeId 2000). It is a technical validation
+    /// spike — not a production guarantee — and falls back to mock on any
+    /// fetch/parse failure. `.scheduledPadova` (PRM Quadro Orario demo) remains
+    /// available; flip the value below to use it. RELEASE always uses `.mock`, so
+    /// neither spike can become the production default.
     #if DEBUG
-    static let sourceMode: BoardSourceMode = .scheduledPadova
+    static let sourceMode: BoardSourceMode = .rfiLivePadova
     #else
     static let sourceMode: BoardSourceMode = .mock
     #endif
@@ -33,24 +30,30 @@ enum AppEnvironment {
             return MockTrainBoardService()
         case .scheduledPadova, .remoteWithMockFallback:
             return ScheduledTrainBoardService(fallback: MockTrainBoardService())
+        case .rfiLivePadova:
+            #if DEBUG
+            return RFILiveBoardService(fallback: MockTrainBoardService())
+            #else
+            return MockTrainBoardService()   // spike never ships as a release default
+            #endif
         }
     }
 
     static var initialStation: Station {
         switch sourceMode {
-        case .mock:                                   return .bolognaCentrale
-        case .scheduledPadova, .remoteWithMockFallback: return .padova
+        case .mock:                                                     return .bolognaCentrale
+        case .scheduledPadova, .remoteWithMockFallback, .rfiLivePadova: return .padova
         }
     }
 
     /// Whether the header `Cambia` action may switch stations. A single fixed
-    /// station source (`.scheduledPadova` = Padova Quadro Orario) MUST stay
-    /// locked, otherwise the station title could disagree with the board rows.
+    /// station source (Padova scheduled demo or RFI live spike) MUST stay locked,
+    /// otherwise the station title could disagree with the board rows.
     /// `.remoteWithMockFallback` is reserved for a future multi-station remote.
     static var allowsStationChange: Bool {
         switch sourceMode {
-        case .mock, .remoteWithMockFallback: return true
-        case .scheduledPadova:               return false
+        case .mock, .remoteWithMockFallback:   return true
+        case .scheduledPadova, .rfiLivePadova: return false
         }
     }
 }

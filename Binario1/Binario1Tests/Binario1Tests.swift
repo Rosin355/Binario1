@@ -541,4 +541,144 @@ struct Binario1Tests {
         #expect(bologna.primary == "BOLOGNA")
         #expect(bologna.secondary == "CENTRALE")
     }
+
+#if DEBUG
+    // MARK: - RFI live Padova spike (DEBUG-only)
+    // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser
+    // tests never need live network.
+
+    private static let rfiPadovaFixtureHTML = """
+    <!DOCTYPE html>
+    <html lang="it">
+    <head><meta charset="utf-8" /><title>Monitor Partenze - PADOVA</title></head>
+    <body>
+      <div id="nomestazione">PADOVA</div>
+      <div id="aggiornamento">Aggiornato alle 17:12</div>
+      <table id="monitor">
+        <thead><tr><th>Vettore</th><th>Cat</th><th>Treno</th><th>Dest</th><th>Ora</th><th>Rit</th><th>Bin</th><th>Info</th></tr></thead>
+        <tbody>
+          <tr class="riga">
+            <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
+            <td><img src="/i/REG.png" alt="Regionale" /></td>
+            <td>5928</td><td>VENEZIA SANTA LUCIA</td><td>17:18</td><td>0</td><td>1</td><td></td>
+          </tr>
+          <tr class="riga">
+            <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
+            <td><img src="/i/FR.png" alt="Frecciarossa" /></td>
+            <td>9402</td><td>ROMA TERMINI</td><td>17:25</td><td>10</td><td>5</td><td>In stazione</td>
+          </tr>
+          <tr class="riga lampeggia">
+            <td><img src="/i/italo.png" alt="Italo" /></td>
+            <td><img src="/i/ITA.png" alt="Italo" /></td>
+            <td>9902</td><td>MILANO CENTRALE</td><td>17:34</td><td>0</td><td></td><td></td>
+          </tr>
+          <tr class="riga">
+            <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
+            <td><img src="/i/RV.png" alt="Regionale Veloce" /></td>
+            <td>2774</td><td>BOLOGNA CENTRALE</td><td>17:41</td><td>Cancellato</td><td>3</td><td>Treno cancellato</td>
+          </tr>
+        </tbody>
+      </table>
+    </body>
+    </html>
+    """
+
+    private struct StubMonitorFetcher: RFIMonitorFetching {
+        var html: String? = nil
+        var failing: Bool = false
+        func fetchMonitorHTML(placeId: String, arrivals: Bool) async throws -> String {
+            if failing { throw TrainBoardServiceError.resourceMissing }
+            return html ?? ""
+        }
+    }
+
+    @Test func rfiMonitorURLBuildsPadovaDepartures() {
+        let url = RFIStationMonitorClient.monitorURL(placeId: "2000", arrivals: false).absoluteString
+        #expect(url.hasPrefix("https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor"))
+        #expect(url.contains("arrivals=False"))
+        #expect(url.contains("placeId=2000"))
+    }
+
+    @Test func rfiParserExtractsStationUpdatedAndRows() {
+        let board = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
+        #expect(board.stationName == "PADOVA")
+        #expect(board.updatedAt == "17:12")
+        #expect(board.rows.count >= 3)
+    }
+
+    @Test func rfiParserExtractsRowFields() {
+        let board = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
+        let venezia = board.rows.first { $0.trainNumber == "5928" }
+        #expect(venezia?.destination == "VENEZIA SANTA LUCIA")
+        #expect(venezia?.time == "17:18")
+        #expect(venezia?.platform == "1")
+        #expect(venezia?.category == "Regionale")
+        // Missing platform stays missing (not fabricated).
+        let italo = board.rows.first { $0.trainNumber == "9902" }
+        #expect(italo?.platform == nil)
+    }
+
+    @Test func rfiDelayParsingNeverFakesDelay() {
+        #expect(RFILiveMapper.delayMinutes(from: "0") == nil)
+        #expect(RFILiveMapper.delayMinutes(from: "") == nil)
+        #expect(RFILiveMapper.delayMinutes(from: nil) == nil)
+        #expect(RFILiveMapper.delayMinutes(from: "Cancellato") == nil)
+        #expect(RFILiveMapper.delayMinutes(from: "10") == 10)
+    }
+
+    @Test func rfiMapperBuildsValidRows() {
+        let ref = Self.romeDate(2026, 6, 16, 17, 0)
+        let response = RFILiveMapper.map(RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML), referenceDate: ref)
+        #expect(response.sourceKind == .rfiLive)
+        #expect(response.isScheduled == false)
+        #expect(response.scheduledWindow == nil)
+        #expect(response.station.name == "Padova")
+        #expect(response.rows.count == 4)
+
+        let venezia = response.rows.first { $0.trainNumber == "5928" }
+        #expect(venezia?.category == "REG")
+        #expect(venezia?.destination == "VENEZIA SANTA LUCIA")
+        #expect(venezia?.delayMinutes == nil)          // "0" → no fake delay
+        #expect(venezia?.status == .onTime)
+        #expect(venezia?.platformDisplay == "1")
+
+        let italo = response.rows.first { $0.trainNumber == "9902" }
+        #expect(italo?.platformDisplay == "--")        // missing platform handled safely
+        #expect(italo?.status == .departing)
+
+        let cancelled = response.rows.first { $0.trainNumber == "2774" }
+        #expect(cancelled?.status == .cancelled)
+        #expect(cancelled?.category == "RV")
+    }
+
+    @Test func rfiParserAndMapperHandleEmptyHTMLSafely() {
+        let board = RFIStationMonitorParser.parse("")
+        #expect(board.rows.isEmpty)
+        #expect(board.stationName == nil)
+        let response = RFILiveMapper.map(board, referenceDate: Self.romeDate(2026, 6, 16, 17, 0))
+        #expect(response.rows.isEmpty)                  // no crash on empty input
+    }
+
+    @Test func rfiServiceMapsLiveBoardFromFetcher() async throws {
+        let ref = Self.romeDate(2026, 6, 16, 17, 0)
+        let mock = MockTrainBoardService(); mock.artificialDelay = .zero
+        let service = RFILiveBoardService(
+            fetcher: StubMonitorFetcher(html: Self.rfiPadovaFixtureHTML),
+            fallback: mock,
+            referenceDate: { ref }
+        )
+        let response = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(response.sourceKind == .rfiLive)
+        #expect(response.station.name == "Padova")
+        #expect(response.rows.count >= 3)
+    }
+
+    @Test func rfiServiceFallsBackToMockOnFailure() async throws {
+        let mock = MockTrainBoardService(); mock.artificialDelay = .zero
+        let service = RFILiveBoardService(fetcher: StubMonitorFetcher(failing: true), fallback: mock)
+        let response = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(!response.rows.isEmpty)                 // fell back to mock
+        #expect(response.sourceKind != .rfiLive)
+    }
+#endif
 }

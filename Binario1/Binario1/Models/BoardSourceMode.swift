@@ -16,4 +16,8 @@ enum BoardSourceMode {
     case scheduledPadova
     /// Reserved: a future remote source that always falls back to mock.
     case remoteWithMockFallback
+    /// DEBUG-only spike: RFI live station monitor for Padova (live monitor
+    /// `placeId` 2000), departures. Online source, mandatory mock fallback.
+    /// Distinct from `.scheduledPadova` (PRM Quadro Orario, id 1861).
+    case rfiLivePadova
 }

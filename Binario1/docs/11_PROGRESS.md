@@ -2,6 +2,58 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-16 — RFI live Padova spike
+
+Stato: completata (spike tecnico). Prossima milestone: **verifica parser su HTML
+RFI reale + valutazione affidabilità/legale**.
+
+### Cosa
+- Primo spike **dati reali**, **solo DEBUG**: adapter del monitor live RFI per
+  **Padova partenze**. Endpoint
+  `https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?arrivals=False&placeId=2000`
+  (live monitor `placeId=2000`, distinto dall'id PRM Quadro Orario 1861).
+- Nuovo `BoardSourceMode.rfiLivePadova`. `AppEnvironment.sourceMode`:
+  **DEBUG → `.rfiLivePadova`**, **RELEASE → `.mock`** (lo spike non diventa mai il
+  default di produzione; i file RFI sono `#if DEBUG`).
+- Layer service isolato (niente parsing nelle view/VM):
+  - `RFIStationMonitorClient` — costruisce l'URL + fetch HTML (`RFIMonitorFetching`).
+  - `RFIStationMonitorParser` — HTML → `RFIMonitorBoard`/`RFIMonitorRow` (stazione,
+    aggiornato, righe positional `<td>`, tollerante a righe malformate).
+  - `RFILiveBoardService` (`TrainBoardService`) + `RFILiveMapper` → `StationBoardResponse`
+    (`sourceKind = .rfiLive`). Departures only; arrivi e qualsiasi errore →
+    **fallback al mock** (obbligatorio).
+- Mapping sicuro: binario mancante → `--`, ritardo mancante/"0" → nessun ritardo
+  (mai finto), destinazione mancante → `Destinazione non disponibile`,
+  cancellato/soppresso → `.cancelled`. Stazione bloccata su Padova.
+- Header: `Monitor RFI online` / `RFI online monitor` (+ `· aggiornato HH:mm` se
+  disponibile). Nessuna etichetta `Orario programmato` / `demo 06:00–06:59` in live.
+- Refresh: solo manuale/path esistente (refresh ogni 30s del board già presente);
+  nessun polling aggressivo/background/notifiche/Live Activities.
+- Fixture `Binario1Tests/Fixtures/rfi-padova-departures.sample.html` + test unitari
+  (URL, stazione `PADOVA`, aggiornato, ≥3 righe, numero/destinazione/ora/binario,
+  ritardo non finto, mapper valido, cancellato, HTML vuoto sicuro, fallback al
+  mock). I test non usano rete.
+
+### Limiti noti
+- **HTML RFI non è un contratto stabile**: i selettori del parser sono tarati su
+  una fixture rappresentativa e vanno verificati sull'HTML live (obiettivo dello
+  spike). Se non combacia → 0 righe → fallback al mock (UI stabile).
+- Nessuna garanzia di produzione, nessun multi-stazione, niente arrivi live,
+  niente AI/notifiche/Live Activities/persistenza.
+
+### File
+- Nuovi: `Services/RFIStationMonitorClient.swift`, `Services/RFIStationMonitorParser.swift`,
+  `Services/RFILiveBoardService.swift` (tutti `#if DEBUG`),
+  `Binario1Tests/Fixtures/rfi-padova-departures.sample.html`.
+- Modificati: `Models/BoardSourceMode.swift`, `Models/StationBoardResponse.swift`
+  (`BoardSourceKind`/`sourceKind`), `Binario1App.swift`,
+  `ViewModel/StationBoardViewModel.swift`, `Views/StationBoardHeaderView.swift`,
+  `Views/StationBoardView.swift`, `Localizable.xcstrings`, `Binario1Tests`.
+
+### Build / test
+- Build: OK (Debug e Release). Test target: compila. Esecuzione unit test bloccata
+  da instabilità CoreSimulator (ambiente). Parser/mapper verificati su fixture.
+
 ## 2026-06-16 — Fix Partenze tab-entry title animation
 
 Stato: completata. Prossima milestone: **Smart Suggestions / App Intents**.

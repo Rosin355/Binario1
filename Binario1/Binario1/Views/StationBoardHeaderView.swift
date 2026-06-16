@@ -18,6 +18,7 @@ struct StationBoardHeaderView: View {
     let isStale: Bool
     var isScheduled: Bool = false     // programmed timetable (not live)
     var scheduledWindow: ScheduledSampleWindow? = nil  // demo sample time window, if any
+    var sourceKind: BoardSourceKind = .mock            // drives the source label
     var canChangeStation: Bool = true // false → station locked (single-station source)
     /// Increment to replay the title's intro animation (e.g. on Partenze tab entry).
     var animationToken: Int = 0
@@ -114,11 +115,27 @@ struct StationBoardHeaderView: View {
         return Text("source.scheduled")     // "Orario programmato" / "Scheduled timetable"
     }
 
+    /// "Monitor RFI online · aggiornato HH:mm" for the live spike (online-source
+    /// label, no freshness pulse dot).
+    private var rfiLiveLabel: Text {
+        if let lastUpdated {
+            return Text(String(format: String(localized: "source.rfiLiveUpdated"), BoardFormatters.clock(lastUpdated)))
+        }
+        return Text("source.rfiLive")
+    }
+
     @ViewBuilder
     private var updatedLabel: some View {
         if isScheduled {
             // Programmed timetable is NOT live — clear label, no live dot.
             scheduledSourceLabel
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .foregroundStyle(BoardColors.amberDim)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        } else if sourceKind == .rfiLive {
+            // Live RFI monitor source — no scheduled/demo wording, no live dot.
+            rfiLiveLabel
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .foregroundStyle(BoardColors.amberDim)
                 .lineLimit(1)

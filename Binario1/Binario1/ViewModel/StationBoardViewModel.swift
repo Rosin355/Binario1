@@ -27,6 +27,8 @@ final class StationBoardViewModel {
     /// Programmed-sample window metadata (e.g. the Padova 06:00–06:59 demo), if the
     /// current source is bundled sample data.
     private(set) var scheduledWindow: ScheduledSampleWindow?
+    /// Origin of the current board — drives the header source label.
+    private(set) var sourceKind: BoardSourceKind = .mock
 
     /// Data is considered stale if older than this.
     private let staleThreshold: TimeInterval = 3 * 60
@@ -116,6 +118,7 @@ final class StationBoardViewModel {
             warningMessageKey = response.warningMessageKey
             isScheduled = response.isScheduled
             scheduledWindow = response.scheduledWindow
+            sourceKind = response.sourceKind
             errorMessageKey = nil
         } catch {
             errorMessageKey = "error.dataUnavailable"
