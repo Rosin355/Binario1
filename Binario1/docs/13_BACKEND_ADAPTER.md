@@ -158,9 +158,18 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   (+ " · fallback"/" · dati cache").
 - **Fallback (not silent):** unreachable/placeholder URL or fetch error → local
   backend fixture, with `[BackendLive] FALLBACK …` DEBUG logs.
-- **Pending:** deploy the function and set the real base URL to validate live on
-  device; production rollout (auth, rate limiting, shared cache, real station
-  registry, reduced diagnostics) still pending.
+- **Deployed + endpoint-validated (2026-06-17):** function `board` is live at
+  `https://hzwwvkuxqhmeicylyrsy.functions.supabase.co/board` (project "Binario 1",
+  `verify_jwt = false`). Direct curl returns 200 with real normalized Padova
+  departures (compact categories, no `Categoria`/entities); 404/400 error paths OK.
+  `BackendEndpointConfig.debug` now points at this URL.
+- **On-device validation:** PENDING — to be run by the user on a real iPhone with
+  `.backendLivePadova` (expect header "Backend · Monitor RFI online", rows from the
+  backend JSON, `[BackendLive] OK …` logs, no `[RFILive]` logs). The app falls back
+  to the local backend fixture if the endpoint is unreachable.
+- **Next hardening (before wider rollout):** rate limiting · app token / auth ·
+  shared cache · real station registry (more stations + arrivals) · reduced/hidden
+  diagnostics · restricted CORS.
 
 **Phase 2 — backend in DEBUG**
 - DEBUG uses `BackendBoardService` (pointing at staging/local).

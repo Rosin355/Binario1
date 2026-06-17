@@ -25,14 +25,17 @@ struct BackendEndpointConfig {
     }
 
     #if DEBUG
-    /// DEBUG backend base URL for `.backendLivePadova`.
+    /// DEBUG backend base URL for `.backendLivePadova` — the deployed Supabase
+    /// Edge Function `board` for the "Binario 1" project.
     ///
-    /// To enable live backend mode: replace the placeholder host below with the
-    /// deployed Supabase project ref (NOT a secret), e.g.
-    /// `https://abcd1234.functions.supabase.co`. Until then `isConfigured` is false
-    /// and `.backendLivePadova` gracefully falls back to the local backend fixture.
+    /// The project ref is **public, not a secret** (it appears in every function
+    /// URL); no anon/service_role key and no Authorization header are used (the
+    /// spike runs `verify_jwt = false`). If the endpoint is ever unreachable,
+    /// `.backendLivePadova` falls back to the local backend fixture (not silently —
+    /// see the `[BackendLive] FALLBACK …` logs). To point at a different deployment,
+    /// change the host below (or reset it to the placeholder to force fixture mode).
     static let debug = BackendEndpointConfig(
-        baseURL: URL(string: "https://\(placeholderHost).functions.supabase.co")!
+        baseURL: URL(string: "https://hzwwvkuxqhmeicylyrsy.functions.supabase.co")!
     )
     #endif
 }
