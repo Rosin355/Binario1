@@ -146,6 +146,22 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   shared cache, reduced/hidden diagnostics, restricted CORS, more stations + arrivals.
 - Local run / deploy notes: `supabase/functions/board/README.md`.
 
+**Phase 2B — iOS remote fetcher — ✅ IMPLEMENTED (DEBUG)**
+- `URLSessionBackendBoardFetcher` (conforms to `BackendBoardFetching`) calls
+  `<base>/board?stationSlug=…&type=…&locale=…`, validates HTTP 2xx, returns raw JSON
+  `Data` (no decoding in the fetcher).
+- `BackendEndpointConfig` centralizes the function base URL (DEBUG placeholder until
+  the real project-ref is set; no secrets, `verify_jwt = false` so no auth header).
+- DEBUG source mode `.backendLivePadova` (the DEBUG default) wired in the service
+  factory: `BackendBoardService(fetcher: URLSession…, fallback: <fixture service>,
+  stampSourceKind: .backendLive)`. Header label "Backend · Monitor RFI online"
+  (+ " · fallback"/" · dati cache").
+- **Fallback (not silent):** unreachable/placeholder URL or fetch error → local
+  backend fixture, with `[BackendLive] FALLBACK …` DEBUG logs.
+- **Pending:** deploy the function and set the real base URL to validate live on
+  device; production rollout (auth, rate limiting, shared cache, real station
+  registry, reduced diagnostics) still pending.
+
 **Phase 2 — backend in DEBUG**
 - DEBUG uses `BackendBoardService` (pointing at staging/local).
 - Keep the direct RFI adapter as an **emergency developer fallback only**.

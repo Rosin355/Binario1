@@ -26,6 +26,9 @@ struct StationBoardResponse: Equatable {
     /// Where this board came from — drives the header source label
     /// (mock "Aggiornato", scheduled demo, or "Monitor RFI online").
     var sourceKind: BoardSourceKind = .mock
+    /// True when the backend served fallback (e.g. alternate/last-known) data.
+    /// Surfaced subtly in the header for backend-live mode.
+    var sourceIsFallback: Bool = false
 }
 
 /// The origin of a board response, for the UI source label only.
@@ -36,6 +39,9 @@ enum BoardSourceKind: Equatable {
     /// Normalized JSON loaded from a local *backend fixture* (Phase 1 of the
     /// backend-adapter migration) — not a live backend connection.
     case backendFixture
+    /// Normalized JSON fetched from the *deployed backend adapter* (Phase 2B):
+    /// iOS → Supabase Edge Function → RFI → JSON. Not direct RFI from the app.
+    case backendLive
 }
 
 /// Metadata describing a programmed-timetable *sample* window (demo data).

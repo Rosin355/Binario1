@@ -1026,6 +1026,24 @@
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · Monitor RFI online" } }
       }
     },
+    "source.backendLive" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend · RFI online monitor" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend · Monitor RFI online" } }
+      }
+    },
+    "source.backendSuffix.cache" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "cached" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "dati cache" } }
+      }
+    },
+    "source.backendSuffix.fallback" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "fallback" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "fallback" } }
+      }
+    },
     "source.rfiLive" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online monitor" } },

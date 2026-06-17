@@ -71,7 +71,8 @@ enum BackendBoardMapper {
             warningMessageKey: nil,
             isScheduled: false,
             scheduledWindow: nil,
-            sourceKind: mapSourceKind(dto.source.kind)
+            sourceKind: mapSourceKind(dto.source.kind),
+            sourceIsFallback: dto.source.isFallback ?? false
         )
     }
 

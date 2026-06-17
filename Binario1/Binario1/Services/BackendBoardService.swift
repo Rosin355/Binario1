@@ -36,17 +36,26 @@ final class BackendBoardService: TrainBoardService, @unchecked Sendable {
     private let fetcher: BackendBoardFetching
     private let fallback: TrainBoardService
     private let referenceDate: @Sendable () -> Date
+    /// Source kind stamped on a successful response: `.backendFixture` for the local
+    /// fixture (Phase 1), `.backendLive` for the deployed backend (Phase 2B).
+    private let stampSourceKind: BoardSourceKind
+    /// When set, emit concise DEBUG logs under `[<tag>]` (e.g. "BackendLive").
+    private let debugLogTag: String?
 
     init(fetcher: BackendBoardFetching = FixtureBackendBoardFetcher(),
          fallback: TrainBoardService = MockTrainBoardService(),
-         referenceDate: @escaping @Sendable () -> Date = { Date() }) {
+         referenceDate: @escaping @Sendable () -> Date = { Date() },
+         stampSourceKind: BoardSourceKind = .backendFixture,
+         debugLogTag: String? = nil) {
         self.fetcher = fetcher
         self.fallback = fallback
         self.referenceDate = referenceDate
+        self.stampSourceKind = stampSourceKind
+        self.debugLogTag = debugLogTag
     }
 
     func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
-        // The Phase 1 fixture is Padova DEPARTURES; arrivals fall back to mock.
+        // Padova DEPARTURES only; arrivals fall back.
         guard type == .departures else {
             return try await fallback.fetchBoard(stationId: stationId, type: type)
         }
@@ -54,15 +63,23 @@ final class BackendBoardService: TrainBoardService, @unchecked Sendable {
             let data = try await fetcher.fetchBoardJSON(stationSlug: stationId, type: type, locale: "it")
             let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: data)
             var response = BackendBoardMapper.map(dto, referenceDate: referenceDate())
-            // Phase 1: this came from a local backend FIXTURE — label it as such so
-            // the header never claims a real backend/live connection.
-            response.sourceKind = .backendFixture
+            // Stamp where the data came through so the header never misrepresents it.
+            response.sourceKind = stampSourceKind
             guard !response.rows.isEmpty else {
+                log("FALLBACK · reason=empty-parse · using=fixture")
                 return try await fallback.fetchBoard(stationId: stationId, type: type)
             }
+            log("OK · rows=\(response.rows.count) · source=\(dto.source.kind) · fallback=\(dto.source.isFallback ?? false) · stale=\(dto.source.isStale ?? false)")
             return response
         } catch {
+            log("FALLBACK · reason=fetch-error · using=fixture · error=\(error)")
             return try await fallback.fetchBoard(stationId: stationId, type: type)
         }
+    }
+
+    private func log(_ message: String) {
+        #if DEBUG
+        if let tag = debugLogTag { print("[\(tag)] \(message)") }
+        #endif
     }
 }

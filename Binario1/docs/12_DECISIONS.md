@@ -94,6 +94,19 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Backend adapter — Phase 2B (iOS remote fetcher)
+
+- **iOS consuma il JSON del backend tramite `BackendBoardService` + fetcher di rete**
+  (`URLSessionBackendBoardFetcher`): l'app parla con l'adapter backend, **mai con RFI
+  diretto** in questa modalità.
+- **L'adapter RFI diretto resta emergency DEBUG-only** (`.rfiLivePadova`), fallback
+  per sviluppo.
+- **Backend live è validazione DEBUG** finché affidabilità / rate-limit / auth non
+  sono irrobustiti; su errore o URL non configurato → fallback alla fixture, non
+  silenzioso (log `[BackendLive] FALLBACK …`). Release resta `.mock`.
+- **URL endpoint centralizzato** in `BackendEndpointConfig` (project-ref non è un
+  secret); nessuna anon/service_role key nel repo.
+
 ## Backend adapter — Phase 2A (Supabase Edge Function `board`)
 
 - **Il backend possiede il parsing/normalizzazione della sorgente**: la Edge Function

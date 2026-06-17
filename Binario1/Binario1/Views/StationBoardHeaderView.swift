@@ -19,6 +19,8 @@ struct StationBoardHeaderView: View {
     var isScheduled: Bool = false     // programmed timetable (not live)
     var scheduledWindow: ScheduledSampleWindow? = nil  // demo sample time window, if any
     var sourceKind: BoardSourceKind = .mock            // drives the source label
+    var sourceIsFallback: Bool = false                 // backend served fallback data
+    var sourceIsStale: Bool = false                    // backend served cached/stale data
     var canChangeStation: Bool = true // false → station locked (single-station source)
     /// Increment to replay the title's intro animation (e.g. on Partenze tab entry).
     var animationToken: Int = 0
@@ -130,6 +132,20 @@ struct StationBoardHeaderView: View {
         Text("source.backendFixture")
     }
 
+    /// "Backend · Monitor RFI online" — data came through the deployed backend
+    /// adapter (Phase 2B), not direct RFI. Appends " · fallback" or " · dati cache"
+    /// when the backend reports fallback/stale data.
+    private var backendLiveLabel: Text {
+        let base = String(localized: "source.backendLive")
+        if sourceIsFallback {
+            return Text(base + " · " + String(localized: "source.backendSuffix.fallback"))
+        }
+        if sourceIsStale {
+            return Text(base + " · " + String(localized: "source.backendSuffix.cache"))
+        }
+        return Text(base)
+    }
+
     @ViewBuilder
     private var updatedLabel: some View {
         if isScheduled {
@@ -151,6 +167,13 @@ struct StationBoardHeaderView: View {
             backendFixtureLabel
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .foregroundStyle(BoardColors.amberDim)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        } else if sourceKind == .backendLive {
+            // DEBUG backend-adapter Phase 2B: normalized JSON via the deployed backend.
+            backendLiveLabel
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .foregroundStyle((sourceIsFallback || sourceIsStale) ? BoardColors.delay : BoardColors.amberDim)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         } else if let lastUpdated {

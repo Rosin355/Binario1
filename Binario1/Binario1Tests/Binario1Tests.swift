@@ -591,7 +591,7 @@ struct Binario1Tests {
 
     /// Mirrors Binario1Tests/Fixtures/backend-padova-departures.sample.json (and the
     /// app resource) so DTO/mapper/service tests never touch the network.
-    private static let backendFixtureJSON = """
+    fileprivate static let backendFixtureJSON = """
     {
       "station": { "id": "padova", "name": "Padova", "sourcePlaceId": "2000" },
       "boardType": "departures",
@@ -687,6 +687,68 @@ struct Binario1Tests {
         #expect(response.station.id == "padova")
         #expect(response.sourceKind == .backendFixture) // service labels it a fixture
         #expect(response.rows.allSatisfy { !$0.category.contains("Categoria") && !$0.category.contains("&#") })
+    }
+
+    // MARK: - Backend live fetcher (Phase 2B, URLSession + stubbed URLProtocol)
+
+    @Test func backendURLBuilderMatchesContract() {
+        let base = URL(string: "https://example.functions.supabase.co")!
+        let url = URLSessionBackendBoardFetcher.makeURL(base: base, stationSlug: "padova", type: .departures, locale: "it")
+        #expect(url?.absoluteString == "https://example.functions.supabase.co/board?stationSlug=padova&type=departures&locale=it")
+    }
+
+    @Test func backendFetcherReturnsDataOn200() async throws {
+        let fetcher = URLSessionBackendBoardFetcher(
+            config: BackendEndpointConfig(baseURL: URL(string: "https://stub-200.example")!),
+            session: makeStubSession())
+        let data = try await fetcher.fetchBoardJSON(stationSlug: "padova", type: .departures, locale: "it")
+        #expect(!data.isEmpty)
+        let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: data)
+        #expect(dto.station.id == "padova")
+    }
+
+    @Test func backendFetcherThrowsOnNon2xx() async {
+        let fetcher = URLSessionBackendBoardFetcher(
+            config: BackendEndpointConfig(baseURL: URL(string: "https://stub-502.example")!),
+            session: makeStubSession())
+        await #expect(throws: BackendFetchError.httpStatus(502)) {
+            _ = try await fetcher.fetchBoardJSON(stationSlug: "padova", type: .departures, locale: "it")
+        }
+    }
+
+    @Test func backendFetcherThrowsOnEmptyBody() async {
+        let fetcher = URLSessionBackendBoardFetcher(
+            config: BackendEndpointConfig(baseURL: URL(string: "https://stub-empty.example")!),
+            session: makeStubSession())
+        await #expect(throws: BackendFetchError.emptyResponse) {
+            _ = try await fetcher.fetchBoardJSON(stationSlug: "padova", type: .departures, locale: "it")
+        }
+    }
+
+    @Test func backendServiceMapsRemoteJSONStampedLive() async throws {
+        let fetcher = URLSessionBackendBoardFetcher(
+            config: BackendEndpointConfig(baseURL: URL(string: "https://stub-200.example")!),
+            session: makeStubSession())
+        let service = BackendBoardService(
+            fetcher: fetcher, fallback: MockTrainBoardService(),
+            referenceDate: { Self.romeDate(2026, 6, 17, 10, 50) },
+            stampSourceKind: .backendLive, debugLogTag: "BackendLive")
+        let response = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(response.rows.count == 9)
+        #expect(response.sourceKind == .backendLive)   // came through the backend, stamped live
+        #expect(response.rows.allSatisfy {
+            !$0.category.contains("Categoria") && !$0.category.contains("&#") && $0.category.count <= 5
+        })
+        let d5 = response.rows.first { $0.id == "IC-603-1120" }
+        #expect(d5?.delayMinutes == 5)
+        #expect(d5?.status == .delayed)
+    }
+
+    @Test func backendEndpointConfigDetectsPlaceholder() {
+        let placeholder = BackendEndpointConfig(baseURL: URL(string: "https://\(BackendEndpointConfig.placeholderHost).functions.supabase.co")!)
+        #expect(placeholder.isConfigured == false)
+        let real = BackendEndpointConfig(baseURL: URL(string: "https://abcd1234.functions.supabase.co")!)
+        #expect(real.isConfigured == true)
     }
 
 #if DEBUG
@@ -956,4 +1018,37 @@ struct Binario1Tests {
         }
     }
 #endif
+}
+
+// MARK: - Stubbed URLProtocol for backend fetcher tests (no live network)
+
+/// Stateless stub: the request HOST encodes the scenario, so parallel tests never
+/// share mutable state. `stub-200` → 200 + backend fixture JSON, `stub-502` → 502,
+/// `stub-empty` → 200 with an empty body.
+final class StubURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool {
+        request.url?.host?.hasPrefix("stub-") ?? false
+    }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+    override func startLoading() {
+        guard let url = request.url else { client?.urlProtocolDidFinishLoading(self); return }
+        let (status, body): (Int, Data)
+        switch url.host {
+        case "stub-502": (status, body) = (502, Data(#"{"error":{"code":"x"}}"#.utf8))
+        case "stub-empty": (status, body) = (200, Data())
+        default: (status, body) = (200, Data(Binario1Tests.backendFixtureJSON.utf8))
+        }
+        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
+                                       headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if !body.isEmpty { client?.urlProtocol(self, didLoad: body) }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+}
+
+private func makeStubSession() -> URLSession {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [StubURLProtocol.self]
+    return URLSession(configuration: config)
 }

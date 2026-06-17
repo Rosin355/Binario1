@@ -10,17 +10,19 @@ import SwiftUI
 /// Composition root. Selects the board data source.
 enum AppEnvironment {
     /// Active board data source, resolved per build configuration:
-    /// **DEBUG → `.backendFixturePadova` (backend-adapter Phase 1), RELEASE → `.mock`**.
+    /// **DEBUG → `.backendLivePadova` (backend-adapter Phase 2B), RELEASE → `.mock`**.
     ///
     /// To switch DEBUG source, flip the value below:
+    ///   • `.backendLivePadova`    — deployed Supabase backend adapter (falls back to
+    ///                               the fixture when the endpoint is not configured)
     ///   • `.backendFixturePadova` — normalized backend JSON fixture (Phase 1 path)
-    ///   • `.rfiLivePadova`        — DEBUG-only direct RFI live monitor (kept as dev fallback)
+    ///   • `.rfiLivePadova`        — DEBUG-only direct RFI live monitor (dev fallback)
     ///   • `.scheduledPadova`      — PRM Quadro Orario programmed-timetable demo
     ///   • `.mock`                 — bundled mock (also the RELEASE default)
     /// All of these except `.mock` are **DEBUG-only**; RELEASE always uses `.mock`,
-    /// so no spike/fixture can become the production default.
+    /// so no spike/fixture/backend mode can become the production default.
     #if DEBUG
-    static let sourceMode: BoardSourceMode = .backendFixturePadova
+    static let sourceMode: BoardSourceMode = .backendLivePadova
     #else
     static let sourceMode: BoardSourceMode = .mock
     #endif
@@ -39,18 +41,51 @@ enum AppEnvironment {
             #endif
         case .backendFixturePadova:
             #if DEBUG
-            return BackendBoardService(fallback: MockTrainBoardService())
+            return makeBackendFixtureService()
             #else
             return MockTrainBoardService()   // backend fixture never ships as a release default
             #endif
+        case .backendLivePadova:
+            #if DEBUG
+            return makeBackendLiveService()
+            #else
+            return MockTrainBoardService()   // backend live never ships as a release default
+            #endif
         }
     }
+
+    #if DEBUG
+    /// Local normalized-fixture backend service (no network).
+    private static func makeBackendFixtureService() -> TrainBoardService {
+        BackendBoardService(fetcher: FixtureBackendBoardFetcher(),
+                            fallback: MockTrainBoardService(),
+                            stampSourceKind: .backendFixture)
+    }
+
+    /// Deployed backend adapter. When the endpoint URL is configured, calls the
+    /// Supabase `/board` function; on any failure it falls back to the local backend
+    /// fixture (NOT silently — `BackendBoardService` logs `[BackendLive] FALLBACK …`).
+    /// When the URL is still a placeholder, it uses the fixture directly.
+    private static func makeBackendLiveService() -> TrainBoardService {
+        let cfg = BackendEndpointConfig.debug
+        guard cfg.isConfigured else {
+            print("[BackendLive] base URL not configured (placeholder) → using fixture · set BackendEndpointConfig.debug")
+            return makeBackendFixtureService()
+        }
+        return BackendBoardService(
+            fetcher: URLSessionBackendBoardFetcher(config: cfg),
+            fallback: makeBackendFixtureService(),
+            stampSourceKind: .backendLive,
+            debugLogTag: "BackendLive")
+    }
+    #endif
 
     static var initialStation: Station {
         switch sourceMode {
         case .mock:
             return .bolognaCentrale
-        case .scheduledPadova, .remoteWithMockFallback, .rfiLivePadova, .backendFixturePadova:
+        case .scheduledPadova, .remoteWithMockFallback, .rfiLivePadova,
+             .backendFixturePadova, .backendLivePadova:
             return .padova
         }
     }
@@ -61,8 +96,10 @@ enum AppEnvironment {
     /// `.remoteWithMockFallback` is reserved for a future multi-station remote.
     static var allowsStationChange: Bool {
         switch sourceMode {
-        case .mock, .remoteWithMockFallback:                            return true
-        case .scheduledPadova, .rfiLivePadova, .backendFixturePadova:   return false
+        case .mock, .remoteWithMockFallback:
+            return true
+        case .scheduledPadova, .rfiLivePadova, .backendFixturePadova, .backendLivePadova:
+            return false
         }
     }
 }

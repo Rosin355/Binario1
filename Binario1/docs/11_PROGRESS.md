@@ -2,6 +2,49 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-17 — iOS backend live fetcher
+
+Stato: completata (Phase 2B lato iOS). Prossima: **deploy della function + hardening
+produzione (auth/rate limit/cache condivisa/registry stazioni reale)**.
+
+### Cosa (niente UI ridisegnata; Viaggi/Cerca invariati)
+- **Fetcher di rete**: nuovo `Services/URLSessionBackendBoardFetcher.swift`, conforme
+  a `BackendBoardFetching`. Costruisce `<base>/board?stationSlug=…&type=…&locale=…`,
+  fa `URLSession.data(from:)`, valida lo status HTTP 2xx, ritorna `Data` grezza
+  (nessuna decodifica nel fetcher). Errori tipizzati `BackendFetchError`
+  (`invalidURL`/`invalidResponse`/`httpStatus`/`emptyResponse`).
+- **Config endpoint centralizzata**: nuovo `Services/BackendEndpointConfig.swift`
+  (`baseURL`). DEBUG: `BackendEndpointConfig.debug` con host placeholder
+  `project-ref-not-set` → `isConfigured == false` finché non si mette il project-ref
+  reale (NON è un secret; nessuna anon/service_role key). Spike `verify_jwt = false`
+  → nessun header Authorization.
+- **Source mode** `.backendLivePadova` (DEBUG): iOS → Edge Function `/board` → RFI →
+  JSON normalizzato. Default DEBUG. Mantenuti `.backendFixturePadova`, `.rfiLivePadova`,
+  `.scheduledPadova`, `.mock`. Release resta `.mock`.
+- **Factory**: `.backendLivePadova` usa `BackendBoardService(fetcher: URLSession…,
+  fallback: <servizio fixture>, stampSourceKind: .backendLive, debugLogTag: "BackendLive")`.
+  Se l'URL non è configurato → usa direttamente la fixture (log esplicito). Su errore
+  di rete → fallback alla fixture **non silenzioso** (`[BackendLive] FALLBACK …`).
+- **Header**: nuova `BoardSourceKind.backendLive` → "Backend · Monitor RFI online" /
+  "Backend · RFI online monitor"; suffisso " · fallback" (source.isFallback) o
+  " · dati cache"/"· cached" (source.isStale) in colore d'allerta. Distingue il dato
+  che arriva dal backend dal dato RFI diretto.
+- **Log DEBUG concisi**: `[BackendLive] OK · rows=N · source=rfiLive · fallback=… ·
+  stale=…`, `[BackendLive] FALLBACK · reason=… · using=fixture`, `[BackendLive] HTTP
+  ERROR · status=…`, `[BackendLive] FETCH ERROR · error=…` (nessun body JSON grande).
+
+### Test (nessuna rete reale)
+- URL builder = `/board?stationSlug=padova&type=departures&locale=it`.
+- Fetcher: 200→Data, non-2xx→`httpStatus`, body vuoto→`emptyResponse` (via
+  `StubURLProtocol` stateless, host-encoded).
+- `BackendBoardService` mappa JSON remoto stubbato → `StationBoardResponse`
+  (`sourceKind == .backendLive`, categorie compatte, ritardo/stato corretti).
+- `BackendEndpointConfig.isConfigured` rileva il placeholder.
+
+### Build / test
+- Build: OK (Debug e Release). Test target: compila. Esecuzione unit test bloccata
+  da CoreSimulator (ambiente). Release mock-only; nessun secret commesso.
+
 ## 2026-06-17 — Supabase board backend adapter spike
 
 Stato: completata (Phase 2A, spike backend). Prossima: **fetcher di rete iOS verso

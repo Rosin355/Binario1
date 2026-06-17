@@ -24,4 +24,9 @@ enum BoardSourceMode {
     /// *normalized backend JSON fixture* for Padova through `BackendBoardService`
     /// (no live network). Renders the same Home board, labelled "Backend fixture".
     case backendFixturePadova
+    /// DEBUG-only: Phase 2B. iOS calls the deployed Supabase Edge Function
+    /// (`GET /board?stationSlug=padova&type=departures`); the backend fetches/parses
+    /// RFI and returns normalized JSON. Falls back to the backend fixture if the
+    /// endpoint is not configured or unreachable. Not direct RFI from the app.
+    case backendLivePadova
 }

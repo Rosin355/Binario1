@@ -29,6 +29,8 @@ final class StationBoardViewModel {
     private(set) var scheduledWindow: ScheduledSampleWindow?
     /// Origin of the current board — drives the header source label.
     private(set) var sourceKind: BoardSourceKind = .mock
+    /// Backend-reported fallback flag (alternate/last-known data), for the header.
+    private(set) var sourceIsFallback = false
 
     /// Data is considered stale if older than this.
     private let staleThreshold: TimeInterval = 3 * 60
@@ -137,6 +139,7 @@ final class StationBoardViewModel {
             isScheduled = response.isScheduled
             scheduledWindow = response.scheduledWindow
             sourceKind = response.sourceKind
+            sourceIsFallback = response.sourceIsFallback
             errorMessageKey = nil
             lastFetchKey = key
             lastFetchAt = now()

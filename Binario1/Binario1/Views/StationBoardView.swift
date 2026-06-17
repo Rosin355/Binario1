@@ -28,6 +28,8 @@ struct StationBoardView: View {
                     isScheduled: viewModel.isScheduled,
                     scheduledWindow: viewModel.scheduledWindow,
                     sourceKind: viewModel.sourceKind,
+                    sourceIsFallback: viewModel.sourceIsFallback,
+                    sourceIsStale: viewModel.sourceIsStale,
                     canChangeStation: viewModel.allowsStationChange,
                     animationToken: animationToken,
                     isFavorite: isFavorite,
