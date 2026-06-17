@@ -826,5 +826,32 @@ struct Binario1Tests {
         #expect(RFITrainCategoryNormalizer.normalize("") == "UNK")
         #expect(RFITrainCategoryNormalizer.normalize("REG") == "REG")
     }
+
+    /// Locator so `Bundle(for:)` resolves the test bundle for fixture files.
+    private final class FixtureBundleLocator {}
+
+    /// Runs against the REAL captured RFI HTML when present
+    /// (Binario1Tests/Fixtures/rfi-padova-departures.real-sample.html). It is added
+    /// manually from the device container; until then this test skips (no live
+    /// network, never invents a fixture).
+    @Test func rfiRealSampleParsesIfPresent() {
+        guard let url = Bundle(for: FixtureBundleLocator.self)
+                .url(forResource: "rfi-padova-departures.real-sample", withExtension: "html"),
+              let html = try? String(contentsOf: url, encoding: .utf8), !html.isEmpty else {
+            print("[Test] real RFI sample absent — add rfi-padova-departures.real-sample.html to activate")
+            return
+        }
+        let board = RFIStationMonitorParser.parse(html)
+        #expect(board.stationName?.uppercased().contains("PADOVA") == true)
+        #expect(board.rows.count >= 20)
+
+        let response = RFILiveMapper.map(board, referenceDate: Self.romeDate(2026, 6, 17, 10, 50))
+        #expect(response.rows.count >= 20)
+        for r in response.rows {
+            #expect(!r.category.contains("Categoria"))   // verbose label stripped
+            #expect(!r.category.contains("&#"))           // HTML entities decoded
+            #expect(r.category.count <= 5)                // compact code (or UNK)
+        }
+    }
 #endif
 }

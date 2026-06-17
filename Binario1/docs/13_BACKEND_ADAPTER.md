@@ -1,0 +1,159 @@
+# 13 — Backend Adapter Architecture
+
+Status: **design only** — no backend implemented yet. This documents the target
+production architecture for real train-board data, so the current DEBUG-only RFI
+spike can later move behind a server adapter.
+
+## Target architecture
+
+```
+iOS app  →  Binario1 backend adapter  →  RFI source  →  normalized JSON  →  iOS app
+```
+
+The iOS app never scrapes RFI directly in production. It calls the Binario1
+backend, which fetches + parses the RFI monitor server-side and returns **stable,
+normalized JSON** matching the app's existing domain model.
+
+## Why a backend adapter
+
+- **Don't scrape RFI from the production app.** HTML scraping in-app is brittle and
+  hard to fix once shipped.
+- **Centralize parser fixes server-side.** When RFI markup changes, fix the server
+  — no App Store release required.
+- **Reduce app-update risk.** The app consumes a versioned JSON contract, not HTML.
+- **Caching + rate limiting.** The server caches briefly and shields RFI from
+  per-client traffic.
+- **Fallback sources later.** The server can add ViaggiaTreno / other sources behind
+  the same contract without app changes.
+- **Source transparency stays intact.** The contract carries a clear source label
+  (`Monitor RFI online`) and `isFallback` / `isStale` flags.
+
+## API contract (v1)
+
+```
+GET /api/board
+```
+
+Query params:
+
+| param         | required | values / default                  |
+|---------------|----------|------------------------------------|
+| `stationSlug` | one of slug/id | e.g. `padova`                |
+| `stationId`   | one of slug/id | central id (see registry)    |
+| `type`        | yes      | `departures` \| `arrivals`         |
+| `source`      | no       | `rfi` (default)                    |
+| `locale`      | no       | `it` (default) \| `en`             |
+
+Example:
+
+```
+GET /api/board?stationSlug=padova&type=departures&locale=it
+```
+
+### Response shape (mirrors the app model)
+
+```json
+{
+  "station": {
+    "id": "padova",
+    "name": "Padova",
+    "sourcePlaceId": "2000"
+  },
+  "boardType": "departures",
+  "source": {
+    "kind": "rfiLive",
+    "label": "Monitor RFI online",
+    "updatedAt": "2026-06-17T10:49:00+02:00",
+    "fetchedAt": "2026-06-17T10:50:12+02:00",
+    "isFallback": false,
+    "isStale": false
+  },
+  "rows": [
+    {
+      "id": "REG-16971-2026-06-17T10:49",
+      "scheduledTime": "10:49",
+      "category": "REG",
+      "trainNumber": "16971",
+      "destination": "Venezia Mestre",
+      "platform": "2",
+      "delayMinutes": 0,
+      "status": "onTime",
+      "notes": []
+    }
+  ],
+  "diagnostics": {
+    "sourceStatus": 200,
+    "sourceBytes": 335041,
+    "parsedRows": 40
+  }
+}
+```
+
+### Field notes
+
+- `source.kind`: `rfiLive` | `scheduled` | `mock` (maps to the app's `BoardSourceKind`).
+- `source.label`: human source label shown in the header (never a guarantee of
+  real-time precision).
+- `status`: `onTime` | `delayed` | `cancelled` | `departing` | … (maps to `TrainStatus`).
+- `delayMinutes`: real positive delay or `0`/absent — **never a fabricated delay**.
+- `platform`: source value or absent → app renders `--`.
+- `category`: already a **compact normalized code** (`AV`/`RV`/`REG`/`IC`/`ITA`/…),
+  never a verbose `Categoria …` label and never HTML entities.
+- `diagnostics`: **development/debug only**. Omitted (or reduced to a minimal
+  `isFallback`/`isStale`) in production responses.
+
+## Backend behavior requirements
+
+- Fetch the RFI monitor HTML **server-side**.
+- Parse HTML, normalize **categories**, **delay**, **platform**, **status**
+  server-side (the rules currently in the DEBUG iOS spike move here).
+- Return the stable JSON above.
+- **Cache** results briefly (suggested **30–60s**) per `station|type`.
+- **No aggressive polling**; **rate-limit** clients.
+- On RFI fetch failure, return **stale-but-recent cached** data with `isStale=true`
+  (and `isFallback=true` if served from an alternate/last-known source).
+- Expose `isFallback` / `isStale` honestly; **never claim perfect real-time
+  precision**.
+- Preserve source transparency (`Monitor RFI online`).
+
+## iOS migration plan
+
+**Phase 1 — contract + DTO (no behavior change)**
+- Keep the current DEBUG direct-RFI adapter (`RFILiveBoardService`).
+- Add a backend DTO matching this JSON + a `BackendBoardService: TrainBoardService`.
+- Test `BackendBoardService` against a **local fixture JSON** (no network in tests).
+
+**Phase 2 — backend in DEBUG**
+- DEBUG uses `BackendBoardService` (pointing at staging/local).
+- Keep the direct RFI adapter as an **emergency developer fallback only**.
+
+**Phase 3 — production**
+- Production app uses `BackendBoardService`.
+- Direct RFI HTML parsing is **excluded from Release** (stays `#if DEBUG`).
+- Mock remains available for tests/previews.
+
+## Station registry plan
+
+Stations must be **centrally mapped** — the RFI **live** `placeId` and the PRM
+**scheduled** id are different systems and must **never** be mixed.
+
+| slug                | displayName            | rfiLivePlaceId | prmScheduledId |
+|---------------------|------------------------|----------------|----------------|
+| `padova`            | Padova                 | `2000`         | `1861`         |
+
+Future (placeholders, ids TBD): Bologna Centrale, Venezia Santa Lucia,
+Montegrotto Terme, Milano Centrale.
+
+Registry shape (future):
+
+```
+struct StationRegistryEntry {
+    let slug: String
+    let displayName: String
+    let rfiLivePlaceId: String?   // RFI live monitor (Monitor?placeId=…)
+    let prmScheduledId: String?   // PRM "Quadro Orario" (different system)
+}
+```
+
+The backend owns the canonical registry; the app references stations by `slug`/`id`
+only and never hardcodes a source-specific id outside the registry.

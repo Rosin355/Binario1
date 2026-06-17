@@ -94,6 +94,20 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Accesso dati reali (produzione)
+
+- **In produzione i dati reali passano da un backend adapter**, non dallo scraping
+  diretto in-app: `iOS → backend → RFI → JSON normalizzato → iOS` (vedi
+  `docs/13_BACKEND_ADAPTER.md`).
+- **Il parsing HTML RFI diretto resta DEBUG-only**; la produzione consuma **JSON
+  normalizzato** dal backend.
+- **Il backend gestisce parsing sorgente, normalizzazione, cache, rate-limit e
+  fallback**; l'app resta stabile anche se il markup della sorgente cambia.
+- **Mai inventare fixture**: la fixture reale si cattura dal device e si aggiunge a
+  mano; i test girano su fixture, mai sulla rete.
+- **`placeId` live RFI ≠ id PRM scheduled**: gli id stazione sono mappati
+  centralmente (station registry), mai mischiati.
+
 ## Board live & ritardi
 
 - **Il token animazione del titolo NON deve mai causare reload dati**: alimenta

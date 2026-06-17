@@ -2,6 +2,46 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-17 — Prepare backend adapter architecture
+
+Stato: completata (design + scaffold). Prossima milestone: **Phase 1 — `BackendBoardService`
++ DTO contro fixture JSON locale**.
+
+### Cosa (niente backend, niente UI)
+- **Doc architettura backend**: nuovo `docs/13_BACKEND_ADAPTER.md` con flusso
+  `iOS → adapter backend → RFI → JSON normalizzato → iOS`, motivazioni (no scraping
+  in produzione, fix parser server-side, meno rischio update app, cache/rate-limit,
+  fallback futuri, JSON stabile), **contratto API** `GET /api/board`
+  (`stationSlug`/`stationId`, `type`, `source`, `locale`) + esempio JSON che
+  rispecchia il modello app, requisiti backend (cache 30–60s, rate-limit,
+  stale-but-recent, `isFallback`/`isStale`, trasparenza sorgente), **piano di
+  migrazione iOS** (Phase 1 DTO+`BackendBoardService` su fixture; Phase 2 backend in
+  DEBUG con RFI diretto come fallback dev; Phase 3 produzione su backend, RFI HTML
+  escluso da Release), e **station registry** (Padova: slug `padova`, displayName
+  `Padova`, rfiLivePlaceId `2000`, prmScheduledId `1861`; live placeId ≠ id PRM, mai
+  mischiarli).
+- **Fixture reale**: NON aggiunta in questo pass — il file catturato vive nel
+  container del device (`Documents/rfi-padova-live-latest.html`) e non è recuperabile
+  da qui; per policy "non inventare fixture" non è stato fabbricato. Aggiunto un test
+  `rfiRealSampleParsesIfPresent` che carica `rfi-padova-departures.real-sample.html`
+  dal bundle di test e **salta** finché il file non è aggiunto (poi verifica
+  PADOVA, ≥20 righe, categorie normalizzate senza `Categoria`/`&#`). La fixture
+  rappresentativa esistente resta.
+
+### Come aggiungere la fixture reale (manuale)
+Xcode → Window > Devices and Simulators → iPhone → app Binario1 → Download Container
+→ `AppData/Documents/rfi-padova-live-latest.html` → copiare in
+`Binario1Tests/Fixtures/rfi-padova-departures.real-sample.html` (sanitizzare se serve).
+
+### File
+- Nuovo: `docs/13_BACKEND_ADAPTER.md`. Modificati: `Binario1Tests` (test reale gated),
+  `docs/12_DECISIONS.md`.
+
+### Build / test
+- Build: OK (Debug e Release). Test target: compila. Esecuzione unit test bloccata
+  da instabilità CoreSimulator (ambiente). Nessuna rete nei test; UI/Viaggi/Cerca
+  invariati; Release resta mock-only.
+
 ## 2026-06-16 — RFI live hardening and delay-column polish
 
 Stato: completata. Prossima milestone: **verifica parser su HTML reale + fixture
