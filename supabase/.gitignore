@@ -1,0 +1,7 @@
+# Supabase local artifacts & secrets — NEVER commit these.
+.branches
+.temp
+.env
+.env.*
+# Keep example env templates only (no real values):
+!.env.example

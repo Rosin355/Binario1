@@ -2,6 +2,35 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-17 — Supabase board backend adapter spike
+
+Stato: completata (Phase 2A, spike backend). Prossima: **fetcher di rete iOS verso
+l'endpoint + hardening produzione (rate limit/auth/cache condivisa)**.
+
+### Cosa (solo backend; nessuna modifica iOS UI/Viaggi/Cerca)
+- **Edge Function `board`** (Deno/TypeScript) in `supabase/functions/board/`:
+  `GET /board?stationSlug=padova&type=departures&locale=it`.
+- **Padova partenze** supportate (registry minimo `STATIONS`: `rfiLivePlaceId=2000`,
+  `prmScheduledId=1861`, sistemi distinti, mai mischiati).
+- **Fetch RFI server-side** del monitor pubblico (placeId 2000, `arrivals=False`);
+  cattura status/content-type/byte/fetchedAt/HTML.
+- **Normalizzazione server-side** (`rfi.ts`, port del parser iOS DEBUG): categorie
+  compatte (REG/RV/AV/FR/IC/EC/RJ/…), niente `Categoria`, niente entità HTML; binario
+  assente → `--`; ritardo>0 → `delayed`; cancellato → `cancelled`; in partenza →
+  `departing`; altrimenti `onTime`. Niente ritardi/binari inventati.
+- **Risposta compatibile con `BackendBoardDTO` iOS** (`station`/`boardType`/`source`/
+  `rows`/`diagnostics`).
+- **Cache** in-memory (key `slug:type:locale`, TTL 30s); su errore RFI con cache
+  calda → dati stale con `isFallback=true`/`isStale=true`; senza cache → `502`
+  strutturato. Codici: 200/400/404/405/502. CORS permissivo + preflight `OPTIONS`
+  (TODO restringere in prod).
+- **Auth/JWT (spike)**: endpoint pubblico, `verify_jwt = false` in `config.toml`
+  (deploy `supabase functions deploy board --no-verify-jwt`). Niente DB, niente
+  service_role, niente secret nel repo (`supabase/.gitignore` esclude `.env`/`.temp`).
+- **Test/validazione**: `rfi_test.ts` (Deno, puro, nessuna rete) su categorie/entità/
+  ritardo/binario/stato + shape. Deno non installato in locale → check eseguibile con
+  `deno test` / `deno check` quando disponibile.
+
 ## 2026-06-17 — Backend adapter iOS fixture phase
 
 Stato: completata (Phase 1 lato iOS, solo fixture). Prossima: **Phase 2 — fetcher di

@@ -133,6 +133,19 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   12'→severe), and the fixture service (loads + maps, `sourceKind == .backendFixture`,
   no network). **No live backend networking yet.**
 
+**Phase 2A — backend endpoint (spike) — ✅ STARTED (server-side)**
+- Supabase Edge Function `board` exists: `supabase/functions/board/`
+  (`index.ts` handler + `rfi.ts` parser/normalization + `rfi_test.ts`).
+- `GET /board?stationSlug=padova&type=departures&locale=it` — **Padova departures only**.
+- Server-side RFI fetch (placeId 2000) + normalization → JSON matching `BackendBoardDTO`.
+- In-memory 30s cache; stale-fallback on RFI failure; 200/400/404/405/502; permissive CORS.
+- **Public / no-JWT for the spike** (`verify_jwt = false`); no DB, no secrets.
+- **Pending:** iOS *remote* fetcher (a `URLSession` `BackendBoardFetching` pointing at
+  the deployed function) — not built yet; iOS still uses the local fixture (Phase 1).
+- **Pending (prod hardening):** rate limiting, app-level token/auth, abuse protection,
+  shared cache, reduced/hidden diagnostics, restricted CORS, more stations + arrivals.
+- Local run / deploy notes: `supabase/functions/board/README.md`.
+
 **Phase 2 — backend in DEBUG**
 - DEBUG uses `BackendBoardService` (pointing at staging/local).
 - Keep the direct RFI adapter as an **emergency developer fallback only**.

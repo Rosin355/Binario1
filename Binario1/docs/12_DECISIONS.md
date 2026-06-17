@@ -94,6 +94,21 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Backend adapter — Phase 2A (Supabase Edge Function `board`)
+
+- **Il backend possiede il parsing/normalizzazione della sorgente**: la Edge Function
+  `board` fa fetch dell'HTML RFI pubblico e restituisce JSON normalizzato compatibile
+  con `BackendBoardDTO`; l'app non fa parsing di sorgenti in produzione.
+- **Niente secret nel repo**: nessuna anon key, nessuna service_role, nessun `.env`
+  reale; la function non accede al DB e non inizializza il client Supabase
+  (`supabase/.gitignore` esclude `.env`/`.temp`).
+- **L'adapter RFI diretto resta DEBUG-only su iOS** (fallback dev); la produzione
+  consumerà l'endpoint backend.
+- **Endpoint pubblico / senza JWT SOLO per lo spike** (`verify_jwt = false`,
+  deploy `--no-verify-jwt`): è un endpoint di validazione, non la configurazione finale.
+- **Prima di un rollout più ampio servono rate limiting / token applicativo / abuse
+  protection** (e cache condivisa, diagnostics ridotte, CORS ristretto).
+
 ## Backend adapter — Phase 1 iOS (fixture)
 
 - **L'iOS consuma JSON normalizzato del backend tramite DTO + mapper**

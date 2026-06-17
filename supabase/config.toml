@@ -1,0 +1,9 @@
+# Supabase local config. `project_id` is a local slug, NOT a secret.
+# This spike needs no database, no migrations and no secrets.
+project_id = "binario1"
+
+[functions.board]
+# Phase 2A spike: public RFI-monitor adapter, no Supabase Auth required.
+# TODO(prod): add app-level token / rate limiting / abuse protection before
+# enabling JWT or wider rollout (see docs/13_BACKEND_ADAPTER.md, docs/12_DECISIONS.md).
+verify_jwt = false
