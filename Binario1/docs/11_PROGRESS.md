@@ -2,6 +2,46 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-17 — Validate board app-token enforcement
+
+Stato: **enforcement attivo e validato server-side.** Validazione su iPhone reale
+**da fare** dall'utente (nessun device in questo ambiente).
+
+### Cosa
+- **Secret Supabase configurati** sul progetto "Binario 1" (`hzwwvkuxqhmeicylyrsy`):
+  `BINARIO_BOARD_APP_TOKEN` (token forte generato localmente) e
+  `BINARIO_BOARD_ENV=production`. Funzione **rideployata**.
+- **Validazione server (curl)**:
+  - A) **nessun token → HTTP 401** (`unauthorized`).
+  - B) **token errato → HTTP 401** (`unauthorized`).
+  - C) **token corretto → HTTP 200**, board normalizzata, righe presenti,
+    `source.kind=rfiLive`, `isFallback=false`, **`diagnostics` OMESSE**
+    (`BINARIO_BOARD_ENV=production`).
+- **iOS token locale (non committato)**: `BackendEndpointConfig.debug.appToken` ora
+  legge l'env var `BINARIO_BOARD_APP_TOKEN` (impostata nello schema Xcode → vive in
+  `xcuserdata/`, già gitignored). Token committato resta **vuoto**. `URLSessionBackendBoardFetcher`
+  invia `X-Binario-App-Token` quando valorizzato; nessun header Authorization, nessuna
+  anon/service_role key. `.gitignore` esteso (`*.local.swift`/`*.local.xcconfig`/`*.env.local`).
+- **Token persistito localmente** per l'utente in `supabase/.env.board.local`
+  (gitignored, `git check-ignore` confermato) — mai committato, mai stampato.
+
+### Conseguenza (atteso)
+- L'endpoint deployato ora **richiede il token**: l'app committata (token vuoto) e
+  qualsiasi client senza token ricevono **401 → fallback visibile alla fixture**
+  (`[BackendLive] FALLBACK · reason=fetch-error · error=…401…`). Per tornare live:
+  impostare `BINARIO_BOARD_APP_TOKEN` (valore in `supabase/.env.board.local`) nello
+  schema Xcode.
+
+### Validazione iPhone (PENDING — utente)
+- Con token locale corretto: header "Backend · Monitor RFI online", log
+  `[BackendLive] OK · rows=N · source=rfiLive · fallback=false · stale=false`, nessun
+  `[RFILive]`. Con token mancante/errato: fallback visibile alla fixture, no crash.
+
+### Build / sicurezza
+- iOS Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator
+  — ambiente). **Nessun secret committato** (token solo in file gitignored / env var).
+  Release resta `.mock`. Viaggi/Cerca invariati.
+
 ## 2026-06-17 — Harden board backend access
 
 Stato: completata (Hardening Phase 1). Codice live deployato; enforcement del token

@@ -42,7 +42,23 @@ struct BackendEndpointConfig {
     /// see the `[BackendLive] FALLBACK …` logs). To point at a different deployment,
     /// change the host below (or reset it to the placeholder to force fixture mode).
     static let debug = BackendEndpointConfig(
-        baseURL: URL(string: "https://hzwwvkuxqhmeicylyrsy.functions.supabase.co")!
+        baseURL: URL(string: "https://hzwwvkuxqhmeicylyrsy.functions.supabase.co")!,
+        appToken: debugAppToken
     )
+
+    /// Local app token for the protected backend, resolved at runtime from the
+    /// `BINARIO_BOARD_APP_TOKEN` environment variable. Set it in your Xcode scheme
+    /// (Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables) —
+    /// that lives in **gitignored user data**, so the real token is never committed.
+    /// Empty when unset → no header is sent and `.backendLivePadova` falls back to
+    /// the local fixture. The value MUST match the Supabase `BINARIO_BOARD_APP_TOKEN`
+    /// secret. NEVER hardcode a real token here.
+    ///
+    /// (We deliberately use an env var rather than a gitignored `*.local.swift`: the
+    /// Xcode project uses a synchronized file group, so a gitignored Swift file would
+    /// be compiled on this machine but missing on a fresh clone, breaking the build.)
+    private static var debugAppToken: String {
+        ProcessInfo.processInfo.environment["BINARIO_BOARD_APP_TOKEN"] ?? ""
+    }
     #endif
 }

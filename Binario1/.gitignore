@@ -15,3 +15,12 @@ Packages/
 # CocoaPods / Carthage
 Pods/
 Carthage/Build/
+
+# Local secrets / token overrides — NEVER commit these.
+# (Preferred: set BINARIO_BOARD_APP_TOKEN in the Xcode scheme env vars, which live
+# in the already-ignored xcuserdata/. These cover any file-based local override too.)
+*.local.swift
+*.local.xcconfig
+*.secrets
+*.env.local
+.env.local

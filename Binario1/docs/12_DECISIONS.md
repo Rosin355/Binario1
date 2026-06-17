@@ -106,6 +106,11 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   `sourceBytes`/`sourceStatus` pubblici in production mode).
 - **La produzione richiede ancora un rate limit distribuito e una policy di rollout**
   (il limiter in-memory è per-istanza, non globale). Nessun secret committato.
+- **App-token validato end-to-end (2026-06-17)**: server no/errato → 401, corretto →
+  200 con diagnostics omesse in production. Enforcement ora ATTIVO sul deploy.
+- **I token reali restano fuori da git**: env var nello schema Xcode (`xcuserdata/`,
+  gitignored) lato iOS, secret Supabase lato server, copia locale in
+  `supabase/.env.board.local` (gitignored). Mai committati, mai nei log/summary.
 
 ## Backend adapter — Phase 2B (iOS remote fetcher)
 

@@ -187,10 +187,17 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   - `BINARIO_BOARD_APP_TOKEN=<token>` — enables token enforcement
   - `BINARIO_BOARD_ENV=development|production` — gates diagnostics
 - **Deploy/test:** `supabase secrets set … --project-ref <ref>` then
-  `supabase functions deploy board --no-verify-jwt --project-ref <ref>`. Validated
-  locally (`deno test`, handler 401/200/diagnostics) + redeployed. **Enforcement is
-  currently OFF in the deployed function** (secret unset → development → open spike),
-  so the on-device validated path is preserved until you set the secrets.
+  `supabase functions deploy board --no-verify-jwt --project-ref <ref>`.
+- **Token validation VALIDATED end-to-end (2026-06-17):** secrets
+  `BINARIO_BOARD_APP_TOKEN` + `BINARIO_BOARD_ENV=production` set and redeployed.
+  Server curl: **no token → 401**, **wrong token → 401**, **correct token → 200**
+  (rows, `source.kind=rfiLive`, **diagnostics omitted** in production). Enforcement is
+  now **ON** in the deployed function. iOS reads the matching token from the
+  `BINARIO_BOARD_APP_TOKEN` env var (Xcode scheme → gitignored `xcuserdata/`); the
+  committed token stays empty. The token is a **lightweight abuse-reduction** measure,
+  not perfect mobile security (a shipped token can be extracted).
+- **On-device validation:** PENDING (user) — with the local token set, expect
+  `[BackendLive] OK …`; without it, a visible fixture fallback on 401.
 - **Still pending:** distributed/shared rate limiter · `verify_jwt`/app-auth policy ·
   station registry expansion · arrivals · restricted CORS · production rollout decision.
 
