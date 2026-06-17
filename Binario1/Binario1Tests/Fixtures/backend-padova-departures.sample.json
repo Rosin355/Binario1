@@ -1,0 +1,32 @@
+{
+  "station": {
+    "id": "padova",
+    "name": "Padova",
+    "sourcePlaceId": "2000"
+  },
+  "boardType": "departures",
+  "source": {
+    "kind": "rfiLive",
+    "label": "Monitor RFI online",
+    "updatedAt": "2026-06-17T10:49:00+02:00",
+    "fetchedAt": "2026-06-17T10:50:12+02:00",
+    "isFallback": false,
+    "isStale": false
+  },
+  "rows": [
+    { "id": "REG-16971-1049", "scheduledTime": "10:49", "category": "REG", "trainNumber": "16971", "destination": "Venezia Mestre", "platform": "2", "delayMinutes": 0, "status": "onTime", "notes": [] },
+    { "id": "RV-2774-1052", "scheduledTime": "10:52", "category": "RV", "trainNumber": "2774", "destination": "Venezia Santa Lucia", "platform": "2", "delayMinutes": 0, "status": "onTime", "notes": [] },
+    { "id": "AV-9805-1058", "scheduledTime": "10:58", "category": "AV", "trainNumber": "9805", "destination": "Napoli Centrale", "platform": "1", "delayMinutes": 0, "status": "onTime", "notes": [] },
+    { "id": "AV-9806-1104", "scheduledTime": "11:04", "category": "AV", "trainNumber": "9806", "destination": "Venezia Santa Lucia", "platform": "2", "delayMinutes": 0, "status": "onTime", "notes": [] },
+    { "id": "REG-5930-1110", "scheduledTime": "11:10", "category": "REG", "trainNumber": "5930", "destination": "Belluno", "platform": "7", "delayMinutes": 0, "status": "onTime", "notes": [] },
+    { "id": "RV-2280-1115", "scheduledTime": "11:15", "category": "RV", "trainNumber": "2280", "destination": "Bologna Centrale", "platform": "1", "delayMinutes": 0, "status": "onTime", "notes": [] },
+    { "id": "IC-603-1120", "scheduledTime": "11:20", "category": "IC", "trainNumber": "603", "destination": "Roma Termini", "platform": "3", "delayMinutes": 5, "status": "delayed", "notes": [] },
+    { "id": "AV-9412-1126", "scheduledTime": "11:26", "category": "AV", "trainNumber": "9412", "destination": "Milano Centrale", "platform": "4", "delayMinutes": 12, "status": "delayed", "notes": [] },
+    { "id": "REG-5932-1130", "scheduledTime": "11:30", "category": "REG", "trainNumber": "5932", "destination": "Castelfranco Veneto", "platform": null, "delayMinutes": 0, "status": "cancelled", "notes": ["Treno cancellato"] }
+  ],
+  "diagnostics": {
+    "sourceStatus": 200,
+    "sourceBytes": 335041,
+    "parsedRows": 9
+  }
+}

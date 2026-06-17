@@ -1020,6 +1020,12 @@
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Destinazione non disponibile" } }
       }
     },
+    "source.backendFixture" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · RFI online monitor" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · Monitor RFI online" } }
+      }
+    },
     "source.rfiLive" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online monitor" } },

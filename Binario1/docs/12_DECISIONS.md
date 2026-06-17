@@ -94,6 +94,22 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Backend adapter — Phase 1 iOS (fixture)
+
+- **L'iOS consuma JSON normalizzato del backend tramite DTO + mapper**
+  (`BackendBoardDTO` → `BackendBoardMapper` → `StationBoardResponse`): le view non
+  vedono mai i DTO, e il mapper applica le regole sicure dell'app (niente
+  ritardi/binari finti, binario assente → `--`, 0/cancellata → nessun ritardo).
+- **La modalità backend-fixture è il ponte prima dell'integrazione reale**:
+  `BackendBoardService` con `FixtureBackendBoardFetcher` carica una fixture JSON dal
+  bundle (nessuna rete). Source mode DEBUG `.backendFixturePadova`, etichettata in
+  header come "Backend fixture · Monitor RFI online" per non far credere a una
+  connessione live.
+- **L'adapter RFI diretto resta DEBUG-only** e disponibile come fallback dev
+  (`.rfiLivePadova`); non è più il default DEBUG.
+- **La produzione userà poi `BackendBoardService` con un fetcher di rete** (Phase 2/3);
+  il parsing HTML RFI resta escluso dal Release. Release resta `.mock`.
+
 ## Accesso dati reali (produzione)
 
 - **In produzione i dati reali passano da un backend adapter**, non dallo scraping

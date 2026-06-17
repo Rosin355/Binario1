@@ -20,4 +20,8 @@ enum BoardSourceMode {
     /// `placeId` 2000), departures. Online source, mandatory mock fallback.
     /// Distinct from `.scheduledPadova` (PRM Quadro Orario, id 1861).
     case rfiLivePadova
+    /// DEBUG-only: Phase 1 of the backend-adapter migration. Loads the bundled
+    /// *normalized backend JSON fixture* for Padova through `BackendBoardService`
+    /// (no live network). Renders the same Home board, labelled "Backend fixture".
+    case backendFixturePadova
 }

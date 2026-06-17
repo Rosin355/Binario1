@@ -2,6 +2,49 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-17 — Backend adapter iOS fixture phase
+
+Stato: completata (Phase 1 lato iOS, solo fixture). Prossima: **Phase 2 — fetcher di
+rete `URLSession` verso backend staging, RFI diretto come fallback dev**.
+
+### Cosa (niente backend reale, niente rete, niente UI ridisegnata)
+- **DTO backend**: nuovo `Services/BackendBoardDTO.swift` — decodifica il JSON
+  normalizzato del contratto `GET /api/board` (`station`, `boardType`, `source`,
+  `rows`, `diagnostics` opzionale). I DTO sono solo modello di trasporto: le view non
+  li vedono mai.
+- **Mapper**: nuovo `Services/BackendBoardMapper.swift` — DTO → `StationBoardResponse`.
+  Regole sicure: niente ritardi/binari inventati; binario assente → `--`; ritardo
+  0/assente → nessun badge; `cancelled` → stato cancellato senza ritardo; status
+  ignoto → derivato dal ritardo. Categorie già compatte dal backend (REG/RV/AV/IC/…).
+- **Service**: nuovo `Services/BackendBoardService.swift` — conforme a
+  `TrainBoardService`, sorgente via `BackendBoardFetching`; in Phase 1 solo
+  `FixtureBackendBoardFetcher` (JSON dal bundle, **nessuna rete**). Decodifica → mappa
+  → marca `sourceKind = .backendFixture`; fallback obbligatorio al mock su
+  errore/board vuota o per gli arrivi.
+- **Fixture JSON normalizzato**: `Binario1/Resources/backend-padova-departures.sample.json`
+  (risorsa app per il service DEBUG) + `Binario1Tests/Fixtures/backend-padova-departures.sample.json`
+  (test). 9 partenze Padova realistiche (REG/RV/AV verso Venezia/Napoli/Belluno/
+  Bologna, +5′, +12′, una cancellata). JSON normalizzato, niente `Categoria`, niente
+  entità HTML, niente label sorgente nelle righe.
+- **Source mode DEBUG**: aggiunto `.backendFixturePadova` (default DEBUG; header
+  "Backend fixture · Monitor RFI online" / "Backend fixture · RFI online monitor",
+  nuova `BoardSourceKind.backendFixture`). Mantenuti `.rfiLivePadova`,
+  `.scheduledPadova`, `.mock` (flip in `AppEnvironment.sourceMode`). Release resta
+  `.mock`.
+
+### Test
+- DTO: decodifica fixture (id/nome stazione, boardType, source kind/label, righe,
+  diagnostics opzionali) + decodifica senza `diagnostics`.
+- Mapper: 9 righe preservate, categorie compatte (no `Categoria`/`&#`), binario
+  assente → `--`, 0/cancellata → nessun ritardo, 5′ → medium, 12′ → severe.
+- Service: carica la fixture senza rete, `sourceKind == .backendFixture`.
+- Nessun test usa rete o backend reale.
+
+### Build / test
+- Build: OK (Debug e Release). Test target: compila. Esecuzione unit test bloccata
+  da instabilità CoreSimulator (ambiente). UI/Viaggi/Cerca invariati; Release
+  mock-only.
+
 ## 2026-06-17 — Prepare backend adapter architecture
 
 Stato: completata (design + scaffold). Prossima milestone: **Phase 1 — `BackendBoardService`

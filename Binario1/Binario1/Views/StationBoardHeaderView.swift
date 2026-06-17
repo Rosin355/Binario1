@@ -124,6 +124,12 @@ struct StationBoardHeaderView: View {
         return Text("source.rfiLive")
     }
 
+    /// "Backend fixture · Monitor RFI online" — DEBUG backend-adapter Phase 1 path.
+    /// Explicitly marks this as a local fixture, not a live backend connection.
+    private var backendFixtureLabel: Text {
+        Text("source.backendFixture")
+    }
+
     @ViewBuilder
     private var updatedLabel: some View {
         if isScheduled {
@@ -136,6 +142,13 @@ struct StationBoardHeaderView: View {
         } else if sourceKind == .rfiLive {
             // Live RFI monitor source — no scheduled/demo wording, no live dot.
             rfiLiveLabel
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .foregroundStyle(BoardColors.amberDim)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        } else if sourceKind == .backendFixture {
+            // DEBUG backend-adapter Phase 1: normalized JSON from a local fixture.
+            backendFixtureLabel
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .foregroundStyle(BoardColors.amberDim)
                 .lineLimit(1)

@@ -118,10 +118,20 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
 
 ## iOS migration plan
 
-**Phase 1 — contract + DTO (no behavior change)**
-- Keep the current DEBUG direct-RFI adapter (`RFILiveBoardService`).
-- Add a backend DTO matching this JSON + a `BackendBoardService: TrainBoardService`.
-- Test `BackendBoardService` against a **local fixture JSON** (no network in tests).
+**Phase 1 — contract + DTO (no behavior change) — ✅ IMPLEMENTED (iOS, fixture-only)**
+- Keep the current DEBUG direct-RFI adapter (`RFILiveBoardService`) available as a
+  dev fallback (flip `AppEnvironment.sourceMode`).
+- Added: `BackendBoardDTO` (wire model), `BackendBoardMapper` (DTO → `StationBoardResponse`),
+  `BackendBoardService: TrainBoardService` with a `BackendBoardFetching` source and a
+  `FixtureBackendBoardFetcher` (bundled JSON, **no network**).
+- Added DEBUG source mode `.backendFixturePadova` (header label "Backend fixture ·
+  Monitor RFI online") — the DEBUG default; RELEASE stays `.mock`.
+- Fixture: `Binario1/Resources/backend-padova-departures.sample.json` (app, for the
+  DEBUG service) + `Binario1Tests/Fixtures/backend-padova-departures.sample.json` (tests).
+- Tested: DTO decode (incl. optional diagnostics), mapper normalization
+  (categories compact, missing platform → `--`, 0/cancelled → no delay, 5'→medium,
+  12'→severe), and the fixture service (loads + maps, `sourceKind == .backendFixture`,
+  no network). **No live backend networking yet.**
 
 **Phase 2 — backend in DEBUG**
 - DEBUG uses `BackendBoardService` (pointing at staging/local).

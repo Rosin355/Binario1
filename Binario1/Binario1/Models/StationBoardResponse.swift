@@ -33,6 +33,9 @@ enum BoardSourceKind: Equatable {
     case mock
     case scheduledSample
     case rfiLive
+    /// Normalized JSON loaded from a local *backend fixture* (Phase 1 of the
+    /// backend-adapter migration) — not a live backend connection.
+    case backendFixture
 }
 
 /// Metadata describing a programmed-timetable *sample* window (demo data).

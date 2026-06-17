@@ -587,6 +587,108 @@ struct Binario1Tests {
         #expect(service.count == 3)
     }
 
+    // MARK: - Backend adapter Phase 1 (DTO → mapper → fixture service)
+
+    /// Mirrors Binario1Tests/Fixtures/backend-padova-departures.sample.json (and the
+    /// app resource) so DTO/mapper/service tests never touch the network.
+    private static let backendFixtureJSON = """
+    {
+      "station": { "id": "padova", "name": "Padova", "sourcePlaceId": "2000" },
+      "boardType": "departures",
+      "source": {
+        "kind": "rfiLive", "label": "Monitor RFI online",
+        "updatedAt": "2026-06-17T10:49:00+02:00", "fetchedAt": "2026-06-17T10:50:12+02:00",
+        "isFallback": false, "isStale": false
+      },
+      "rows": [
+        { "id": "REG-16971-1049", "scheduledTime": "10:49", "category": "REG", "trainNumber": "16971", "destination": "Venezia Mestre", "platform": "2", "delayMinutes": 0, "status": "onTime", "notes": [] },
+        { "id": "RV-2774-1052", "scheduledTime": "10:52", "category": "RV", "trainNumber": "2774", "destination": "Venezia Santa Lucia", "platform": "2", "delayMinutes": 0, "status": "onTime", "notes": [] },
+        { "id": "AV-9805-1058", "scheduledTime": "10:58", "category": "AV", "trainNumber": "9805", "destination": "Napoli Centrale", "platform": "1", "delayMinutes": 0, "status": "onTime", "notes": [] },
+        { "id": "AV-9806-1104", "scheduledTime": "11:04", "category": "AV", "trainNumber": "9806", "destination": "Venezia Santa Lucia", "platform": "2", "delayMinutes": 0, "status": "onTime", "notes": [] },
+        { "id": "REG-5930-1110", "scheduledTime": "11:10", "category": "REG", "trainNumber": "5930", "destination": "Belluno", "platform": "7", "delayMinutes": 0, "status": "onTime", "notes": [] },
+        { "id": "RV-2280-1115", "scheduledTime": "11:15", "category": "RV", "trainNumber": "2280", "destination": "Bologna Centrale", "platform": "1", "delayMinutes": 0, "status": "onTime", "notes": [] },
+        { "id": "IC-603-1120", "scheduledTime": "11:20", "category": "IC", "trainNumber": "603", "destination": "Roma Termini", "platform": "3", "delayMinutes": 5, "status": "delayed", "notes": [] },
+        { "id": "AV-9412-1126", "scheduledTime": "11:26", "category": "AV", "trainNumber": "9412", "destination": "Milano Centrale", "platform": "4", "delayMinutes": 12, "status": "delayed", "notes": [] },
+        { "id": "REG-5932-1130", "scheduledTime": "11:30", "category": "REG", "trainNumber": "5932", "destination": "Castelfranco Veneto", "platform": null, "delayMinutes": 0, "status": "cancelled", "notes": ["Treno cancellato"] }
+      ],
+      "diagnostics": { "sourceStatus": 200, "sourceBytes": 335041, "parsedRows": 9 }
+    }
+    """
+
+    private struct StubBackendFetcher: BackendBoardFetching {
+        let data: Data
+        func fetchBoardJSON(stationSlug: String, type: BoardType, locale: String) async throws -> Data { data }
+    }
+
+    @Test func backendFixtureDTODecodes() throws {
+        let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: Data(Self.backendFixtureJSON.utf8))
+        #expect(dto.station.id == "padova")
+        #expect(dto.station.name == "Padova")
+        #expect(dto.station.sourcePlaceId == "2000")
+        #expect(dto.boardType == "departures")
+        #expect(dto.source.kind == "rfiLive")
+        #expect(dto.source.label == "Monitor RFI online")
+        #expect(dto.source.isFallback == false)
+        #expect(dto.rows.count == 9)
+        #expect(dto.rows.first?.category == "REG")
+        #expect(dto.rows.first?.trainNumber == "16971")
+        #expect(dto.diagnostics?.parsedRows == 9)   // optional diagnostics decodes
+    }
+
+    @Test func backendDTODecodesWithoutDiagnostics() throws {
+        // diagnostics is optional (production omits it) — decoding must still succeed.
+        let json = #"{"station":{"id":"padova","name":"Padova","sourcePlaceId":null},"boardType":"departures","source":{"kind":"rfiLive","label":"Monitor RFI online"},"rows":[]}"#
+        let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: Data(json.utf8))
+        #expect(dto.diagnostics == nil)
+        #expect(dto.station.sourcePlaceId == nil)
+        #expect(dto.source.isFallback == nil)
+    }
+
+    @Test func backendMapperProducesNormalizedRows() throws {
+        let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: Data(Self.backendFixtureJSON.utf8))
+        let response = BackendBoardMapper.map(dto, referenceDate: Self.romeDate(2026, 6, 17, 10, 50))
+
+        #expect(response.rows.count == 9)               // row count preserved
+        #expect(response.station.id == "padova")
+        #expect(response.boardType == .departures)
+        #expect(response.sourceKind == .rfiLive)        // mapper maps source.kind (service overrides to .backendFixture)
+
+        for r in response.rows {                        // categories stay compact, no leakage
+            #expect(!r.category.contains("Categoria"))
+            #expect(!r.category.contains("&#"))
+            #expect(r.category.count <= 5)
+        }
+
+        let onTime = response.rows.first { $0.id == "REG-16971-1049" }
+        #expect(onTime?.delayMinutes == nil)            // 0 delay → no delay badge
+        #expect(onTime?.actualPlatform == "2")
+        #expect(onTime?.status == .onTime)
+
+        let d5 = response.rows.first { $0.id == "IC-603-1120" }
+        #expect(d5?.delayMinutes == 5)
+        #expect(DelayVisualState.from(delayMinutes: d5?.delayMinutes, isCancelled: false) == .medium)
+
+        let d12 = response.rows.first { $0.id == "AV-9412-1126" }
+        #expect(d12?.delayMinutes == 12)
+        #expect(DelayVisualState.from(delayMinutes: d12?.delayMinutes, isCancelled: false) == .severe)
+
+        let cancelled = response.rows.first { $0.status == .cancelled }
+        #expect(cancelled != nil)
+        #expect(cancelled?.platformDisplay == "--")     // missing platform → "--"
+        #expect(cancelled?.delayMinutes == nil)         // cancelled → no delay
+    }
+
+    @Test func backendServiceLoadsFixtureWithoutNetwork() async throws {
+        let stub = StubBackendFetcher(data: Data(Self.backendFixtureJSON.utf8))
+        let service = BackendBoardService(fetcher: stub, fallback: MockTrainBoardService(),
+                                          referenceDate: { Self.romeDate(2026, 6, 17, 10, 50) })
+        let response = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(response.rows.count == 9)
+        #expect(response.station.id == "padova")
+        #expect(response.sourceKind == .backendFixture) // service labels it a fixture
+        #expect(response.rows.allSatisfy { !$0.category.contains("Categoria") && !$0.category.contains("&#") })
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser

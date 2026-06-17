@@ -10,16 +10,17 @@ import SwiftUI
 /// Composition root. Selects the board data source.
 enum AppEnvironment {
     /// Active board data source, resolved per build configuration:
-    /// **DEBUG → `.rfiLivePadova` (real-data spike), RELEASE → `.mock`**.
+    /// **DEBUG → `.backendFixturePadova` (backend-adapter Phase 1), RELEASE → `.mock`**.
     ///
-    /// `.rfiLivePadova` is a **DEBUG-only** adapter that reads the RFI live station
-    /// monitor for Padova (live monitor placeId 2000). It is a technical validation
-    /// spike — not a production guarantee — and falls back to mock on any
-    /// fetch/parse failure. `.scheduledPadova` (PRM Quadro Orario demo) remains
-    /// available; flip the value below to use it. RELEASE always uses `.mock`, so
-    /// neither spike can become the production default.
+    /// To switch DEBUG source, flip the value below:
+    ///   • `.backendFixturePadova` — normalized backend JSON fixture (Phase 1 path)
+    ///   • `.rfiLivePadova`        — DEBUG-only direct RFI live monitor (kept as dev fallback)
+    ///   • `.scheduledPadova`      — PRM Quadro Orario programmed-timetable demo
+    ///   • `.mock`                 — bundled mock (also the RELEASE default)
+    /// All of these except `.mock` are **DEBUG-only**; RELEASE always uses `.mock`,
+    /// so no spike/fixture can become the production default.
     #if DEBUG
-    static let sourceMode: BoardSourceMode = .rfiLivePadova
+    static let sourceMode: BoardSourceMode = .backendFixturePadova
     #else
     static let sourceMode: BoardSourceMode = .mock
     #endif
@@ -36,13 +37,21 @@ enum AppEnvironment {
             #else
             return MockTrainBoardService()   // spike never ships as a release default
             #endif
+        case .backendFixturePadova:
+            #if DEBUG
+            return BackendBoardService(fallback: MockTrainBoardService())
+            #else
+            return MockTrainBoardService()   // backend fixture never ships as a release default
+            #endif
         }
     }
 
     static var initialStation: Station {
         switch sourceMode {
-        case .mock:                                                     return .bolognaCentrale
-        case .scheduledPadova, .remoteWithMockFallback, .rfiLivePadova: return .padova
+        case .mock:
+            return .bolognaCentrale
+        case .scheduledPadova, .remoteWithMockFallback, .rfiLivePadova, .backendFixturePadova:
+            return .padova
         }
     }
 
@@ -52,8 +61,8 @@ enum AppEnvironment {
     /// `.remoteWithMockFallback` is reserved for a future multi-station remote.
     static var allowsStationChange: Bool {
         switch sourceMode {
-        case .mock, .remoteWithMockFallback:   return true
-        case .scheduledPadova, .rfiLivePadova: return false
+        case .mock, .remoteWithMockFallback:                            return true
+        case .scheduledPadova, .rfiLivePadova, .backendFixturePadova:   return false
         }
     }
 }
