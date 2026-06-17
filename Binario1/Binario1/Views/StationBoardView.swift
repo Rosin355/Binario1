@@ -45,9 +45,7 @@ struct StationBoardView: View {
 
                 BoardTypeSegmentedControl(
                     selected: viewModel.boardType,
-                    onSelect: { type in
-                        Task { await viewModel.selectBoardType(type) }
-                    }
+                    onSelect: { viewModel.selectBoardType($0) }   // .task(id:) does the fetch
                 )
                 .padding(.horizontal, 18)
                 .padding(.bottom, 12)
@@ -105,7 +103,7 @@ struct StationBoardView: View {
             .padding(.bottom, 14)
         }
         .scrollIndicators(.hidden)
-        .refreshable { await viewModel.refresh() }
+        .refreshable { await viewModel.refresh(force: true) }
     }
 
     private var loadingState: some View {

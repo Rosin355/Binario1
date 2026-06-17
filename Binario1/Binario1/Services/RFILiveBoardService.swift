@@ -16,11 +16,15 @@ import Foundation
 
 enum RFILiveMapper {
 
+    /// Verbose per-row category logs are noisy; off by default (flip to debug a
+    /// specific normalization). The aggregate summary is logged once per fetch.
+    static let logsCategoryNormalizationDetails = false
+
     /// Compact board code from a verbose RFI category label, via the dedicated
     /// normalizer (decodes entities, strips "Categoria", maps to codes, else "UNK").
     static func category(from raw: String?) -> String {
         let code = RFITrainCategoryNormalizer.normalize(raw)
-        if let raw, raw != code {
+        if logsCategoryNormalizationDetails, let raw, raw != code {
             print("[RFILive] category raw=\"\(raw)\" normalized=\"\(code)\"")
         }
         return code
@@ -140,25 +144,36 @@ final class RFILiveBoardService: TrainBoardService, @unchecked Sendable {
             let board = RFIStationMonitorParser.parse(result.html)
             let response = RFILiveMapper.map(board, referenceDate: referenceDate())
 
+            let status = result.statusCode.map(String.init) ?? "?"
             if response.rows.isEmpty {
                 record(url: result.url, status: result.statusCode, contentType: result.contentType,
                        bytes: result.byteCount, rows: 0, usedFallback: true,
                        source: "fallback-after-empty-parse", error: nil, path: capturedPath)
-                print("[RFILive] RFI FETCH OK BUT PARSE FAILED (0 rows) → fallback · \(result.url)")
+                print("[RFILive] FALLBACK · status=\(status) · rows=0 · bytes=\(result.byteCount) · fallback=true")
                 return try await fallback.fetchBoard(stationId: stationId, type: type)
             }
 
             record(url: result.url, status: result.statusCode, contentType: result.contentType,
                    bytes: result.byteCount, rows: response.rows.count, usedFallback: false,
                    source: "live", error: nil, path: capturedPath)
-            print("[RFILive] RFI LIVE OK · \(response.rows.count) rows · \(result.byteCount) bytes · \(result.contentType ?? "?")")
+            print("[RFILive] LIVE OK · status=\(status) · rows=\(response.rows.count) · bytes=\(result.byteCount) · contentType=\(result.contentType ?? "?") · fallback=false")
+            print("[RFILive] categories: \(Self.categorySummary(response.rows))")
             return response
         } catch {
             record(url: url, status: nil, contentType: nil, bytes: 0, rows: 0, usedFallback: true,
                    source: "fallback-after-fetch-error", error: "\(error)", path: nil)
-            print("[RFILive] RFI FETCH FAILED → fallback: \(error)")
+            print("[RFILive] FETCH ERROR · fallback=true · error=\(error)")
             return try await fallback.fetchBoard(stationId: stationId, type: type)
         }
+    }
+
+    /// Aggregate "AV=12, RV=8, …" summary for the concise DEBUG log.
+    private static func categorySummary(_ rows: [TrainBoardRow]) -> String {
+        Dictionary(grouping: rows, by: { $0.category })
+            .mapValues(\.count)
+            .sorted { $0.value > $1.value }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: ", ")
     }
 
     private func record(url: URL, status: Int?, contentType: String?, bytes: Int, rows: Int,

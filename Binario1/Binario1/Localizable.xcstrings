@@ -423,6 +423,12 @@
         }
       }
     },
+    "delay.short" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Del." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Rit." } }
+      }
+    },
     "empty.noTrains" : {
       "localizations" : {
         "en" : {

@@ -22,8 +22,9 @@ enum BoardColors {
     static let amberFaint  = Color(red: 0.38, green: 0.21, blue: 0.03)      // labels / hints
     static let platform    = Color(red: 1.0,  green: 0.60, blue: 0.06)
 
-    static let delay       = Color(red: 1.0,  green: 0.22, blue: 0.07)      // big delays / cancelled
+    static let delay       = Color(red: 1.0,  green: 0.22, blue: 0.07)      // 10+ min / cancelled (red-orange)
     static let cancelled   = Color(red: 1.0,  green: 0.22, blue: 0.07)
+    static let delayMedium = Color(red: 1.0,  green: 0.40, blue: 0.03)      // 5–9 min (stronger orange)
 
     // On-time status (Viaggi): a railway green dot/label, used sparingly.
     static let statusGreen    = Color(red: 0.36, green: 0.86, blue: 0.40)

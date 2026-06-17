@@ -94,6 +94,21 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Board live & ritardi
+
+- **Il token animazione del titolo NON deve mai causare reload dati**: alimenta
+  solo il titolo LED dell'header (reveal). Il fetch del board dipende solo da
+  `.task(id: boardType)` e dal refresh manuale.
+- **La validazione live DEBUG evita richieste duplicate silenziose**: `refresh`
+  ha guard in-flight + dedupe per board (stesso `station|boardType` entro pochi
+  secondi); `selectBoardType` non rifà il fetch (lo fa `.task(id:)`);
+  pull-to-refresh è `force`.
+- **Colonna ritardo board compatta = etichetta piccola (`Rit.`/`Del.`) + badge**,
+  visibile solo con ritardo/cancellazione; colonna a larghezza fissa stabile.
+- **Colori ritardo semantici per soglia** (`DelayVisualState`): 1–4' ambra, 5–9'
+  arancio, 10'+ rosso-arancio, cancellato rosso; nessun colore unico arbitrario.
+  Rosso riservato ai problemi seri.
+
 ## Sorgenti dati
 
 - **I dati reali partono come adapter DEBUG isolato** (`RFILiveBoardService`,

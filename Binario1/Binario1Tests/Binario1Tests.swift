@@ -542,6 +542,51 @@ struct Binario1Tests {
         #expect(bologna.secondary == "CENTRALE")
     }
 
+    // MARK: - Delay color policy
+
+    @Test func delayVisualStateThresholds() {
+        #expect(DelayVisualState.from(delayMinutes: nil, isCancelled: false) == nil)   // no badge
+        #expect(DelayVisualState.from(delayMinutes: 0, isCancelled: false) == nil)     // no badge
+        #expect(DelayVisualState.from(delayMinutes: 3, isCancelled: false) == .mild)
+        #expect(DelayVisualState.from(delayMinutes: 7, isCancelled: false) == .medium)
+        #expect(DelayVisualState.from(delayMinutes: 15, isCancelled: false) == .severe)
+        #expect(DelayVisualState.from(delayMinutes: nil, isCancelled: true) == .cancelled)
+        #expect(DelayVisualState.from(delayMinutes: 3, isCancelled: true) == .cancelled) // cancelled wins
+    }
+
+    // MARK: - Board refresh dedupe (duplicate-fetch hardening)
+
+    private final class CountingBoardService: TrainBoardService, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _count = 0
+        var count: Int { lock.lock(); defer { lock.unlock() }; return _count }
+        func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
+            lock.lock(); _count += 1; lock.unlock()
+            return StationBoardResponse(
+                station: .padova, boardType: type, locale: nil, supportedLocales: [],
+                rows: [], generatedAt: Date(), sourceUpdatedAt: nil, isStale: false, warningMessageKey: nil
+            )
+        }
+    }
+
+    @MainActor
+    @Test func boardRefreshDedupesRapidDuplicatesButAllowsForceAndBoardChange() async {
+        let service = CountingBoardService()
+        let fixed = Self.romeDate(2026, 6, 16, 17, 0)
+        let vm = StationBoardViewModel(service: service, station: .padova,
+                                       allowsStationChange: false, now: { fixed })
+        await vm.refresh()                  // first load
+        await vm.refresh()                  // rapid duplicate (same board, same instant) → deduped
+        #expect(service.count == 1)
+
+        await vm.refresh(force: true)       // manual pull-to-refresh bypasses dedupe
+        #expect(service.count == 2)
+
+        vm.selectBoardType(.arrivals)       // board change → different key, not deduped
+        await vm.refresh()
+        #expect(service.count == 3)
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser

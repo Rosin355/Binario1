@@ -35,6 +35,13 @@ final class StationBoardViewModel {
 
     private let service: TrainBoardService
     private var isRefreshing = false
+    private var lastFetchAt: Date?
+    private var lastFetchKey: String?
+    /// Minimum gap between automatic (non-forced) fetches of the SAME board, to
+    /// collapse accidental duplicate triggers (a double `.task` fire, a lifecycle
+    /// re-entry). Manual refresh (`force`) and a board-type change bypass it; the
+    /// periodic auto-refresh (30s) sits well above it.
+    private let minAutoRefreshInterval: TimeInterval = 8
 
     /// Whether the header `Cambia` action may switch stations. A single fixed
     /// station source (e.g. the Padova scheduled timetable) locks this so the
@@ -101,8 +108,19 @@ final class StationBoardViewModel {
 
     // MARK: - Actions
 
-    func refresh() async {
-        guard !isRefreshing else { return }
+    /// Loads the board. `force` (manual pull-to-refresh) bypasses the dedupe guard;
+    /// non-forced calls for the SAME board within `minAutoRefreshInterval` are
+    /// skipped so accidental duplicate triggers never double-fetch.
+    func refresh(force: Bool = false) async {
+        guard !isRefreshing else { return }                 // never overlap requests
+        let key = "\(station.id)|\(boardType.rawValue)"
+        if !force, key == lastFetchKey, let last = lastFetchAt,
+           now().timeIntervalSince(last) < minAutoRefreshInterval {
+            #if DEBUG
+            print("[Board] refresh deduped (same board, last fetch \(Int(now().timeIntervalSince(last)))s ago)")
+            #endif
+            return
+        }
         isRefreshing = true
         isLoading = rows.isEmpty
         defer {
@@ -120,16 +138,23 @@ final class StationBoardViewModel {
             scheduledWindow = response.scheduledWindow
             sourceKind = response.sourceKind
             errorMessageKey = nil
+            lastFetchKey = key
+            lastFetchAt = now()
         } catch {
+            if Task.isCancelled { return }                  // superseded by a newer refresh
             errorMessageKey = "error.dataUnavailable"
             sourceIsStale = true
+            lastFetchKey = key
+            lastFetchAt = now()
         }
     }
 
-    func selectBoardType(_ type: BoardType) async {
+    /// Switches board type. Mutating `boardType` retriggers the view's `.task(id:)`,
+    /// which performs the fetch — so we deliberately do NOT fetch here (that would
+    /// be a duplicate request on every board-type switch).
+    func selectBoardType(_ type: BoardType) {
         guard boardType != type else { return }
         boardType = type
-        await refresh()
     }
 
     /// Cycle to the next mock station (drives the header station-change flip and

@@ -2,6 +2,52 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-16 — RFI live hardening and delay-column polish
+
+Stato: completata. Prossima milestone: **verifica parser su HTML reale + fixture
+sanitizzata**.
+
+### 1. Doppio fetch RFI (investigato + risolto)
+- **Causa**: `selectBoardType` chiamava `refresh()` E il cambio di `boardType`
+  rilancia `.task(id:)` → due fetch al cambio Partenze/Arrivi; eventuali
+  re-trigger del `.task` all'apertura non erano deduplicati. Il token animazione
+  titolo **non** causava reload (alimenta solo il titolo header — confermato).
+- **Fix**: `refresh(force:)` con **guard in-flight** (no overlap) + **dedupe per
+  board** (stesso `station|boardType` entro `minAutoRefreshInterval` = 8s →
+  skip); `selectBoardType` non fa più fetch (lo fa `.task(id:)`); pull-to-refresh
+  usa `force: true`; il fetch annullato (superseded) non mostra errore.
+- Risultato: apertura → 1 fetch; refresh manuale → 1 fetch; ritorno da
+  Viaggi/Cerca → nessun fetch automatico; cambio board → 1 fetch.
+
+### 2. Diagnostica DEBUG più pulita
+- Log conciso: `[RFILive] LIVE OK · status=200 · rows=40 · bytes=… · contentType=… · fallback=false`,
+  `[RFILive] FALLBACK · status=… · rows=0 · …`, `[RFILive] FETCH ERROR · fallback=true · error=…`.
+- Riepilogo categorie: `[RFILive] categories: AV=12, RV=8, REG=15, …`.
+- Log per-riga categoria dietro flag `RFILiveMapper.logsCategoryNormalizationDetails`
+  (default `false`). Capture HTML grezzo in Documents invariato (path loggato).
+
+### 3. Colonna ritardo compatta (UI)
+- In "Tutte le partenze" la colonna ritardo ora è una `VStack`: etichetta piccola
+  `Rit.` / `Del.` + badge ritardo sotto. Mostrata solo se c'è ritardo/cancellazione;
+  colonna a larghezza fissa stabile quando vuota; nessuno shift della destinazione.
+
+### 4. Logica colore ritardo semantica
+- Nuovo `DelayVisualState` (mild/medium/severe/cancelled): 1–4' ambra, 5–9' arancio
+  (`BoardColors.delayMedium`), 10'+ rosso-arancio, cancellato rosso, 0/nil → nessun
+  badge. Rosso riservato ai problemi seri.
+
+### File
+- Modificati: `ViewModel/StationBoardViewModel.swift` (dedupe/force),
+  `Views/StationBoardView.swift` (onSelect sync, refresh force),
+  `Views/DelayBadgeView.swift` (`DelayVisualState`), `Views/TrainBoardRowView.swift`
+  (colonna ritardo label+badge), `DesignSystem/BoardTheme.swift` (`delayMedium`),
+  `Services/RFILiveBoardService.swift` (log + flag + summary), `Localizable.xcstrings`
+  (`delay.short`), `Binario1Tests`.
+
+### Build / test
+- Build: OK (Debug e Release). Test target: compila. Esecuzione unit test bloccata
+  da instabilità CoreSimulator (ambiente). Aggiunti test soglie ritardo + dedupe.
+
 ## 2026-06-16 — RFI live diagnostics
 
 Stato: completata (tooling DEBUG). Prossima milestone: **girare su iPhone reale e

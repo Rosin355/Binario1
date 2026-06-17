@@ -112,10 +112,19 @@ struct TrainBoardRowView: View {
             .minimumScaleFactor(0.6)
     }
 
+    // Small label over the delay badge — only when a delay/cancellation exists, so
+    // the fixed-width column stays empty and stable otherwise.
     @ViewBuilder
     private var delayColumn: some View {
         if row.hasDelay || row.status.isCancelled {
-            DelayBadgeView(row: row, fontSize: 12)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("delay.short")             // "Rit." / "Del."
+                    .font(BoardFont.text(8, .semibold))
+                    .tracking(0.4)
+                    .foregroundStyle(BoardColors.amberDim)
+                    .lineLimit(1)
+                DelayBadgeView(row: row, fontSize: 12)
+            }
         }
     }
 }
