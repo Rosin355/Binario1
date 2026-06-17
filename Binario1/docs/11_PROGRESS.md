@@ -4,31 +4,35 @@ Cronologia sintetica delle milestone. Tenere conciso.
 
 ## 2026-06-17 — Validate backend live on iPhone
 
-Stato: endpoint **deployato e validato**; validazione su iPhone reale **da fare**
-dall'utente (nessun device in questo ambiente).
+Stato: **VALIDATO end-to-end su iPhone reale.** Backend adapter provato:
+iOS → Supabase Edge Function `/board` → RFI → JSON normalizzato → board.
 
-### Cosa
+### Validazione su device
+- **Evidenza**: log console Xcode da iPhone reale (nessuno screenshot catturato):
+  `[BackendLive] OK · rows=40 · source=rfiLive · fallback=false · stale=false`.
+- **Conferma**: `.backendLivePadova` chiama con successo la Supabase `/board`; il
+  backend ha restituito **40 righe live**; `fallback=false` (fixture NON usata);
+  `stale=false` (nessun cache stale); **nessun log `[RFILive]`** → il parser RFI
+  diretto on-device non gira in questa modalità.
+
+### Contesto (già fatto in precedenza)
 - **Function deployata**: `board` sul progetto Supabase "Binario 1"
-  (`supabase functions deploy board --no-verify-jwt`, CLI già autenticata).
-  Endpoint: `https://hzwwvkuxqhmeicylyrsy.functions.supabase.co/board`.
-- **Endpoint validato via curl** (no auth, `verify_jwt=false`):
-  - `?stationSlug=padova&type=departures&locale=it` → **200**, partenze reali Padova,
-    categorie compatte (AV/RV/REG/…), binari/ritardi/stati, **niente `Categoria`,
-    niente entità HTML**.
-  - station sconosciuta → **404**; `type=arrivals` → **400**.
-- **iOS DEBUG configurato**: `BackendEndpointConfig.debug` ora punta all'URL reale
-  (project ref pubblico, **non un secret**; nessuna anon/service_role key, nessun
-  header Authorization). Fallback alla fixture se irraggiungibile resta attivo.
-- **Validazione su iPhone reale**: PENDING (da eseguire dall'utente con
-  `.backendLivePadova`): attesa header "Backend · Monitor RFI online", righe dal JSON
-  backend, log `[BackendLive] OK · rows=N · source=rfiLive · fallback=false`, nessun
-  log `[RFILive]` in questa modalità.
+  (`supabase functions deploy board --no-verify-jwt`). Endpoint:
+  `https://hzwwvkuxqhmeicylyrsy.functions.supabase.co/board`.
+- **Endpoint validato via curl**: `?stationSlug=padova&type=departures&locale=it`
+  → 200 partenze reali (categorie compatte, niente `Categoria`/entità); 404 station
+  sconosciuta; 400 `type=arrivals`.
+- **iOS DEBUG**: `BackendEndpointConfig.debug` punta all'URL reale (project ref
+  pubblico, non un secret; nessuna anon/service_role key, nessun header Authorization).
 
-### Sicurezza / build
-- Nessun secret committato (solo il project ref pubblico nell'URL). Release resta
-  `.mock`. `.backendFixturePadova`/`.rfiLivePadova`/`.mock` invariati; Viaggi/Cerca
-  invariati. Build Debug+Release OK; test target compila (esecuzione bloccata da
-  CoreSimulator — ambiente).
+### Prossimo hardening (non ancora avviato)
+- app token / auth · rate limiting · cache condivisa · espansione station registry
+  · supporto arrivi · riduzione diagnostics · decisione di rollout in produzione.
+
+### Sicurezza
+- Nessun secret committato (solo il project ref pubblico). Release resta `.mock`.
+  `.backendFixturePadova`/`.rfiLivePadova`/`.mock` invariati; Viaggi/Cerca invariati.
+  Pass solo-doc: nessun codice modificato.
 
 ## 2026-06-17 — iOS backend live fetcher
 

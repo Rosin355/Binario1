@@ -106,6 +106,9 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   silenzioso (log `[BackendLive] FALLBACK …`). Release resta `.mock`.
 - **URL endpoint centralizzato** in `BackendEndpointConfig` (project-ref non è un
   secret); nessuna anon/service_role key nel repo.
+- **Validazione backend-live riuscita su iPhone reale** (2026-06-17, log
+  `[BackendLive] OK · rows=40 · …`): il path dati reali in produzione deve passare
+  dal **JSON normalizzato del backend**, non dal parsing RFI on-device.
 
 ## Backend adapter — Phase 2A (Supabase Edge Function `board`)
 

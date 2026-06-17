@@ -163,10 +163,16 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   `verify_jwt = false`). Direct curl returns 200 with real normalized Padova
   departures (compact categories, no `Categoria`/entities); 404/400 error paths OK.
   `BackendEndpointConfig.debug` now points at this URL.
-- **On-device validation:** PENDING — to be run by the user on a real iPhone with
-  `.backendLivePadova` (expect header "Backend · Monitor RFI online", rows from the
-  backend JSON, `[BackendLive] OK …` logs, no `[RFILive]` logs). The app falls back
-  to the local backend fixture if the endpoint is unreachable.
+- **On-device validation:** ✅ VALIDATED on a real iPhone (2026-06-17). Xcode console
+  showed `[BackendLive] OK · rows=40 · source=rfiLive · fallback=false · stale=false`
+  — 40 live rows via the backend, fixture not used, not stale, and **no `[RFILive]`
+  logs** (the direct on-device RFI parser does not run in this mode). Evidence: Xcode
+  console log (no screenshots captured). The app still falls back to the local backend
+  fixture if the endpoint is unreachable.
+- **Status:** the Supabase backend adapter is now proven end-to-end
+  (iOS → `/board` → RFI → normalized JSON → board). The direct RFI adapter
+  (`.rfiLivePadova`) remains a DEBUG emergency fallback only. Production hardening
+  remains pending.
 - **Next hardening (before wider rollout):** rate limiting · app token / auth ·
   shared cache · real station registry (more stations + arrivals) · reduced/hidden
   diagnostics · restricted CORS.
