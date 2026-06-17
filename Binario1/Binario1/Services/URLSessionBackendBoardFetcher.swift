@@ -42,8 +42,18 @@ struct URLSessionBackendBoardFetcher: BackendBoardFetching {
         guard let url = Self.makeURL(base: config.baseURL, stationSlug: stationSlug, type: type, locale: locale) else {
             throw BackendFetchError.invalidURL
         }
+        var request = URLRequest(url: url)
+        let token = config.appToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        if token.isEmpty {
+            #if DEBUG
+            print("[BackendLive] app token not configured")
+            #endif
+        } else {
+            // Lightweight abuse-reduction header (not Authorization, not a secret).
+            request.setValue(token, forHTTPHeaderField: "X-Binario-App-Token")
+        }
         do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
                 throw BackendFetchError.invalidResponse
             }

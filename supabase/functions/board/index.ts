@@ -6,8 +6,11 @@
 // Endpoint:  GET /board?stationSlug=padova&type=departures&locale=it
 // Returns JSON compatible with the iOS `BackendBoardDTO` (see docs/13_BACKEND_ADAPTER.md).
 //
-// Scope of this spike: Padova DEPARTURES only, public/no-JWT, no DB, no secrets.
-// It only fetches PUBLIC RFI HTML and normalizes it server-side.
+// Scope: Padova DEPARTURES only, no DB. Fetches PUBLIC RFI HTML and normalizes it
+// server-side. Hardening Phase 1 adds a lightweight app-token header
+// (X-Binario-App-Token), best-effort in-memory rate limiting, and a diagnostics
+// policy gated by BINARIO_BOARD_ENV. `verify_jwt` stays false; token validation is
+// code-level. Secrets are set via `supabase secrets set …`, never committed.
 
 import {
   isCancelledRow,
@@ -17,6 +20,22 @@ import {
   normalizeStatus,
   parseRFIMonitorHTML,
 } from "./rfi.ts";
+import {
+  clientKey,
+  InMemoryRateLimiter,
+  type RateLimitResult,
+  resolveEnv,
+  shouldIncludeDiagnostics,
+  validateAppToken,
+} from "./hardening.ts";
+
+// Hardening Phase 1 config (read once per warm instance). Secrets are set via
+// `supabase secrets set …` — never committed. See README / docs/13.
+const APP_TOKEN = Deno.env.get("BINARIO_BOARD_APP_TOKEN"); // lightweight app token (optional)
+const APP_ENV = resolveEnv(Deno.env.get("BINARIO_BOARD_ENV")); // development | production
+const INCLUDE_DIAGNOSTICS = shouldIncludeDiagnostics(APP_ENV);
+const RATE_LIMIT_PER_MIN = 60;
+const limiter = new InMemoryRateLimiter(RATE_LIMIT_PER_MIN, 60_000);
 
 // Tiny station registry. NOTE: the RFI live `placeId` (2000) and the PRM scheduled
 // id (1861) are DIFFERENT id systems — never mix them.
@@ -70,15 +89,29 @@ interface BoardResponse {
   diagnostics: Record<string, unknown>;
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+    headers: { ...CORS_HEADERS, ...extraHeaders, "Content-Type": "application/json; charset=utf-8" },
   });
 }
 
-function errorResponse(code: string, message: string, status: number): Response {
-  return jsonResponse({ error: { code, message } }, status);
+function errorResponse(code: string, message: string, status: number, extraHeaders: Record<string, string> = {}): Response {
+  return jsonResponse({ error: { code, message } }, status, extraHeaders);
+}
+
+function rateLimitHeaders(rl: RateLimitResult): Record<string, string> {
+  return {
+    "X-RateLimit-Limit": String(rl.limit),
+    "X-RateLimit-Remaining": String(rl.remaining),
+  };
+}
+
+/** Apply the diagnostics policy: omit `diagnostics` entirely in production. */
+function applyDiagnosticsPolicy(body: BoardResponse): Record<string, unknown> {
+  if (INCLUDE_DIAGNOSTICS) return body as unknown as Record<string, unknown>;
+  const { diagnostics: _omit, ...rest } = body;
+  return rest;
 }
 
 // Rome-local date prefix "YYYY-MM-DD" (for stable row ids and updatedAt).
@@ -106,12 +139,13 @@ function rfiMonitorURL(placeId: string): string {
   return `https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?arrivals=False&placeId=${placeId}`;
 }
 
-function staleFallback(cached: CacheEntry, fetchedAt: string, reason: string): Response {
-  return jsonResponse({
+function staleFallback(cached: CacheEntry, fetchedAt: string, reason: string, extraHeaders: Record<string, string>): Response {
+  const body: BoardResponse = {
     ...cached.body,
     source: { ...cached.body.source, isFallback: true, isStale: true, fetchedAt },
     diagnostics: { ...cached.body.diagnostics, cache: reason },
-  });
+  };
+  return jsonResponse(applyDiagnosticsPolicy(body), 200, extraHeaders);
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -121,6 +155,30 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   if (req.method !== "GET") {
     return errorResponse("method_not_allowed", "Use GET.", 405);
+  }
+
+  // App-token (lightweight abuse reduction — NOT user auth). When the env token is
+  // set, require a matching X-Binario-App-Token; when unset, allow in development
+  // only. Token values are never logged or echoed.
+  const tokenResult = validateAppToken(APP_TOKEN, req.headers.get("X-Binario-App-Token"));
+  if (tokenResult === "missing" || tokenResult === "invalid") {
+    return errorResponse("unauthorized", "Missing or invalid app token", 401);
+  }
+  if (tokenResult === "unconfigured") {
+    if (APP_ENV === "production") {
+      return errorResponse("unauthorized", "Missing or invalid app token", 401);
+    }
+    console.warn("[board] BINARIO_BOARD_APP_TOKEN not configured — allowing request (development only)");
+  }
+
+  // Best-effort in-memory rate limit (per warm instance; see hardening.ts TODO).
+  const rl = limiter.check(clientKey(req.headers), Date.now());
+  const rlHeaders = rateLimitHeaders(rl);
+  if (!rl.allowed) {
+    return errorResponse("rate_limited", "Too many requests", 429, {
+      ...rlHeaders,
+      "Retry-After": String(rl.retryAfterSeconds),
+    });
   }
 
   const url = new URL(req.url);
@@ -149,11 +207,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // Fresh cache hit
   if (cached && now - cached.at < CACHE_TTL_MS) {
-    return jsonResponse({
+    const body: BoardResponse = {
       ...cached.body,
       source: { ...cached.body.source, isFallback: false, isStale: false },
       diagnostics: { ...cached.body.diagnostics, cache: "hit" },
-    });
+    };
+    return jsonResponse(applyDiagnosticsPolicy(body), 200, rlHeaders);
   }
 
   const fetchedAt = new Date().toISOString();
@@ -176,8 +235,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!res.ok) throw new Error(`RFI HTTP ${res.status}`);
   } catch (err) {
     // Serve stale-but-recent cache if we have any; otherwise structured 502.
-    if (cached) return staleFallback(cached, fetchedAt, "stale-fallback-fetch-error");
-    return errorResponse("source_fetch_failed", `RFI fetch failed: ${String(err)}`, 502);
+    if (cached) return staleFallback(cached, fetchedAt, "stale-fallback-fetch-error", rlHeaders);
+    return errorResponse("source_fetch_failed", `RFI fetch failed: ${String(err)}`, 502, rlHeaders);
   }
 
   const parsed = parseRFIMonitorHTML(html);
@@ -209,8 +268,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .filter((r) => r.scheduledTime.length > 0); // require a scheduled time
 
   if (rows.length === 0) {
-    if (cached) return staleFallback(cached, fetchedAt, "stale-fallback-empty-parse");
-    return errorResponse("source_parse_empty", "RFI returned no parseable rows.", 502);
+    if (cached) return staleFallback(cached, fetchedAt, "stale-fallback-empty-parse", rlHeaders);
+    return errorResponse("source_parse_empty", "RFI returned no parseable rows.", 502, rlHeaders);
   }
 
   const updatedAt = parsed.updatedAt ? `${datePrefix}T${parsed.updatedAt}:00${offset}` : fetchedAt;
@@ -231,5 +290,5 @@ Deno.serve(async (req: Request): Promise<Response> => {
   };
 
   cache.set(cacheKey, { at: now, body });
-  return jsonResponse(body);
+  return jsonResponse(applyDiagnosticsPolicy(body), 200, rlHeaders);
 });

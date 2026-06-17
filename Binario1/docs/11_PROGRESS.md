@@ -2,6 +2,47 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-17 — Harden board backend access
+
+Stato: completata (Hardening Phase 1). Codice live deployato; enforcement del token
+attivabile impostando i secret server-side (non ancora attivi → spike resta aperto).
+
+### Cosa
+- **App token** `X-Binario-App-Token` nella Edge Function: legge
+  `BINARIO_BOARD_APP_TOKEN` (env). Se configurato → token mancante/errato = **401**
+  (`unauthorized`); se non configurato → consentito **solo in development** (warning),
+  rifiutato in production. Confronto constant-time-ish; il token **non** è mai loggato
+  né incluso negli errori.
+- **Rate limit foundation** in-memory best-effort (60 req/min per client key) → **429**
+  (`rate_limited`) con `Retry-After`/`X-RateLimit-Limit`/`X-RateLimit-Remaining`.
+  Per-istanza, **non globale** → TODO limiter distribuito (Upstash/Redis o Supabase).
+- **Diagnostics ridotte per ambiente**: `BINARIO_BOARD_ENV` (`development`/`production`,
+  default development). In production il blocco `diagnostics` è **omesso**.
+- **iOS**: `URLSessionBackendBoardFetcher` allega `X-Binario-App-Token` se
+  `BackendEndpointConfig.appToken` è valorizzato; se vuoto logga
+  `[BackendLive] app token not configured` e non allega header. 401 → errore tipizzato
+  → `BackendBoardService` fallback alla fixture (header "Backend fixture"). Nessun
+  token reale committato (placeholder vuoto, da impostare in locale).
+
+### Validazione
+- Backend: `deno check` pulito; `deno test` **16/16** (7 hardening + 9 parser).
+  Handler locale: no token→401, token errato→401, token corretto→200 (diagnostics in
+  dev), production+token→200 **senza diagnostics**, production+token assente→401.
+  Funzione **rideployata**; live senza token → 200 (unconfigured+development),
+  header rate-limit presenti.
+- iOS: Build Debug+Release OK; test target compila (5 nuovi test token/401/fallback;
+  esecuzione bloccata da CoreSimulator — ambiente).
+
+### Secret Supabase richiesti (non nel repo)
+- `BINARIO_BOARD_APP_TOKEN=<token>` · `BINARIO_BOARD_ENV=production`
+  (`supabase secrets set …`, poi redeploy). Token speculare in
+  `BackendEndpointConfig.appToken` lato app (in locale, non committato).
+
+### Sicurezza / prossimo
+- Nessun secret committato (solo project ref pubblico). Release resta `.mock`.
+  Prossimo: rate limit distribuito, espansione station registry, arrivi,
+  decisione di rollout produzione.
+
 ## 2026-06-17 — Validate backend live on iPhone
 
 Stato: **VALIDATO end-to-end su iPhone reale.** Backend adapter provato:

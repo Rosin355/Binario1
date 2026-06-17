@@ -751,6 +751,52 @@ struct Binario1Tests {
         #expect(real.isConfigured == true)
     }
 
+    // MARK: - App-token header (Hardening Phase 1)
+
+    @Test func backendFetcherAttachesAppTokenWhenConfigured() async throws {
+        var cfg = BackendEndpointConfig(baseURL: URL(string: "https://stub-echotoken.example")!)
+        cfg.appToken = "tok-123"
+        let fetcher = URLSessionBackendBoardFetcher(config: cfg, session: makeStubSession())
+        let data = try await fetcher.fetchBoardJSON(stationSlug: "padova", type: .departures, locale: "it")
+        let echoed = try JSONSerialization.jsonObject(with: data) as? [String: String]
+        #expect(echoed?["received"] == "tok-123")
+    }
+
+    @Test func backendFetcherOmitsTokenHeaderWhenEmpty() async throws {
+        let cfg = BackendEndpointConfig(baseURL: URL(string: "https://stub-echotoken.example")!) // appToken defaults to ""
+        let fetcher = URLSessionBackendBoardFetcher(config: cfg, session: makeStubSession())
+        let data = try await fetcher.fetchBoardJSON(stationSlug: "padova", type: .departures, locale: "it")
+        let echoed = try JSONSerialization.jsonObject(with: data) as? [String: String]
+        #expect(echoed?["received"] == "")   // no header attached → server sees nothing
+    }
+
+    @Test func backendFetcherThrowsTypedErrorOn401() async {
+        let fetcher = URLSessionBackendBoardFetcher(
+            config: BackendEndpointConfig(baseURL: URL(string: "https://stub-401.example")!),
+            session: makeStubSession())
+        await #expect(throws: BackendFetchError.httpStatus(401)) {
+            _ = try await fetcher.fetchBoardJSON(stationSlug: "padova", type: .departures, locale: "it")
+        }
+    }
+
+    @Test func backendServiceFallsBackToFixtureOn401() async throws {
+        let liveFetcher = URLSessionBackendBoardFetcher(
+            config: BackendEndpointConfig(baseURL: URL(string: "https://stub-401.example")!),
+            session: makeStubSession())
+        let fixtureFallback = BackendBoardService(
+            fetcher: StubBackendFetcher(data: Data(Self.backendFixtureJSON.utf8)),
+            fallback: MockTrainBoardService(),
+            referenceDate: { Self.romeDate(2026, 6, 17, 10, 50) },
+            stampSourceKind: .backendFixture)
+        let service = BackendBoardService(
+            fetcher: liveFetcher, fallback: fixtureFallback,
+            referenceDate: { Self.romeDate(2026, 6, 17, 10, 50) },
+            stampSourceKind: .backendLive, debugLogTag: "BackendLive")
+        let response = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(response.rows.count == 9)                  // served by the fixture fallback
+        #expect(response.sourceKind == .backendFixture)    // 401 → visible fixture fallback
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser
@@ -1023,8 +1069,9 @@ struct Binario1Tests {
 // MARK: - Stubbed URLProtocol for backend fetcher tests (no live network)
 
 /// Stateless stub: the request HOST encodes the scenario, so parallel tests never
-/// share mutable state. `stub-200` → 200 + backend fixture JSON, `stub-502` → 502,
-/// `stub-empty` → 200 with an empty body.
+/// share mutable state. `stub-<n>` (n≠200) → HTTP n error JSON; `stub-empty` → 200
+/// empty body; `stub-echotoken` → 200 `{"received":"<X-Binario-App-Token>"}`;
+/// anything else (e.g. `stub-200`) → 200 + backend fixture JSON.
 final class StubURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool {
         request.url?.host?.hasPrefix("stub-") ?? false
@@ -1033,11 +1080,18 @@ final class StubURLProtocol: URLProtocol {
     override func stopLoading() {}
     override func startLoading() {
         guard let url = request.url else { client?.urlProtocolDidFinishLoading(self); return }
+        let suffix = (url.host ?? "").hasPrefix("stub-") ? String((url.host ?? "").dropFirst("stub-".count)) : ""
         let (status, body): (Int, Data)
-        switch url.host {
-        case "stub-502": (status, body) = (502, Data(#"{"error":{"code":"x"}}"#.utf8))
-        case "stub-empty": (status, body) = (200, Data())
-        default: (status, body) = (200, Data(Binario1Tests.backendFixtureJSON.utf8))
+        switch suffix {
+        case "empty":
+            (status, body) = (200, Data())
+        case "echotoken":
+            let token = request.value(forHTTPHeaderField: "X-Binario-App-Token") ?? ""
+            (status, body) = (200, Data("{\"received\":\"\(token)\"}".utf8))
+        case let s where Int(s) != nil && Int(s) != 200:
+            (status, body) = (Int(s)!, Data(#"{"error":{"code":"x"}}"#.utf8))
+        default:
+            (status, body) = (200, Data(Binario1Tests.backendFixtureJSON.utf8))
         }
         let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
                                        headerFields: ["Content-Type": "application/json"])!

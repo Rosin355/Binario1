@@ -173,9 +173,26 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   (iOS → `/board` → RFI → normalized JSON → board). The direct RFI adapter
   (`.rfiLivePadova`) remains a DEBUG emergency fallback only. Production hardening
   remains pending.
-- **Next hardening (before wider rollout):** rate limiting · app token / auth ·
-  shared cache · real station registry (more stations + arrivals) · reduced/hidden
-  diagnostics · restricted CORS.
+**Hardening Phase 1 — ✅ IMPLEMENTED (server + iOS, code-level)**
+- **App token:** `X-Binario-App-Token` validated against `BINARIO_BOARD_APP_TOKEN`.
+  Configured → missing/invalid = `401 unauthorized`; unset → allowed in development
+  only (rejected in production). Token never logged/echoed. iOS attaches the header
+  from `BackendEndpointConfig.appToken` (empty = none; logs `[BackendLive] app token
+  not configured`); `401` → typed error → visible fixture fallback.
+- **Rate limit:** best-effort in-memory 60/min per client key → `429 rate_limited`
+  with `Retry-After` / `X-RateLimit-*`. Per warm instance only (NOT global).
+- **Diagnostics policy:** `BINARIO_BOARD_ENV=production` omits `diagnostics`
+  (default `development` includes them).
+- **Required Supabase secrets (never committed):**
+  - `BINARIO_BOARD_APP_TOKEN=<token>` — enables token enforcement
+  - `BINARIO_BOARD_ENV=development|production` — gates diagnostics
+- **Deploy/test:** `supabase secrets set … --project-ref <ref>` then
+  `supabase functions deploy board --no-verify-jwt --project-ref <ref>`. Validated
+  locally (`deno test`, handler 401/200/diagnostics) + redeployed. **Enforcement is
+  currently OFF in the deployed function** (secret unset → development → open spike),
+  so the on-device validated path is preserved until you set the secrets.
+- **Still pending:** distributed/shared rate limiter · `verify_jwt`/app-auth policy ·
+  station registry expansion · arrivals · restricted CORS · production rollout decision.
 
 **Phase 2 — backend in DEBUG**
 - DEBUG uses `BackendBoardService` (pointing at staging/local).

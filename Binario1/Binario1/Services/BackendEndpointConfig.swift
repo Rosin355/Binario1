@@ -15,6 +15,13 @@ struct BackendEndpointConfig {
     /// `https://<project-ref>.functions.supabase.co` (the fetcher appends `/board`).
     let baseURL: URL
 
+    /// Lightweight app token sent as the `X-Binario-App-Token` header (abuse
+    /// reduction only — NOT a secret-grade credential, NOT user auth). Empty means
+    /// "not configured": the fetcher attaches no header and logs a notice. Do NOT
+    /// commit a real token value here; set it locally before testing the protected
+    /// backend (and `supabase secrets set BINARIO_BOARD_APP_TOKEN=…` server-side).
+    var appToken: String = ""
+
     /// Marker host used while no real deployment URL is set. When present we treat
     /// the config as *not configured* and fall back to the local fixture.
     static let placeholderHost = "project-ref-not-set"

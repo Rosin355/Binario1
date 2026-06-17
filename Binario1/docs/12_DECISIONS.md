@@ -94,6 +94,19 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Backend adapter — Hardening Phase 1 (`board`)
+
+- **`/board` non è più trattato come endpoint pubblico illimitato** per un rollout più
+  ampio: supporta un **app token** (`X-Binario-App-Token`, env `BINARIO_BOARD_APP_TOKEN`)
+  e un **rate limit** best-effort.
+- **L'app token è una misura leggera di abuse-reduction, non sicurezza completa**: un
+  token spedito in un'app mobile è estraibile → NON è user auth né equivalente a
+  service_role. Per ora `verify_jwt = false`, validazione a livello di codice.
+- **Diagnostics ridotte in produzione** via `BINARIO_BOARD_ENV` (niente
+  `sourceBytes`/`sourceStatus` pubblici in production mode).
+- **La produzione richiede ancora un rate limit distribuito e una policy di rollout**
+  (il limiter in-memory è per-istanza, non globale). Nessun secret committato.
+
 ## Backend adapter — Phase 2B (iOS remote fetcher)
 
 - **iOS consuma il JSON del backend tramite `BackendBoardService` + fetcher di rete**

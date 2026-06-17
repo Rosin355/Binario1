@@ -63,9 +63,44 @@ Deployed call placeholder (no real project ref committed):
 https://<project-ref>.functions.supabase.co/board?stationSlug=padova&type=departures&locale=it
 ```
 
+## Hardening Phase 1
+
+The function supports a **lightweight app token** + best-effort **rate limit** +
+**diagnostics policy**, all driven by Supabase secrets (never committed):
+
+| secret | values | effect |
+|--------|--------|--------|
+| `BINARIO_BOARD_APP_TOKEN` | any string | when set, requests must send `X-Binario-App-Token: <token>` or get `401` |
+| `BINARIO_BOARD_ENV` | `development` \| `production` | `production` omits `diagnostics`; unset → `development` |
+
+Behavior:
+- **App token** (`X-Binario-App-Token`): if `BINARIO_BOARD_APP_TOKEN` is set, a
+  missing/invalid token → `401 {"error":{"code":"unauthorized",…}}`. If unset, the
+  request is allowed **only in development** (warning logged); in `production` an
+  unset token is rejected. Token values are never logged or echoed. *This is
+  abuse-reduction, not real auth — a token shipped in an app can be extracted.*
+- **Rate limit:** best-effort in-memory, 60 req/min per approximate client key →
+  `429 {"error":{"code":"rate_limited",…}}` with `Retry-After`, `X-RateLimit-Limit`,
+  `X-RateLimit-Remaining`. **Per warm instance only — not globally reliable.**
+  TODO(prod): shared/distributed limiter (Upstash/Redis or Supabase-backed).
+- **Diagnostics:** included in `development`, omitted in `production`.
+
+### Set the secrets (no values in the repo)
+
+```bash
+supabase secrets set BINARIO_BOARD_APP_TOKEN=<your-token> --project-ref <project-ref>
+supabase secrets set BINARIO_BOARD_ENV=production --project-ref <project-ref>
+# then redeploy:
+supabase functions deploy board --no-verify-jwt --project-ref <project-ref>
+```
+
+With the GitHub ↔ Supabase integration, set these in **Supabase project secrets**
+(dashboard), not in the repo. The matching token also goes in the iOS
+`BackendEndpointConfig.appToken` (locally, not committed).
+
 ## Security notes
 
 - No anon key, no `service_role` key, no `.env` with real secrets in the repo.
 - No database access / no Supabase client init in this function.
-- Public/no-JWT is **only** for this validation spike. Production must add
-  rate limiting, an app-level token, and abuse protection first.
+- `verify_jwt = false` stays for now; the app token is code-level abuse reduction.
+  Production still needs a distributed rate limiter + a rollout policy.
