@@ -24,3 +24,8 @@ Carthage/Build/
 *.secrets
 *.env.local
 .env.local
+
+# Xcode SHARED scheme — can carry scheme environment variables (incl. a local
+# BINARIO_BOARD_APP_TOKEN), so keep it out of git. Set the token in a per-user
+# (non-"Shared") scheme so it lives in the already-ignored xcuserdata/ instead.
+*.xcodeproj/xcshareddata/
