@@ -4,8 +4,9 @@ Cronologia sintetica delle milestone. Tenere conciso.
 
 ## 2026-06-17 — Validate board app-token enforcement
 
-Stato: **enforcement attivo e validato server-side.** Validazione su iPhone reale
-**da fare** dall'utente (nessun device in questo ambiente).
+Stato: **enforcement attivo; server validato (no/errato/corretto) + path negativo
+confermato su iPhone reale.** Path positivo su iPhone (token corretto) **da fare**
+dall'utente (nessun device in questo ambiente).
 
 ### Cosa
 - **Secret Supabase configurati** sul progetto "Binario 1" (`hzwwvkuxqhmeicylyrsy`):
@@ -32,10 +33,19 @@ Stato: **enforcement attivo e validato server-side.** Validazione su iPhone real
   impostare `BINARIO_BOARD_APP_TOKEN` (valore in `supabase/.env.board.local`) nello
   schema Xcode.
 
-### Validazione iPhone (PENDING — utente)
-- Con token locale corretto: header "Backend · Monitor RFI online", log
-  `[BackendLive] OK · rows=N · source=rfiLive · fallback=false · stale=false`, nessun
-  `[RFILive]`. Con token mancante/errato: fallback visibile alla fixture, no crash.
+### Validazione iPhone
+- **Path negativo — CONFERMATO su iPhone reale** (log utente):
+  `[BackendLive] app token not configured` → `[BackendLive] HTTP ERROR · status=401`
+  → `[BackendLive] FALLBACK · reason=fetch-error · using=fixture · error=httpStatus(401)`.
+  Il backend rifiuta senza token, iOS riceve 401 e fa **fallback visibile alla
+  fixture**, nessun crash.
+- **Path positivo — server riconfermato** (curl con token corretto dal file
+  gitignored): HTTP 200, 40 righe, `source.kind=rfiLive`, `isFallback=false`,
+  `isStale=false`, **diagnostics omesse** (production), categorie compatte.
+  **Su iPhone: PENDING (utente)** — impostare `BINARIO_BOARD_APP_TOKEN` (valore in
+  `supabase/.env.board.local`) nello schema Xcode, eseguire `.backendLivePadova`,
+  atteso `[BackendLive] OK · rows=N · source=rfiLive · fallback=false · stale=false`,
+  header "Backend · Monitor RFI online", nessun `[RFILive]`.
 
 ### Build / sicurezza
 - iOS Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator
