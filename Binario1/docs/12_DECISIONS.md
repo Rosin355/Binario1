@@ -109,7 +109,8 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - **App-token validato end-to-end (2026-06-17)**: server no/errato → 401, corretto →
   200 con diagnostics omesse in production. Enforcement ora ATTIVO sul deploy. Path
   negativo confermato anche su iPhone reale (401 → fallback visibile alla fixture);
-  path positivo su device pending utente.
+  path positivo **confermato su iPhone reale** (header `Backend · Monitor RFI online`,
+  righe live, niente fixture). Backend-live protetto validato su device.
 - **I token reali restano fuori da git**: env var nello schema Xcode (`xcuserdata/`,
   gitignored) lato iOS, secret Supabase lato server, copia locale in
   `supabase/.env.board.local` (gitignored). Mai committati, mai nei log/summary.

@@ -2,6 +2,34 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-17 — Complete board app-token device validation
+
+Stato: **path positivo confermato visivamente su iPhone reale.** Validazione
+app-token completa (negativo + positivo su device; server tutti i path).
+
+### Evidenza (screenshot iPhone reale)
+- Header mostra **`Backend · Monitor RFI online`** (NON `Backend fixture`) → dati dal
+  backend live, nessun fallback alla fixture visibile.
+- Righe **backend live** renderizzate nel tabellone Partenze.
+- Categorie compatte corrette: **AV / RV / REG**.
+- Badge ritardo corretti (inclusi ritardi gravi); riga **treno cancellato → `CANC`**;
+  valori binario corretti.
+- **Console log non catturata** in questo pass (evidenza = screenshot UI). Riga attesa:
+  `[BackendLive] OK · rows=N · source=rfiLive · fallback=false · stale=false`.
+
+### Riepilogo validazione app-token
+- **Path negativo** (già confermato su iPhone): nessun token → HTTP 401 → fallback
+  visibile alla fixture, no crash.
+- **Path positivo** (ora confermato su iPhone): token corretto → header
+  `Backend · Monitor RFI online`, righe live, niente fixture. Server già validato via
+  curl (no/errato → 401; corretto → 200, diagnostics omesse in production).
+
+### Sicurezza / prossimo
+- Nessun secret committato (token solo in env var schema Xcode + file gitignored
+  `supabase/.env.board.local`). Release resta `.mock`. Viaggi/Cerca invariati.
+- Prossima fase: station registry, supporto arrivi, cache condivisa/distribuita,
+  policy di rollout in produzione.
+
 ## 2026-06-17 — Validate board app-token enforcement
 
 Stato: **enforcement attivo; server validato (no/errato/corretto) + path negativo

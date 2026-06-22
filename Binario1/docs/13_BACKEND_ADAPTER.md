@@ -196,16 +196,19 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   `BINARIO_BOARD_APP_TOKEN` env var (Xcode scheme → gitignored `xcuserdata/`); the
   committed token stays empty. The token is a **lightweight abuse-reduction** measure,
   not perfect mobile security (a shipped token can be extracted).
-- **On-device validation:** the **negative path is CONFIRMED on a real iPhone** —
-  with no token, `[BackendLive] HTTP ERROR · status=401` →
-  `[BackendLive] FALLBACK · … using=fixture · error=httpStatus(401)` (visible fixture
-  fallback, no crash). The **positive path is server-confirmed** (correct token →
-  200, 40 rows, diagnostics omitted) and **pending on-device** (set the scheme env
-  var and expect `[BackendLive] OK …`).
-- This completes Hardening Phase 1 token validation (server fully validated; positive
-  on-device check is the only remaining manual step). App-token = lightweight abuse
-  reduction, not perfect mobile security. Next: distributed rate limit · shared cache
-  · station registry · arrivals · rollout decision.
+- **On-device validation: ✅ COMPLETE on a real iPhone (both paths).**
+  - *Negative:* no token → `[BackendLive] HTTP ERROR · status=401` →
+    `[BackendLive] FALLBACK · … using=fixture · error=httpStatus(401)` (visible fixture
+    fallback, no crash).
+  - *Positive:* correct token → header **`Backend · Monitor RFI online`** (not
+    "Backend fixture"), live backend rows, compact categories (AV/RV/REG), delay
+    badges incl. severe, cancelled row `CANC`, platforms correct. Evidence = iPhone
+    screenshot (console `[BackendLive] OK …` line not captured this pass). Server side
+    independently validated via curl (200, 40 rows, diagnostics omitted in production).
+- **Hardening Phase 1 token validation is VALIDATED:** missing token rejected, correct
+  token reaches the backend-live path, fixture fallback remains available. App-token =
+  lightweight abuse reduction, not perfect mobile security. Next: distributed rate
+  limit · shared cache · station registry · arrivals · rollout decision.
 - **Still pending:** distributed/shared rate limiter · `verify_jwt`/app-auth policy ·
   station registry expansion · arrivals · restricted CORS · production rollout decision.
 
