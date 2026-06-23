@@ -209,6 +209,15 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   token reaches the backend-live path, fixture fallback remains available. App-token =
   lightweight abuse reduction, not perfect mobile security. Next: distributed rate
   limit · shared cache · station registry · arrivals · rollout decision.
+- **Real-station comparison (2026-06-22):** the backend-live path was visually compared
+  against the **physical RFI departure board at Padova station** (header
+  `Backend · Monitor RFI online`). The visible rows were **coherent** with the physical
+  board (train number, destination, scheduled time, delay/cancellation, platform); a
+  13-row sample is recorded in `docs/11_PROGRESS.md`. Categories compact (AV/RV/REG),
+  severe delays clear, cancelled shown as `CANC`. This validates practical alignment
+  with station reality **for the observed sample only** — keep the source label
+  transparent (`Monitor RFI online`, not an absolute guaranteed-real-time claim) and
+  continue reliability monitoring.
 - **Still pending:** distributed/shared rate limiter · `verify_jwt`/app-auth policy ·
   station registry expansion · arrivals · restricted CORS · production rollout decision.
 

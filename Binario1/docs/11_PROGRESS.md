@@ -2,6 +2,46 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-22 — Real-station board comparison at Padova
+
+Stato: **validazione visiva in stazione reale** del backend-live (campione osservato).
+Non è una garanzia formale che tutti i dati RFI futuri coincidano sempre con i display
+di stazione — serve comunque monitoraggio affidabilità + trasparenza sorgente.
+
+### Contesto
+- iPhone reale, app Binario1 con **header `Backend · Monitor RFI online`** (backend-live
+  attivo, non fixture).
+- Confronto visivo del tabellone app vs **tabellone fisico RFI** alla stazione di Padova.
+- Le righe visibili sono risultate **coerenti** con il tabellone fisico per numero
+  treno, destinazione, orario, ritardo/cancellazione e binario.
+
+### Righe visibili coincidenti (campione)
+- AV 9750 → Torino P. Nuova → 17:46 → +110' → bin. 3
+- RV 3506 → Verona P. Nuova → 18:40 → +60' → bin. 3
+- REG 17220 → Verona P. Nuova → 18:53 → +35' → bin. 1
+- AV 9749 → Trieste C.le → 19:16 → +20' → bin. 5
+- AV 8928 → Venezia S. Lucia → 19:27 → +10' → bin. 2
+- AV 8993 → Udine → 19:34 → +20' → bin. 5
+- RV 3508 → Verona P. Nuova → 19:40 → bin. 3
+- REG 17107 → Rovigo → 19:41 → bin. 1
+- AV 9480 → Trieste C.le → 19:42 → bin. 2
+- REG 17146 → Verona P. Nuova → 19:53 → cancellato
+- RV 3988 → Venezia S. Lucia → 19:53 → bin. 2
+- AV 9437 → Roma Termini → 19:56 → bin. 1
+- AV 9428 → Venezia S. Lucia → 20:06 → +20' → bin. 2
+
+### Note di rendering
+- Categorie compatte corrette: AV / RV / REG.
+- Ritardi gravi mostrati chiaramente; treno cancellato come **`CANC`**; binari leggibili.
+- Il display dell'app è risultato **più leggibile** del tabellone fisico per
+  ritardi/cancellazioni.
+
+### Esito
+- Valida l'**allineamento pratico con la realtà di stazione per il campione osservato**.
+- NON rimuove la necessità di monitoraggio dell'affidabilità e di trasparenza sulla
+  sorgente (`Monitor RFI online`, non real-time garantito in assoluto).
+- Docs-only; nessun codice app modificato; Release resta `.mock`.
+
 ## 2026-06-17 — Complete board app-token device validation
 
 Stato: **path positivo confermato visivamente su iPhone reale.** Validazione

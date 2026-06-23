@@ -94,6 +94,15 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Trasparenza sorgente dati (online)
+
+- **Binario1 resta trasparente sul fatto che i dati arrivano da una sorgente online**
+  (`Monitor RFI online`), non da un feed real-time garantito.
+- **I dati backend RFI possono essere molto coerenti con i tabelloni fisici di stazione**
+  — confronto visivo a Padova (2026-06-22) coerente sul campione osservato — ma l'app
+  **non deve promettere precisione assoluta** né garantire che tutti i dati futuri
+  coincidano sempre con i display di stazione. Mantenere monitoraggio affidabilità.
+
 ## Backend adapter — Hardening Phase 1 (`board`)
 
 - **`/board` non è più trattato come endpoint pubblico illimitato** per un rollout più
