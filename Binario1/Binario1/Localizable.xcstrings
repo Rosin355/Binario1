@@ -292,6 +292,38 @@
         }
       }
     },
+    "board.destinationUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destination unavailable"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destinazione non disponibile"
+          }
+        }
+      }
+    },
+    "board.originUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Origin unavailable"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Provenienza non disponibile"
+          }
+        }
+      }
+    },
     "column.delay" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -407,6 +439,22 @@
         }
       }
     },
+    "delay.short" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rit."
+          }
+        }
+      }
+    },
     "disclaimer.officialDisplays" : {
       "localizations" : {
         "en" : {
@@ -421,12 +469,6 @@
             "value" : "Le informazioni possono subire variazioni. In stazione fare sempre riferimento agli annunci e ai monitor ufficiali."
           }
         }
-      }
-    },
-    "delay.short" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Del." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Rit." } }
       }
     },
     "empty.noTrains" : {
@@ -998,13 +1040,8 @@
         }
       }
     },
-    "section.yourNextTrains" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your next trains" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "I tuoi prossimi treni" } }
-      }
-    },
     "section.programmedDepartures" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1020,52 +1057,117 @@
         }
       }
     },
-    "board.destinationUnavailable" : {
+    "section.yourNextTrains" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Destination unavailable" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Destinazione non disponibile" } }
-      }
-    },
-    "board.originUnavailable" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Origin unavailable" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Provenienza non disponibile" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your next trains"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi prossimi treni"
+          }
+        }
       }
     },
     "source.backendFixture" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · RFI online" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · RFI online" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend fixture · RFI online"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend fixture · RFI online"
+          }
+        }
       }
     },
     "source.backendLive" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend · RFI online" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend · RFI online" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend · RFI online"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend · RFI online"
+          }
+        }
       }
     },
     "source.backendSuffix.cache" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "cached" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "dati cache" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cached"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dati cache"
+          }
+        }
       }
     },
     "source.backendSuffix.fallback" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "fallback" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "fallback" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fallback"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fallback"
+          }
+        }
       }
     },
     "source.rfiLive" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "RFI online" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFI online"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFI online"
+          }
+        }
       }
     },
     "source.rfiLiveUpdated" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online · updated %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "RFI online · aggiornato %@" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFI online · updated %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFI online · aggiornato %@"
+          }
+        }
       }
     },
     "source.scheduled" : {

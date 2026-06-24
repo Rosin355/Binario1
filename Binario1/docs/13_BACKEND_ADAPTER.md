@@ -252,6 +252,33 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   `URLSessionBackendBoardFetcher` builds `…/board?…&type=departures|arrivals`. The
   personalized Home hero stays departures-only for now (arrivals personalization later).
 
+## DEBUG app-token setup (installed-device validation)
+
+The protected backend needs the `X-Binario-App-Token` header. iOS resolves the DEBUG
+token (`BackendEndpointConfig.resolveAppToken`) in this order:
+
+1. **Build-time** value baked into the DEBUG binary (works for an installed app
+   launched from the Home screen).
+2. **Xcode Run scheme env var** `BINARIO_BOARD_APP_TOKEN` (only when launched by Xcode).
+3. empty → no header → fixture fallback on 401.
+
+**Why scheme env vars alone are not enough:** Xcode injects scheme environment
+variables only when it launches the app. An app opened from the Home icon has none,
+so it would send no token → 401 → "Backend fixture · RFI online". Use the build-time
+local `.xcconfig` for installed-device validation.
+
+**Local setup (token never committed):**
+1. `cp Config/Binario1Secrets.example.xcconfig Config/Binario1Secrets.local.xcconfig`
+2. Put the real token in `Config/Binario1Secrets.local.xcconfig` (gitignored; must match
+   the Supabase `BINARIO_BOARD_APP_TOKEN` secret).
+3. Build & run DEBUG. `Config/Binario1.debug.xcconfig` (the app target's Debug
+   `baseConfigurationReference`) `#include?`s the local file and feeds the token into a
+   custom Info.plist key via `Config/Binario1-Info.plist` (`$(BINARIO_BOARD_APP_TOKEN)`).
+
+**Release** has no `baseConfigurationReference` → no token key in its Info.plist →
+stays `.mock`. The app token is **lightweight abuse reduction, not real mobile
+security** (a token shipped in an app can be extracted).
+
 ## Station registry plan
 
 Stations must be **centrally mapped** — the RFI **live** `placeId` and the PRM

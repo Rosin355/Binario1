@@ -2,6 +2,44 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-23 — Fix installed DEBUG app token configuration
+
+Stato: completata. Niente token committato; Release invariato (`.mock`).
+
+### Causa
+- `BackendEndpointConfig.debug.appToken` leggeva SOLO
+  `ProcessInfo.environment["BINARIO_BOARD_APP_TOKEN"]` → presente solo se l'app è
+  lanciata da Xcode. Aprendo l'app installata dall'icona, nessuna env var → richiesta
+  senza `X-Binario-App-Token` → 401 → fallback alla fixture (header
+  "Backend fixture · RFI online", righe fixture).
+
+### Fix (token build-time, gitignored)
+- `Config/Binario1Secrets.local.xcconfig` (**gitignored**) definisce
+  `BINARIO_BOARD_APP_TOKEN`; incluso via `#include?` da `Config/Binario1.debug.xcconfig`
+  (committato), impostato come `baseConfigurationReference` del config **Debug** del
+  target app. Esempio committato: `Config/Binario1Secrets.example.xcconfig` (placeholder).
+- Il token è esposto all'app tramite una chiave Info.plist custom: partial
+  `Config/Binario1-Info.plist` con `$(BINARIO_BOARD_APP_TOKEN)` (i custom `INFOPLIST_KEY_*`
+  NON vengono iniettati per chiavi non-Apple → serve il file). Xcode fonde le chiavi
+  generate sopra (verificato: plist DEBUG ha CFBundle* + token len 64).
+- `resolveAppToken(infoValue:envValue:)`: precedenza **build-time Info.plist → env var
+  Xcode → vuoto** (ignora placeholder e `$( )` non risolto). Così: lancio da Xcode OK,
+  e app installata aperta da icona OK (token nel binario DEBUG).
+- **Release**: nessun `baseConfigurationReference` → nessuna chiave token nel plist
+  Release (verificato ASSENTE); resta `.mock`.
+- Log: token assente → "app token not configured · using fixture fallback if backend
+  returns 401"; HTTP 401 → "...status=401 · likely missing/invalid app token".
+
+### Sicurezza
+- Token reale solo in `Config/Binario1Secrets.local.xcconfig` (gitignored). Mai nei
+  log/docs/commit. `git check-ignore` confermato.
+
+### Build / test
+- Build Debug+Release OK; plist DEBUG verificato (token len 64), plist Release verificato
+  (token assente). Test target compila; aggiunti test `resolveAppToken` (build-time >
+  env > vuoto; placeholder/`$( )` ignorati). Esecuzione unit test bloccata da
+  CoreSimulator (ambiente).
+
 ## 2026-06-23 — Add backend arrivals and station registry foundation
 
 Stato: completata. Nessuna stazione non verificata attivata; nessun cambio di

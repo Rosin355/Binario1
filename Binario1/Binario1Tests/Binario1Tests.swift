@@ -751,6 +751,19 @@ struct Binario1Tests {
         #expect(real.isConfigured == true)
     }
 
+    @Test func appTokenResolutionPrefersBuildTimeThenEnvThenEmpty() {
+        // 1) build-time Info.plist value wins over the scheme env var
+        #expect(BackendEndpointConfig.resolveAppToken(infoValue: "build-token", envValue: "env-token") == "build-token")
+        // 2) falls back to the env var when the build-time value is absent/blank/placeholder/unresolved
+        #expect(BackendEndpointConfig.resolveAppToken(infoValue: nil, envValue: "env-token") == "env-token")
+        #expect(BackendEndpointConfig.resolveAppToken(infoValue: "   ", envValue: "env-token") == "env-token")
+        #expect(BackendEndpointConfig.resolveAppToken(infoValue: "$(BINARIO_BOARD_APP_TOKEN)", envValue: "env-token") == "env-token")
+        #expect(BackendEndpointConfig.resolveAppToken(infoValue: "paste-local-token-here", envValue: "env-token") == "env-token")
+        // 3) empty when neither is configured
+        #expect(BackendEndpointConfig.resolveAppToken(infoValue: nil, envValue: nil) == "")
+        #expect(BackendEndpointConfig.resolveAppToken(infoValue: "  ", envValue: "  ") == "")
+    }
+
     // MARK: - App-token header (Hardening Phase 1)
 
     @Test func backendFetcherAttachesAppTokenWhenConfigured() async throws {

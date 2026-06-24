@@ -46,7 +46,7 @@ struct URLSessionBackendBoardFetcher: BackendBoardFetching {
         let token = config.appToken.trimmingCharacters(in: .whitespacesAndNewlines)
         if token.isEmpty {
             #if DEBUG
-            print("[BackendLive] app token not configured")
+            print("[BackendLive] app token not configured · using fixture fallback if backend returns 401")
             #endif
         } else {
             // Lightweight abuse-reduction header (not Authorization, not a secret).
@@ -59,7 +59,8 @@ struct URLSessionBackendBoardFetcher: BackendBoardFetching {
             }
             guard (200..<300).contains(http.statusCode) else {
                 #if DEBUG
-                print("[BackendLive] HTTP ERROR · status=\(http.statusCode)")
+                let hint = http.statusCode == 401 ? " · likely missing/invalid app token" : ""
+                print("[BackendLive] HTTP ERROR · status=\(http.statusCode)\(hint)")
                 #endif
                 throw BackendFetchError.httpStatus(http.statusCode)
             }

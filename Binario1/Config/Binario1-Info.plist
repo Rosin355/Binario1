@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- DEBUG-only partial Info.plist. Xcode merges the generated keys (CFBundle*, scene
+     manifest, etc.) on top of this file. The single custom key below is populated by
+     build-setting substitution from Config/Binario1.debug.xcconfig (empty when the
+     gitignored local token file is absent). No secret lives in this committed file. -->
+<plist version="1.0">
+<dict>
+    <key>BINARIO_BOARD_APP_TOKEN</key>
+    <string>$(BINARIO_BOARD_APP_TOKEN)</string>
+</dict>
+</plist>

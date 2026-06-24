@@ -31,6 +31,21 @@ struct BackendEndpointConfig {
         !(baseURL.host?.contains(Self.placeholderHost) ?? true)
     }
 
+    /// App-token precedence: a build-time Info.plist value (baked into the DEBUG
+    /// binary via Config/*.xcconfig — survives a Home-screen launch) → the Xcode Run
+    /// scheme env var (only present when launched by Xcode) → empty. Ignores an
+    /// unresolved `$(…)` substitution and the committed example placeholder.
+    static func resolveAppToken(infoValue: String?, envValue: String?) -> String {
+        if let v = infoValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !v.isEmpty, v != "paste-local-token-here", !v.contains("$(") {
+            return v
+        }
+        if let e = envValue?.trimmingCharacters(in: .whitespacesAndNewlines), !e.isEmpty {
+            return e
+        }
+        return ""
+    }
+
     #if DEBUG
     /// DEBUG backend base URL for `.backendLivePadova` — the deployed Supabase
     /// Edge Function `board` for the "Binario 1" project.
@@ -46,19 +61,17 @@ struct BackendEndpointConfig {
         appToken: debugAppToken
     )
 
-    /// Local app token for the protected backend, resolved at runtime from the
-    /// `BINARIO_BOARD_APP_TOKEN` environment variable. Set it in your Xcode scheme
-    /// (Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables) —
-    /// that lives in **gitignored user data**, so the real token is never committed.
-    /// Empty when unset → no header is sent and `.backendLivePadova` falls back to
-    /// the local fixture. The value MUST match the Supabase `BINARIO_BOARD_APP_TOKEN`
-    /// secret. NEVER hardcode a real token here.
-    ///
-    /// (We deliberately use an env var rather than a gitignored `*.local.swift`: the
-    /// Xcode project uses a synchronized file group, so a gitignored Swift file would
-    /// be compiled on this machine but missing on a fresh clone, breaking the build.)
+    /// Local app token for the protected backend (see `resolveAppToken`): a
+    /// **build-time** value from the gitignored `Config/Binario1Secrets.local.xcconfig`
+    /// (baked into the DEBUG binary via the custom Info.plist key — survives a
+    /// Home-screen launch of the installed app), else the Xcode Run scheme env var
+    /// (only when launched by Xcode), else empty (→ fixture fallback). MUST match the
+    /// Supabase `BINARIO_BOARD_APP_TOKEN` secret. NEVER hardcode a real token here.
     private static var debugAppToken: String {
-        ProcessInfo.processInfo.environment["BINARIO_BOARD_APP_TOKEN"] ?? ""
+        resolveAppToken(
+            infoValue: Bundle.main.object(forInfoDictionaryKey: "BINARIO_BOARD_APP_TOKEN") as? String,
+            envValue: ProcessInfo.processInfo.environment["BINARIO_BOARD_APP_TOKEN"]
+        )
     }
     #endif
 }

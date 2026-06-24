@@ -117,6 +117,17 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   **non deve promettere precisione assoluta** né garantire che tutti i dati futuri
   coincidano sempre con i display di stazione. Mantenere monitoraggio affidabilità.
 
+## Token DEBUG per app installata (build-time)
+
+- **I token reali non si committano mai**: il token DEBUG vive solo in
+  `Config/Binario1Secrets.local.xcconfig` (gitignored); committati solo l'esempio
+  placeholder e la config base Debug.
+- **Le build DEBUG installate hanno bisogno del token a build-time**, non solo della
+  env var dello schema Xcode: la scheme env var c'è solo se l'app è lanciata da Xcode,
+  non aprendo l'icona. Quindi il token è iniettato nel binario DEBUG via `.xcconfig` →
+  chiave Info.plist custom; precedenza build-time → env var → vuoto.
+- **Release non riceve token** (nessun baseConfigurationReference) e resta `.mock`.
+
 ## Station registry & board type (arrivi/partenze)
 
 - **Gli id stazione devono essere VERIFICATI prima dell'attivazione**: una stazione

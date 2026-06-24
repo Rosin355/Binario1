@@ -17,10 +17,12 @@ Pods/
 Carthage/Build/
 
 # Local secrets / token overrides — NEVER commit these.
-# (Preferred: set BINARIO_BOARD_APP_TOKEN in the Xcode scheme env vars, which live
-# in the already-ignored xcuserdata/. These cover any file-based local override too.)
+# DEBUG installed-device token: Config/Binario1Secrets.local.xcconfig (gitignored)
+# is baked into the DEBUG build via Config/Binario1.debug.xcconfig. The committed
+# Config/Binario1Secrets.example.xcconfig is a placeholder only.
 *.local.swift
 *.local.xcconfig
+Config/*.local.xcconfig
 *.secrets
 *.env.local
 .env.local

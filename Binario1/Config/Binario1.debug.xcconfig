@@ -1,0 +1,18 @@
+// DEBUG base configuration for the Binario1 app target.
+//
+// Pulls the LOCAL (gitignored) app token into the DEBUG build and exposes it to the
+// app via a custom Info.plist key, so an installed DEBUG build can call the backend
+// live even when launched from the Home screen — not only when launched by Xcode
+// (Xcode Run scheme env vars are absent for a Home-screen launch).
+//
+// Release does NOT use this file and receives no token. The app token is lightweight
+// abuse-reduction, NOT a real secret — never commit a real value.
+
+// Optional: provides BINARIO_BOARD_APP_TOKEN. Gitignored; absent on fresh clones.
+#include? "Binario1Secrets.local.xcconfig"
+
+// Expose the token to the app via a custom Info.plist key. A partial Info.plist
+// (with `$(BINARIO_BOARD_APP_TOKEN)` substitution) is used as the base; Xcode merges
+// the generated keys on top (GENERATE_INFOPLIST_FILE stays YES). Custom INFOPLIST_KEY_*
+// settings are NOT injected for non-Apple keys, hence the explicit file.
+INFOPLIST_FILE = Config/Binario1-Info.plist
