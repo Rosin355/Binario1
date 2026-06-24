@@ -94,6 +94,20 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Home — featured personalizzata
+
+- **La sezione in alto della Home dà priorità ai viaggi salvati dell'utente** quando
+  possibile (titolo "I tuoi prossimi treni"): mostra "il mio treno", non solo il
+  prossimo treno generico della stazione. È il vantaggio di Binario1 sul tabellone
+  fisico — personalizza il primo sguardo.
+- **Fallback generico** alle prossime partenze quando non ci sono viaggi salvati o
+  match → nessun hero vuoto.
+- **Il tabellone completo "Tutte le partenze" resta la fonte di verità** sotto la
+  featured.
+- **MVP**: matching per nome stazione canonicalizzato (no route planner), sorgente
+  viaggi salvati mock (`HomeSavedJourneys`); diventa reale con la persistenza dei
+  viaggi salvati. Nessun cambio di contratto dati/backend.
+
 ## Trasparenza sorgente dati (online)
 
 - **Binario1 resta trasparente sul fatto che i dati arrivano da una sorgente online**

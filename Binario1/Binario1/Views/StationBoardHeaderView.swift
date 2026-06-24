@@ -117,8 +117,8 @@ struct StationBoardHeaderView: View {
         return Text("source.scheduled")     // "Orario programmato" / "Scheduled timetable"
     }
 
-    /// "Monitor RFI online · aggiornato HH:mm" for the live spike (online-source
-    /// label, no freshness pulse dot).
+    /// "RFI online · aggiornato HH:mm" for the live spike (online-source label, no
+    /// freshness pulse dot).
     private var rfiLiveLabel: Text {
         if let lastUpdated {
             return Text(String(format: String(localized: "source.rfiLiveUpdated"), BoardFormatters.clock(lastUpdated)))
@@ -126,15 +126,15 @@ struct StationBoardHeaderView: View {
         return Text("source.rfiLive")
     }
 
-    /// "Backend fixture · Monitor RFI online" — DEBUG backend-adapter Phase 1 path.
+    /// "Backend fixture · RFI online" — DEBUG backend-adapter Phase 1 path.
     /// Explicitly marks this as a local fixture, not a live backend connection.
     private var backendFixtureLabel: Text {
         Text("source.backendFixture")
     }
 
-    /// "Backend · Monitor RFI online" — data came through the deployed backend
-    /// adapter (Phase 2B), not direct RFI. Appends " · fallback" or " · dati cache"
-    /// when the backend reports fallback/stale data.
+    /// "Backend · RFI online" — data came through the deployed backend adapter
+    /// (Phase 2B), not direct RFI. Appends " · fallback" or " · dati cache" when the
+    /// backend reports fallback/stale data.
     private var backendLiveLabel: Text {
         let base = String(localized: "source.backendLive")
         if sourceIsFallback {

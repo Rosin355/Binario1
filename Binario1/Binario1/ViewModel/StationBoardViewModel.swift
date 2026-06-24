@@ -50,16 +50,23 @@ final class StationBoardViewModel {
     /// station title can never disagree with the board rows.
     let allowsStationChange: Bool
 
+    /// The user's saved journeys (from Viaggi), used to personalize the featured
+    /// section. Empty → the generic "next departures" behavior. MVP/mock-backed for
+    /// now (see `HomeSavedJourneys`); becomes real when saved journeys are persisted.
+    private let savedJourneys: [SavedJourney]
+
     /// Current-time source, injectable for deterministic tests of the scheduled
     /// demo window. Defaults to the wall clock.
     private let now: () -> Date
 
     init(service: TrainBoardService, station: Station = .bolognaCentrale,
-         allowsStationChange: Bool = true, now: @escaping () -> Date = { Date() }) {
+         allowsStationChange: Bool = true, now: @escaping () -> Date = { Date() },
+         savedJourneys: [SavedJourney] = []) {
         self.service = service
         self.station = station
         self.allowsStationChange = allowsStationChange
         self.now = now
+        self.savedJourneys = savedJourneys
     }
 
     // MARK: - Derived data
@@ -80,15 +87,44 @@ final class StationBoardViewModel {
         rows.sorted { $0.scheduledTime < $1.scheduledTime }
     }
 
-    /// The 3 most imminent trains, shown as large cards in "Prossime partenze".
-    var featuredRows: [TrainBoardRow] {
-        Array(sortedRows.prefix(3))
+    /// Board rows matching a saved journey that departs from THIS station (departures
+    /// only): origin = current station AND destination name matches. Up to 3, in
+    /// scheduled order. Cancelled / severely delayed matches are intentionally kept —
+    /// the user still wants to see "my train", problems included.
+    var personalizedFeaturedRows: [TrainBoardRow] {
+        guard boardType == .departures, !savedJourneys.isEmpty, !isScheduledSampleOutOfWindow else { return [] }
+        let fromHere = savedJourneys.filter { StationNameMatcher.matches(station.displayName, $0.origin) }
+        guard !fromHere.isEmpty else { return [] }
+        let matched = sortedRows.filter { row in
+            fromHere.contains { StationNameMatcher.matches(row.destination, $0.destination) }
+        }
+        return Array(matched.prefix(3))
     }
 
-    /// The full board for "Tutte le partenze". Begins at the 3rd featured train so
-    /// the highlighted/imminent train heads the list (matching the design).
+    /// True when the featured section shows the user's saved-journey trains
+    /// ("I tuoi prossimi treni") instead of the generic next departures.
+    var usesPersonalizedFeatured: Bool { !personalizedFeaturedRows.isEmpty }
+
+    /// Featured cards: the user's saved-journey trains when any match, otherwise the
+    /// 3 most imminent departures (generic fallback — never an empty hero).
+    var featuredRows: [TrainBoardRow] {
+        let personalized = personalizedFeaturedRows
+        return personalized.isEmpty ? Array(sortedRows.prefix(3)) : personalized
+    }
+
+    /// Localization key for the featured section title (personalized vs generic vs
+    /// programmed-sample). The view wraps it in `LocalizedStringKey`.
+    var featuredTitleKey: String {
+        if usesPersonalizedFeatured { return "section.yourNextTrains" }
+        if isScheduledSampleOutOfWindow { return "section.programmedDepartures" }
+        return boardType == .departures ? "section.nextDepartures" : "section.nextArrivals"
+    }
+
+    /// The full board for "Tutte le partenze". With a personalized spotlight this is
+    /// the COMPLETE station board; in generic mode it begins at the 3rd featured
+    /// train so the highlighted/imminent train heads the list (existing design).
     var listRows: [TrainBoardRow] {
-        Array(sortedRows.dropFirst(2))
+        usesPersonalizedFeatured ? sortedRows : Array(sortedRows.dropFirst(2))
     }
 
     /// A bundled scheduled *sample* whose programmed window does not include the
@@ -99,11 +135,13 @@ final class StationBoardViewModel {
         return !window.contains(now())
     }
 
-    /// The highlighted train — the 3rd featured card and the first (selected) list row.
+    /// The highlighted train. In personalized mode it's the user's soonest matching
+    /// train; otherwise the 3rd featured card (which also heads the generic list).
     var imminentRowID: TrainBoardRow.ID? {
         // A scheduled sample outside its demo window must not present any row as the
         // current/next departure (e.g. don't highlight a 06:14 train at 17:40).
         if isScheduledSampleOutOfWindow { return nil }
+        if usesPersonalizedFeatured { return personalizedFeaturedRows.first?.id }
         let featured = featuredRows
         return featured.count >= 3 ? featured[2].id : featured.last?.id
     }

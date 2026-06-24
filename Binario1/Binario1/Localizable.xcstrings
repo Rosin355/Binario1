@@ -998,6 +998,12 @@
         }
       }
     },
+    "section.yourNextTrains" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your next trains" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "I tuoi prossimi treni" } }
+      }
+    },
     "section.programmedDepartures" : {
       "localizations" : {
         "en" : {
@@ -1022,8 +1028,8 @@
     },
     "source.backendFixture" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · RFI online monitor" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · Monitor RFI online" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · RFI online" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · RFI online" } }
       }
     },
     "source.backendLive" : {
@@ -1046,14 +1052,14 @@
     },
     "source.rfiLive" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online monitor" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Monitor RFI online" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "RFI online" } }
       }
     },
     "source.rfiLiveUpdated" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online monitor · updated %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Monitor RFI online · aggiornato %@" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "RFI online · updated %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "RFI online · aggiornato %@" } }
       }
     },
     "source.scheduled" : {

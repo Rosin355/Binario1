@@ -90,8 +90,7 @@ struct StationBoardView: View {
                     rows: viewModel.featuredRows,
                     boardType: viewModel.boardType,
                     imminentRowID: viewModel.imminentRowID,
-                    titleKey: viewModel.isScheduledSampleOutOfWindow
-                        ? LocalizedStringKey("section.programmedDepartures") : nil
+                    titleKey: LocalizedStringKey(viewModel.featuredTitleKey)
                 )
 
                 TrainBoardListSectionView(

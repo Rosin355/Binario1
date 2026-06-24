@@ -2,6 +2,56 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-23 — Personalize Home featured departures
+
+Stato: completata (UI + logica MVP). Nessun cambio backend/contratto dati.
+
+### Cosa
+- **Pulizia label sorgente** (display/localization only): `source.backendFixture`
+  ("Backend fixture · RFI online"), `source.backendLive` ("Backend · RFI online") e
+  anche `source.rfiLive`/`source.rfiLiveUpdated` ("RFI online" / "RFI online ·
+  aggiornato %@") — **nessun "Monitor RFI online" visibile nell'header** (IT+EN);
+  commenti header aggiornati. Suffissi `· fallback` / `· dati cache`/`cached` invariati.
+- **Featured personalizzata**: quando ci sono viaggi salvati (Viaggi) con righe del
+  tabellone corrispondenti, la sezione in alto mostra **solo i treni dell'utente** con
+  titolo **`I TUOI PROSSIMI TRENI`** (`section.yourNextTrains`). Match: stazione
+  corrente = origine viaggio salvato + destinazione ~ destinazione viaggio (departures).
+- **Fallback**: senza viaggi salvati o senza match → comportamento generico esistente
+  (`PROSSIME PARTENZE`, top 3 imminenti). Nessun hero vuoto.
+- **`TUTTE LE PARTENZE`** resta sotto come tabellone completo (board intero quando la
+  featured è personalizzata; comportamento esistente in modalità generica).
+- **Treni cancellati / molto in ritardo** restano visibili anche nella featured
+  personalizzata (l'utente vuede vedere "il mio treno", problemi inclusi).
+
+### Matching MVP (no route planner, no DB, no sync)
+- `StationNameMatcher` (puro, testabile): canonicalizza (maiuscolo, fold accenti,
+  punteggiatura → spazio, espansione abbreviazioni comuni: `S.` → SANTA, `C.LE` →
+  CENTRALE, `P.NUOVA` → PORTA NUOVA), confronto per uguaglianza o sottoinsieme di token.
+- Sorgente viaggi salvati per la Home: adapter `HomeSavedJourneys` (riusa i dati mock
+  di Viaggi + 1 entry demo Padova→Venezia S.Lucia così la spotlight si attiva sul
+  board Padova; Viaggi invariato). **Diventa reale quando i viaggi salvati saranno
+  persistiti/condivisi.**
+
+### Review (adversariale, multi-agent) — findings risolti
+- Matcher: il match per sottoinsieme ora richiede ≥2 token condivisi → niente falsi
+  positivi (Venezia ≠ Venezia Mestre; Centrale ≠ Milano Centrale).
+- Spotlight ora dimostrabile end-to-end (entry demo); prima cadeva sempre in fallback
+  coi soli dati mock di Viaggi.
+- Pulizia label estesa a `source.rfiLive` + commenti header (niente "Monitor" residuo).
+
+### Test (nessuna rete)
+- Label backend fixture/live = "… · RFI online", niente "Monitor" (skip difensivo se
+  la localizzazione non è risolvibile nel bundle di test).
+- Matcher: forme comuni Venezia S.Lucia / C.LE / P.Nuova; Mestre ≠ Santa Lucia.
+- Featured personalizzata: match → solo righe corrispondenti + titolo yourNextTrains +
+  board completo sotto; no match → fallback generico + dropFirst(2); cancellato/ritardo
+  personalizzati restano visibili.
+
+### Build / sicurezza
+- Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator —
+  ambiente). Niente modifiche a backend/Supabase/contratto; Viaggi/Cerca invariati;
+  Release resta `.mock`.
+
 ## 2026-06-22 — Real-station board comparison at Padova
 
 Stato: **validazione visiva in stazione reale** del backend-live (campione osservato).

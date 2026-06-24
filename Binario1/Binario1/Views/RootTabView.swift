@@ -20,7 +20,8 @@ struct RootTabView: View {
     @State private var stationViewModel = StationBoardViewModel(
         service: AppEnvironment.makeTrainBoardService(),
         station: AppEnvironment.initialStation,
-        allowsStationChange: AppEnvironment.allowsStationChange
+        allowsStationChange: AppEnvironment.allowsStationChange,
+        savedJourneys: HomeSavedJourneys.current()   // mock-backed for now (see HomeSavedJourneys)
     )
     @State private var tripsViewModel = TripsViewModel(service: MockTripsService())
 

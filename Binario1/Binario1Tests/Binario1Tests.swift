@@ -797,6 +797,127 @@ struct Binario1Tests {
         #expect(response.sourceKind == .backendFixture)    // 401 → visible fixture fallback
     }
 
+    // MARK: - Source label cleanup + personalized featured section
+
+    @Test func backendSourceLabelsDropMonitorWord() {
+        let app = Bundle(for: StationBoardViewModel.self)
+        for loc in ["it", "en"] {
+            let fixture = String(localized: "source.backendFixture", bundle: app, locale: Locale(identifier: loc))
+            let live = String(localized: "source.backendLive", bundle: app, locale: Locale(identifier: loc))
+            guard fixture != "source.backendFixture", live != "source.backendLive" else {
+                print("[Test] backend source labels not resolvable in test bundle — skipping")
+                return
+            }
+            #expect(fixture == "Backend fixture · RFI online")
+            #expect(live == "Backend · RFI online")
+            #expect(!fixture.contains("Monitor"))
+            #expect(!live.contains("Monitor"))
+            // The direct RFI-live label (DEBUG header) is de-"Monitor"ed too, so no
+            // visible "Monitor RFI online" remains anywhere in the header path.
+            let rfi = String(localized: "source.rfiLive", bundle: app, locale: Locale(identifier: loc))
+            let rfiUpdated = String(localized: "source.rfiLiveUpdated", bundle: app, locale: Locale(identifier: loc))
+            #expect(rfi == "RFI online")
+            #expect(!rfi.contains("Monitor"))
+            #expect(!rfiUpdated.contains("Monitor"))
+        }
+    }
+
+    @Test func stationNameMatcherNormalizesCommonForms() {
+        #expect(StationNameMatcher.matches("VENEZIA S.LUCIA", "Venezia Santa Lucia"))
+        #expect(StationNameMatcher.matches("Venezia S. Lucia", "VENEZIA SANTA LUCIA"))
+        #expect(StationNameMatcher.matches("Bologna C.LE", "Bologna Centrale"))
+        #expect(StationNameMatcher.matches("Verona P.Nuova", "Verona Porta Nuova"))
+        #expect(StationNameMatcher.matches("Padova", "padova"))
+        // A single shared/generic token or a bare city prefix must NOT match different places.
+        #expect(!StationNameMatcher.matches("Milano", "Milano Centrale"))
+        #expect(!StationNameMatcher.matches("Centrale", "Milano Centrale"))
+        #expect(!StationNameMatcher.matches("Venezia", "Venezia Mestre"))
+        #expect(!StationNameMatcher.matches("Venezia Mestre", "Venezia Santa Lucia"))
+        #expect(!StationNameMatcher.matches("Milano", "Torino"))
+        #expect(!StationNameMatcher.matches(nil, "Padova"))
+    }
+
+    private struct FixedBoardService: TrainBoardService {
+        let rows: [TrainBoardRow]
+        func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
+            StationBoardResponse(station: .padova, boardType: type, locale: nil, supportedLocales: [],
+                                 rows: rows, generatedAt: Self.fixedDate, sourceUpdatedAt: nil,
+                                 isStale: false, warningMessageKey: nil)
+        }
+        static let fixedDate = Binario1Tests.romeDate(2026, 6, 17, 18, 0)
+    }
+
+    private static func boardRow(_ id: String, _ destination: String, _ h: Int, _ m: Int,
+                                 status: TrainStatus = .onTime, delay: Int? = nil) -> TrainBoardRow {
+        let t = romeDate(2026, 6, 17, h, m)
+        return TrainBoardRow(
+            id: id, trainNumber: id, category: "AV", operatorName: nil, origin: nil,
+            destination: destination, scheduledTime: t,
+            expectedTime: delay.map { t.addingTimeInterval(Double($0) * 60) }, delayMinutes: delay,
+            plannedPlatform: nil, actualPlatform: "1", status: status, notes: nil, lastUpdated: t)
+    }
+
+    private static func savedTo(_ destination: String, from origin: String = "Padova") -> SavedJourney {
+        SavedJourney(id: "\(origin)->\(destination)", direction: .workToHome, origin: origin,
+                     destination: destination, departure: romeDate(2026, 6, 17, 17, 46),
+                     platform: nil, durationMinutes: 30, status: .onTime)
+    }
+
+    @MainActor
+    @Test func personalizedFeaturedShowsMatchingSavedJourneyTrains() async {
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "VENEZIA S.LUCIA", 18, 10),
+            Self.boardRow("r3", "Verona Porta Nuova", 18, 20),
+            Self.boardRow("r4", "Venezia S. Lucia", 18, 30),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: [Self.savedTo("Venezia Santa Lucia")])
+        await vm.refresh()
+        #expect(vm.usesPersonalizedFeatured == true)
+        #expect(vm.featuredTitleKey == "section.yourNextTrains")
+        #expect(vm.featuredRows.map(\.id) == ["r2", "r4"])   // only Venezia S. Lucia, scheduled order
+        #expect(vm.imminentRowID == "r2")                    // soonest matching train highlighted
+        #expect(vm.listRows.count == rows.count)             // full station board remains below
+    }
+
+    @MainActor
+    @Test func featuredFallsBackToGenericWhenNoSavedJourneyMatches() async {
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "Milano Centrale", 18, 10),
+            Self.boardRow("r3", "Verona Porta Nuova", 18, 20),
+            Self.boardRow("r4", "Trieste Centrale", 18, 30),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: [Self.savedTo("Venezia Santa Lucia")])  // not on the board
+        await vm.refresh()
+        #expect(vm.usesPersonalizedFeatured == false)
+        #expect(vm.featuredTitleKey == "section.nextDepartures")
+        #expect(vm.featuredRows.map(\.id) == ["r1", "r2", "r3"])   // generic top 3
+        #expect(vm.listRows.map(\.id) == ["r3", "r4"])             // existing dropFirst(2) behavior
+    }
+
+    @MainActor
+    @Test func personalizedFeaturedKeepsCancelledAndDelayedTrains() async {
+        let rows = [
+            Self.boardRow("c", "Venezia S.Lucia", 18, 5, status: .cancelled),
+            Self.boardRow("d", "Venezia Santa Lucia", 18, 15, status: .delayed, delay: 35),
+            Self.boardRow("o", "Bologna Centrale", 18, 25),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: [Self.savedTo("Venezia Santa Lucia")])
+        await vm.refresh()
+        #expect(vm.usesPersonalizedFeatured == true)
+        let ids = Set(vm.featuredRows.map(\.id))
+        #expect(ids.contains("c"))    // cancelled match still shown
+        #expect(ids.contains("d"))    // severe-delay match still shown
+        #expect(!ids.contains("o"))   // non-matching destination excluded
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser
