@@ -18,7 +18,7 @@ struct NextDeparturesSectionView: View {
 
     var body: some View {
         if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 BoardSectionHeader(titleKey: titleKey ?? boardType.nextSectionTitleKey, systemImage: "tram.fill")
 
                 VStack(spacing: 0) {

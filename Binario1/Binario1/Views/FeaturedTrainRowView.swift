@@ -25,13 +25,13 @@ struct FeaturedTrainRowView: View {
         HStack(spacing: 0) {
             // Time
             Text(row.timeString())
-                .font(BoardFont.digits(24))
+                .font(BoardFont.digits(22))
                 .foregroundStyle(BoardColors.amber)
                 .ledGlow(BoardColors.amber, radius: 3, opacity: 0.32)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .frame(width: 80, alignment: .leading)
-                .padding(.leading, 14)
+                .frame(width: 74, alignment: .leading)
+                .padding(.leading, 12)
 
             divider
 
@@ -49,7 +49,7 @@ struct FeaturedTrainRowView: View {
                             .foregroundStyle(BoardColors.amberDim)
                     }
                     Text(place)
-                        .font(BoardFont.text(18, .semibold))
+                        .font(BoardFont.text(17, .semibold))
                         .foregroundStyle(row.status.isCancelled ? BoardColors.amberDim : BoardColors.amberBright)
                         .strikethrough(row.status.isCancelled, color: BoardColors.delay)
                         .lineLimit(1)
@@ -60,7 +60,7 @@ struct FeaturedTrainRowView: View {
                     DelayBadgeView(row: row, showPlusSign: true, fontSize: 13)
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
 
             divider
@@ -72,15 +72,15 @@ struct FeaturedTrainRowView: View {
                     .tracking(1)
                     .foregroundStyle(BoardColors.amberDim)
                 Text(row.platformDisplay)
-                    .font(BoardFont.digits(23))
+                    .font(BoardFont.digits(21))
                     .foregroundStyle(BoardColors.platform)
                     .ledGlow(BoardColors.platform, radius: 4, opacity: 0.45)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
             }
-            .frame(width: 80)
+            .frame(width: 74)
         }
-        .frame(minHeight: 54)
+        .frame(minHeight: 46)
         .background(isImminent ? BoardColors.amber.opacity(0.07) : .clear)
         .overlay {
             if isImminent {
@@ -97,7 +97,7 @@ struct FeaturedTrainRowView: View {
         Rectangle()
             .fill(BoardColors.gridLine)
             .frame(width: 1)
-            .padding(.vertical, 9)
+            .padding(.vertical, 7)
     }
 }
 

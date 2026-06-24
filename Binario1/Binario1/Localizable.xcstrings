@@ -1028,8 +1028,8 @@
     },
     "source.backendLive" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend · RFI online monitor" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend · Monitor RFI online" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend · RFI online" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backend · RFI online" } }
       }
     },
     "source.backendSuffix.cache" : {
