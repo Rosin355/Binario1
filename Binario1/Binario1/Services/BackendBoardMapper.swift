@@ -17,6 +17,8 @@ enum BackendBoardMapper {
                     referenceDate: Date = Date(),
                     timezone: TimeZone = TimeZone(identifier: "Europe/Rome") ?? .current) -> StationBoardResponse {
 
+        let boardType = BoardType(rawValue: dto.boardType) ?? .departures
+
         let rows: [TrainBoardRow] = dto.rows.compactMap { r in
             guard let scheduled = time(r.scheduledTime, on: referenceDate, timezone: timezone) else { return nil }
             let status = mapStatus(r.status, delayMinutes: r.delayMinutes)
@@ -24,16 +26,24 @@ enum BackendBoardMapper {
             let delay = cancelled ? nil : positiveDelay(r.delayMinutes)      // never a fake delay
             let platform = (r.platform?.isEmpty == false) ? r.platform : nil // missing → nil → "--"
             let category = (r.category?.isEmpty == false) ? r.category! : "" // backend is already compact
-            let destination = (r.destination?.isEmpty == false)
+            // The contract's `destination` field carries the destination for departures
+            // and the ORIGIN/provenance for arrivals — map it to the matching domain
+            // field so the board shows the right place per board type. The empty-place
+            // fallback label matches the board type too.
+            let unavailableKey: String.LocalizationValue = boardType == .arrivals
+                ? "board.originUnavailable" : "board.destinationUnavailable"
+            let place = (r.destination?.isEmpty == false)
                 ? r.destination!
-                : String(localized: "board.destinationUnavailable")
+                : String(localized: unavailableKey)
+            let origin = boardType == .arrivals ? place : nil
+            let destination = boardType == .arrivals ? nil : place
             let notes = (r.notes?.isEmpty == false) ? r.notes!.joined(separator: " · ") : nil
             return TrainBoardRow(
                 id: r.id,
                 trainNumber: r.trainNumber ?? "",
                 category: category,
                 operatorName: nil,
-                origin: nil,
+                origin: origin,
                 destination: destination,
                 scheduledTime: scheduled,
                 expectedTime: delay.map { scheduled.addingTimeInterval(Double($0) * 60) },
@@ -61,7 +71,7 @@ enum BackendBoardMapper {
 
         return StationBoardResponse(
             station: station,
-            boardType: BoardType(rawValue: dto.boardType) ?? .departures,
+            boardType: boardType,
             locale: "it-IT",
             supportedLocales: ["it-IT", "en-US"],
             rows: rows,

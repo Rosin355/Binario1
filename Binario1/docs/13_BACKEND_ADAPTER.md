@@ -230,6 +230,28 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
 - Direct RFI HTML parsing is **excluded from Release** (stays `#if DEBUG`).
 - Mock remains available for tests/previews.
 
+## Arrivals + station registry (implemented, 2026-06-23)
+
+- **Arrivals supported for Padova:** `GET /board?stationSlug=padova&type=arrivals&locale=it`
+  → RFI `arrivals=True` (departures → `arrivals=False`). Same normalized JSON contract;
+  `boardType` echoes the requested type. **For arrivals the row `destination` field
+  carries the ORIGIN/provenance** (no separate origin field in the contract yet); iOS
+  maps it to the domain `origin` so the board shows the right place. Validated live
+  (curl): departures + arrivals both 200; unsupported `type` → 400.
+- **Station registry** in `supabase/functions/board/registry.ts` (`StationEntry`):
+  ```ts
+  interface StationEntry { slug; displayName; rfiLivePlaceId; prmScheduledId }
+  STATIONS = { padova: { slug:"padova", displayName:"Padova", rfiLivePlaceId:"2000", prmScheduledId:"1861" } }
+  ```
+- **ID systems are separate:** `rfiLivePlaceId` (RFI live monitor) ≠ `prmScheduledId`
+  (PRM "Quadro Orario"). Never interchanged.
+- **Station expansion rule:** add a new station ONLY when its `rfiLivePlaceId` is
+  VERIFIED against the live RFI monitor. Documented future candidates (NOT activated):
+  Bologna Centrale, Venezia Santa Lucia, Montegrotto Terme, Milano Centrale.
+- **iOS:** `BackendBoardService` forwards the selected board type;
+  `URLSessionBackendBoardFetcher` builds `…/board?…&type=departures|arrivals`. The
+  personalized Home hero stays departures-only for now (arrivals personalization later).
+
 ## Station registry plan
 
 Stations must be **centrally mapped** — the RFI **live** `placeId` and the PRM

@@ -18,12 +18,14 @@ protocol BackendBoardFetching: Sendable {
     func fetchBoardJSON(stationSlug: String, type: BoardType, locale: String) async throws -> Data
 }
 
-/// Phase 1 fetcher: loads the bundled normalized fixture JSON. No network.
+/// Local fixture fetcher: loads the bundled normalized DEPARTURES fixture JSON. No
+/// network. There is no arrivals fixture, so arrivals throw → the service falls back.
 struct FixtureBackendBoardFetcher: BackendBoardFetching {
     var resourceName: String = "backend-padova-departures.sample"
     var bundle: Bundle = .main
 
     func fetchBoardJSON(stationSlug: String, type: BoardType, locale: String) async throws -> Data {
+        guard type == .departures else { throw TrainBoardServiceError.resourceMissing }  // departures-only fixture
         guard let url = bundle.url(forResource: resourceName, withExtension: "json"),
               let data = try? Data(contentsOf: url) else {
             throw TrainBoardServiceError.resourceMissing
@@ -55,10 +57,8 @@ final class BackendBoardService: TrainBoardService, @unchecked Sendable {
     }
 
     func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
-        // Padova DEPARTURES only; arrivals fall back.
-        guard type == .departures else {
-            return try await fallback.fetchBoard(stationId: stationId, type: type)
-        }
+        // Both departures and arrivals flow to the fetcher (the live backend supports
+        // both; the local fixture serves departures only and throws → fallback).
         do {
             let data = try await fetcher.fetchBoardJSON(stationSlug: stationId, type: type, locale: "it")
             let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: data)

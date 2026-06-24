@@ -28,6 +28,7 @@ import {
   shouldIncludeDiagnostics,
   validateAppToken,
 } from "./hardening.ts";
+import { type BoardType, parseBoardType, resolveStation, rfiMonitorURL } from "./registry.ts";
 
 // Hardening Phase 1 config (read once per warm instance). Secrets are set via
 // `supabase secrets set …` — never committed. See README / docs/13.
@@ -37,18 +38,9 @@ const INCLUDE_DIAGNOSTICS = shouldIncludeDiagnostics(APP_ENV);
 const RATE_LIMIT_PER_MIN = 60;
 const limiter = new InMemoryRateLimiter(RATE_LIMIT_PER_MIN, 60_000);
 
-// Tiny station registry. NOTE: the RFI live `placeId` (2000) and the PRM scheduled
-// id (1861) are DIFFERENT id systems — never mix them.
-const STATIONS = {
-  padova: {
-    id: "padova",
-    name: "Padova",
-    rfiLivePlaceId: "2000",
-    prmScheduledId: "1861",
-  },
-} as const;
-
-type StationEntry = (typeof STATIONS)[keyof typeof STATIONS];
+// Station registry lives in registry.ts (single VERIFIED station: Padova).
+// rfiLivePlaceId (live monitor) and prmScheduledId (PRM schedule) are different id
+// systems and are never mixed.
 
 // CORS: permissive for the dev spike. TODO(prod): restrict Allow-Origin to the app.
 const CORS_HEADERS: Record<string, string> = {
@@ -65,7 +57,7 @@ const cache = new Map<string, CacheEntry>();
 
 interface BoardResponse {
   station: { id: string; name: string; sourcePlaceId: string };
-  boardType: "departures";
+  boardType: BoardType;
   source: {
     kind: "rfiLive";
     label: string;
@@ -135,10 +127,6 @@ function romeOffset(d: Date): string {
   return /^[+-]\d{2}:\d{2}$/.test(off) ? off : "+00:00";
 }
 
-function rfiMonitorURL(placeId: string): string {
-  return `https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?arrivals=False&placeId=${placeId}`;
-}
-
 function staleFallback(cached: CacheEntry, fetchedAt: string, reason: string, extraHeaders: Record<string, string>): Response {
   const body: BoardResponse = {
     ...cached.body,
@@ -190,18 +178,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (!stationSlug) {
     return errorResponse("missing_stationSlug", "Query param 'stationSlug' is required.", 400);
   }
-  const station = (STATIONS as Record<string, StationEntry>)[stationSlug];
+  const station = resolveStation(stationSlug);
   if (!station) {
     return errorResponse("unknown_station", `Unknown station '${stationSlug}'.`, 404);
   }
-  if (type !== "departures") {
-    return errorResponse("unsupported_board_type", "Only type='departures' is supported in this spike.", 400);
+  const boardType = parseBoardType(type);
+  if (!boardType) {
+    return errorResponse("unsupported_board_type", "Query param 'type' must be 'departures' or 'arrivals'.", 400);
   }
   if (locale !== "it" && locale !== "en") {
     return errorResponse("unsupported_locale", "Only locale 'it' or 'en' is supported.", 400);
   }
 
-  const cacheKey = `${stationSlug}:${type}:${locale}`;
+  const cacheKey = `${stationSlug}:${boardType}:${locale}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
 
@@ -222,7 +211,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   let sourceBytes = 0;
 
   try {
-    const res = await fetch(rfiMonitorURL(station.rfiLivePlaceId), {
+    const res = await fetch(rfiMonitorURL(station.rfiLivePlaceId, boardType), {
       headers: {
         "User-Agent": "Binario1-board-adapter/0.1 (+spike)",
         "Accept": "text/html,application/xhtml+xml",
@@ -250,13 +239,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const delayMinutes = normalizeDelay(r.delay);
       const platform = normalizePlatform(r.platform);
       const cancelled = isCancelledRow(r);
-      const status = normalizeStatus({ delayMinutes, isCancelled: cancelled, isDeparting: r.isDeparting });
+      // The isDeparting heuristic (blinking / "in stazione") is a DEPARTURES-monitor
+      // signal; never emit a "departing" status on an arrivals board.
+      const isDeparting = boardType === "departures" ? r.isDeparting : false;
+      const status = normalizeStatus({ delayMinutes, isCancelled: cancelled, isDeparting });
       const time = r.time ?? "";
       return {
         id: `${category}-${r.trainNumber ?? "?"}-${datePrefix}T${time}`,
         scheduledTime: time,
         category,
         trainNumber: r.trainNumber ?? "",
+        // For arrivals the RFI monitor's place cell is the ORIGIN/provenance; the
+        // contract keeps the `destination` field name (iOS maps it to origin for
+        // arrivals). Departures unchanged: this is the destination.
         destination: r.destination ?? "",
         platform,
         // Contract keeps a number; 0 means "no delay" (cancelled also → 0).
@@ -276,8 +271,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const label = locale === "en" ? "RFI online monitor" : "Monitor RFI online";
 
   const body: BoardResponse = {
-    station: { id: station.id, name: station.name, sourcePlaceId: station.rfiLivePlaceId },
-    boardType: "departures",
+    station: { id: station.slug, name: station.displayName, sourcePlaceId: station.rfiLivePlaceId },
+    boardType,
     source: { kind: "rfiLive", label, updatedAt, fetchedAt, isFallback: false, isStale: false },
     rows,
     diagnostics: {

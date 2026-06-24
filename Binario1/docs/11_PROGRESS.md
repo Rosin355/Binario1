@@ -2,6 +2,53 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-23 — Add backend arrivals and station registry foundation
+
+Stato: completata. Nessuna stazione non verificata attivata; nessun cambio di
+contratto dati (stesso JSON normalizzato per partenze/arrivi).
+
+### Backend (Edge Function)
+- **Station registry** estratto in `registry.ts`: unica stazione VERIFICATA Padova
+  (`rfiLivePlaceId=2000`, `prmScheduledId=1861`, sistemi distinti, mai mischiati).
+  TODO future (Bologna/Venezia/Montegrotto/Milano) solo con `rfiLivePlaceId` verificato.
+- **Arrivi**: `/board?...&type=arrivals` → RFI `arrivals=True`; partenze → `arrivals=False`.
+  `parseBoardType` (departures/arrivals, default departures, else 400). Risposta usa lo
+  stesso contratto; `boardType` riflette il tipo richiesto. Per gli arrivi il campo
+  `destination` contiene la PROVENIENZA (documentato; iOS lo mappa su `origin`).
+- Parser/normalizzazione invariati (categorie compatte, niente `Categoria`/entità,
+  binari/ritardi/stati sicuri). Cache key già per tipo.
+- Validato live (curl): departures → boardType departures (40 righe, dest. Venezia/
+  Bologna); arrivals → boardType arrivals (40 righe, provenienza es. Reggio Calabria);
+  `type` non valido → 400.
+
+### iOS
+- `BackendBoardService` non forza più departures: partenze e arrivi passano al fetcher.
+  `URLSessionBackendBoardFetcher` invia già `type` (Partenze→departures, Arrivi→arrivals).
+  `FixtureBackendBoardFetcher` serve solo departures → per gli arrivi lancia → fallback.
+- `BackendBoardMapper`: per `boardType=arrivals` mappa il luogo su `origin`
+  (destinazione nil) così il board mostra la provenienza; departures invariato.
+- **Hero personalizzata** resta SOLO per le partenze (guardia `boardType == .departures`);
+  per gli arrivi titolo generico `PROSSIMI ARRIVI`. Personalizzazione arrivi rinviata.
+
+### Test
+- Backend (deno): registry risolve Padova (1 sola stazione); parseBoardType; URL
+  departures `arrivals=False` / arrivals `arrivals=True`; helper puri (19/19 pass).
+- iOS: URL builder per tipo; DTO decodifica `boardType=arrivals`; mapper arrivi →
+  `origin`; fixture fetcher rifiuta arrivi; arrivi non personalizzano (titolo generico);
+  test partenze personalizzate invariati.
+
+### Review (adversariale, multi-agent) — findings risolti
+- Arrivi non emettono più `departing` (euristica monitor partenze): in arrivi
+  `isDeparting=false` → solo onTime/delayed/cancelled (verificato live).
+- Fallback luogo mancante per arrivi usa `board.originUnavailable`
+  ("Provenienza non disponibile"), non la stringa destinazione.
+- Aggiunti test end-to-end `BackendBoardService` per arrivi (forward del tipo;
+  fixture-only → fallback a mock).
+
+### Build / sicurezza
+- Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator —
+  ambiente). Nessun secret committato; Release resta `.mock`; Viaggi/Cerca invariati.
+
 ## 2026-06-23 — Personalize Home featured departures
 
 Stato: completata (UI + logica MVP). Nessun cambio backend/contratto dati.

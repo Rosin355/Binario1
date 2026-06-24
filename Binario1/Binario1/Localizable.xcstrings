@@ -1026,6 +1026,12 @@
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Destinazione non disponibile" } }
       }
     },
+    "board.originUnavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Origin unavailable" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Provenienza non disponibile" } }
+      }
+    },
     "source.backendFixture" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Backend fixture · RFI online" } },

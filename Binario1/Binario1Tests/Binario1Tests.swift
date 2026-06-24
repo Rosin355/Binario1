@@ -918,6 +918,108 @@ struct Binario1Tests {
         #expect(!ids.contains("o"))   // non-matching destination excluded
     }
 
+    // MARK: - Arrivals + board-type request (station registry / Arrivi)
+
+    @Test func backendURLBuilderUsesBoardType() {
+        let base = URL(string: "https://example.functions.supabase.co")!
+        let dep = URLSessionBackendBoardFetcher.makeURL(base: base, stationSlug: "padova", type: .departures, locale: "it")
+        let arr = URLSessionBackendBoardFetcher.makeURL(base: base, stationSlug: "padova", type: .arrivals, locale: "it")
+        #expect(dep?.absoluteString == "https://example.functions.supabase.co/board?stationSlug=padova&type=departures&locale=it")
+        #expect(arr?.absoluteString == "https://example.functions.supabase.co/board?stationSlug=padova&type=arrivals&locale=it")
+    }
+
+    @Test func backendDTODecodesArrivals() throws {
+        let json = #"{"station":{"id":"padova","name":"Padova","sourcePlaceId":"2000"},"boardType":"arrivals","source":{"kind":"rfiLive","label":"RFI online"},"rows":[{"id":"AV-1-1010","scheduledTime":"10:10","category":"AV","trainNumber":"1","destination":"Reggio di Calabria Centrale","platform":"5","delayMinutes":0,"status":"onTime","notes":[]}]}"#
+        let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: Data(json.utf8))
+        #expect(dto.boardType == "arrivals")
+        #expect(dto.rows.first?.destination == "Reggio di Calabria Centrale")
+    }
+
+    @Test func backendMapperMapsArrivalsPlaceToOrigin() throws {
+        // For arrivals the contract's `destination` carries the ORIGIN/provenance.
+        let json = #"{"station":{"id":"padova","name":"Padova","sourcePlaceId":"2000"},"boardType":"arrivals","source":{"kind":"rfiLive","label":"RFI online"},"rows":[{"id":"AV-1-1010","scheduledTime":"10:10","category":"AV","trainNumber":"1","destination":"Reggio di Calabria Centrale","platform":"5","delayMinutes":0,"status":"onTime","notes":[]},{"id":"REG-2-1012","scheduledTime":"10:12","category":"REG","trainNumber":"2","destination":"Venezia Santa Lucia","platform":"3","delayMinutes":7,"status":"delayed","notes":[]}]}"#
+        let dto = try JSONDecoder().decode(BackendBoardDTO.self, from: Data(json.utf8))
+        let response = BackendBoardMapper.map(dto, referenceDate: Self.romeDate(2026, 6, 17, 10, 0))
+        #expect(response.boardType == .arrivals)
+        let first = response.rows.first
+        #expect(first?.origin == "Reggio di Calabria Centrale")   // place → origin for arrivals
+        #expect(first?.destination == nil)
+        #expect(first?.displayPlace(for: .arrivals) == "Reggio di Calabria Centrale")
+        #expect(first?.category == "AV")
+        let delayed = response.rows.first { $0.id == "REG-2-1012" }
+        #expect(delayed?.delayMinutes == 7)
+        #expect(delayed?.status == .delayed)
+    }
+
+    @Test func fixtureFetcherRejectsArrivals() async {
+        // The bundled fixture is departures-only; arrivals must throw so the service
+        // can fall back (never serve departures rows under the Arrivi board).
+        let fetcher = FixtureBackendBoardFetcher()
+        await #expect(throws: TrainBoardServiceError.self) {
+            _ = try await fetcher.fetchBoardJSON(stationSlug: "padova", type: .arrivals, locale: "it")
+        }
+    }
+
+    @MainActor
+    @Test func arrivalsDoNotPersonalizeAndUseGenericTitle() async {
+        let rows = [
+            Self.boardRow("a1", "Venezia Santa Lucia", 18, 0),
+            Self.boardRow("a2", "Bologna Centrale", 18, 10),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: [Self.savedTo("Venezia Santa Lucia")])  // would match on departures
+        vm.selectBoardType(.arrivals)
+        await vm.refresh()
+        #expect(vm.usesPersonalizedFeatured == false)             // personalization is departures-only for now
+        #expect(vm.featuredTitleKey == "section.nextArrivals")
+        #expect(vm.featuredRows.count == 2)                       // generic top rows
+    }
+
+    private final class RecordingBackendFetcher: BackendBoardFetching, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _types: [BoardType] = []
+        var types: [BoardType] { lock.lock(); defer { lock.unlock() }; return _types }
+        let data: Data
+        init(data: Data) { self.data = data }
+        func fetchBoardJSON(stationSlug: String, type: BoardType, locale: String) async throws -> Data {
+            lock.lock(); _types.append(type); lock.unlock()
+            return data
+        }
+    }
+
+    private struct DepartureOnlyFetcher: BackendBoardFetching {
+        let data: Data
+        func fetchBoardJSON(stationSlug: String, type: BoardType, locale: String) async throws -> Data {
+            guard type == .departures else { throw TrainBoardServiceError.resourceMissing }  // like the bundled fixture
+            return data
+        }
+    }
+
+    @Test func backendServiceForwardsArrivalsToFetcher() async throws {
+        let arrivalsJSON = #"{"station":{"id":"padova","name":"Padova","sourcePlaceId":"2000"},"boardType":"arrivals","source":{"kind":"rfiLive","label":"RFI online"},"rows":[{"id":"AV-1-1010","scheduledTime":"10:10","category":"AV","trainNumber":"1","destination":"Reggio di Calabria Centrale","platform":"5","delayMinutes":0,"status":"onTime","notes":[]}]}"#
+        let fetcher = RecordingBackendFetcher(data: Data(arrivalsJSON.utf8))
+        let service = BackendBoardService(fetcher: fetcher, fallback: MockTrainBoardService(),
+                                          referenceDate: { Self.romeDate(2026, 6, 17, 10, 0) },
+                                          stampSourceKind: .backendLive)
+        let response = try await service.fetchBoard(stationId: "padova", type: .arrivals)
+        #expect(fetcher.types == [.arrivals])                  // service forwards the board type
+        #expect(response.boardType == .arrivals)
+        #expect(response.sourceKind == .backendLive)
+        #expect(response.rows.first?.origin == "Reggio di Calabria Centrale")
+    }
+
+    @Test func backendServiceFallsBackWhenFetcherRejectsArrivals() async throws {
+        // Departures-only fetcher (like the bundled fixture) → arrivals throw → mock
+        // fallback (never serve departures rows under the Arrivi board).
+        let service = BackendBoardService(fetcher: DepartureOnlyFetcher(data: Data(Self.backendFixtureJSON.utf8)),
+                                          fallback: MockTrainBoardService(),
+                                          referenceDate: { Self.romeDate(2026, 6, 17, 10, 0) },
+                                          stampSourceKind: .backendFixture)
+        let response = try await service.fetchBoard(stationId: "padova", type: .arrivals)
+        #expect(response.sourceKind == .mock)                  // fell back to mock, not the fixture
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser

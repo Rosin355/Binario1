@@ -117,6 +117,18 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   **non deve promettere precisione assoluta** né garantire che tutti i dati futuri
   coincidano sempre con i display di stazione. Mantenere monitoraggio affidabilità.
 
+## Station registry & board type (arrivi/partenze)
+
+- **Gli id stazione devono essere VERIFICATI prima dell'attivazione**: una stazione
+  entra nel registry solo con `rfiLivePlaceId` confermato sul monitor RFI live. Mai
+  attivare id ipotizzati. `rfiLivePlaceId` ≠ `prmScheduledId` (sistemi diversi).
+- **Il board type fluisce end-to-end** (iOS → backend): l'app invia
+  `type=departures|arrivals`, il backend mappa su RFI `arrivals=False/True`.
+- **Arrivi e partenze usano lo stesso contratto JSON normalizzato**; per gli arrivi il
+  campo `destination` trasporta la provenienza (iOS lo mappa su `origin`).
+- **La hero personalizzata vale prima per le partenze**; la personalizzazione degli
+  arrivi è un'evoluzione successiva (per ora arrivi = vista generica).
+
 ## Backend adapter — Hardening Phase 1 (`board`)
 
 - **`/board` non è più trattato come endpoint pubblico illimitato** per un rollout più
