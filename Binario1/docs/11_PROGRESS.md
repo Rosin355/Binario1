@@ -2,6 +2,43 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-01 — Persist saved journeys for personalized Home
+
+Stato: completata. Niente backend/Supabase; Release resta `.mock`.
+
+### Cosa
+- **Modello persistibile**: `SavedJourney` (+ `JourneyStatus`, `JourneyDirection`) ora
+  `Codable`.
+- **Persistenza locale**: nuovo `Services/SavedJourneyStore.swift` — `SavedJourneyStoring`
+  + `UserDefaultsSavedJourneyStore` (blob JSON in `UserDefaults`, chiave
+  `binario1.savedJourneys.v1`) con `load/save/add(upsert)/delete` e `seedIfNeeded`
+  (seed una tantum al primo avvio, flag `…seeded.v1`; NON riseminò dopo che l'utente
+  svuota → le cancellazioni restano). `SavedJourneySeed.initial()` = i saved di
+  `MockTripsService.sample` (Montegrotto↔Padova), ora dati reali persistiti.
+- **Home legge il persistito**: `HomeSavedJourneys.current()` fa seed-once + `load()`
+  dallo store. **Rimosso il demo Padova→Venezia S. Lucia** (non più dato utente).
+- **Viaggi condivide lo store**: `TripsViewModel` carica i saved dallo store (suggested/
+  recent restano mock) → Viaggi e Home usano la stessa sorgente persistita.
+- **Comportamento Home invariato**: se un viaggio salvato matcha righe del board →
+  "I TUOI PROSSIMI TRENI"; altrimenti "PROSSIME PARTENZE"; board completo sotto.
+  Arrivi restano generici.
+
+### Nota comportamentale (device)
+- Con i soli seed reali (Montegrotto↔Padova) e board Padova, nessun match →
+  la Home mostra "PROSSIME PARTENZE" (corretto: niente più demo artificiale). La
+  personalizzazione si attiva quando un viaggio salvato reale ha come capolinea una
+  destinazione presente sul tabellone.
+
+### Test
+- Store: save/load/add(upsert)/delete roundtrip; seed una tantum + rispetto delle
+  cancellazioni; i seed NON contengono il demo rimosso.
+- Home: usa i viaggi persistiti (personalizza con viaggio NON-demo); fallback generico
+  se lo store è vuoto.
+
+### Build / test
+- Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator —
+  ambiente). Nessun backend/Supabase toccato; nessun secret; Release `.mock`.
+
 ## 2026-06-23 — Validate installed DEBUG backend token configuration
 
 Stato: **validato su iPhone reale.** Il token DEBUG build-time funziona anche aprendo

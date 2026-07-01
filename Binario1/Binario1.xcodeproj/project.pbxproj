@@ -24,11 +24,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		BA10C0F100000000005B2B00 /* Binario1.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Binario1.debug.xcconfig; sourceTree = "<group>"; };
+		BA10C0F200000000005B2B00 /* Binario1Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Binario1Secrets.example.xcconfig; sourceTree = "<group>"; };
 		CDDAFCB82FDDA6C9005B2B00 /* Binario1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Binario1.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CDDAFCC52FDDA6CB005B2B00 /* Binario1Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Binario1Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CDDAFCCF2FDDA6CB005B2B00 /* Binario1UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Binario1UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		BA10C0F100000000005B2B00 /* Binario1.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Binario1.debug.xcconfig; sourceTree = "<group>"; };
-		BA10C0F200000000005B2B00 /* Binario1Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Binario1Secrets.example.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -74,6 +74,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BA10C0F000000000005B2B00 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				BA10C0F100000000005B2B00 /* Binario1.debug.xcconfig */,
+				BA10C0F200000000005B2B00 /* Binario1Secrets.example.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
 		CDDAFCAF2FDDA6C9005B2B00 = {
 			isa = PBXGroup;
 			children = (
@@ -83,15 +92,6 @@
 				CDDAFCD22FDDA6CB005B2B00 /* Binario1UITests */,
 				CDDAFCB92FDDA6C9005B2B00 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		BA10C0F000000000005B2B00 /* Config */ = {
-			isa = PBXGroup;
-			children = (
-				BA10C0F100000000005B2B00 /* Binario1.debug.xcconfig */,
-				BA10C0F200000000005B2B00 /* Binario1Secrets.example.xcconfig */,
-			);
-			path = Config;
 			sourceTree = "<group>";
 		};
 		CDDAFCB92FDDA6C9005B2B00 /* Products */ = {

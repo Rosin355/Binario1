@@ -94,6 +94,18 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 - Estensione futura ai numeri condivisi Home/Partenze (`PlatformBadgeView`,
   `DelayBadgeView`, orario riga) solo se non introduce regressioni di layout.
 
+## Viaggi salvati — persistenza locale
+
+- **I viaggi salvati sono persistiti localmente** (`SavedJourneyStore`, JSON in
+  `UserDefaults`) e sono la **fonte di verità unica** condivisa da Viaggi e dalla Home
+  personalizzata. Niente backend/account/sync per ora.
+- **Seed una tantum al primo avvio** (campioni realistici), poi dati reali
+  editabili/cancellabili; le cancellazioni restano (nessun re-seed).
+- **Rimosso il demo Padova→Venezia S. Lucia**: la personalizzazione della Home NON
+  dipende più da un viaggio demo hardcoded — funziona con i viaggi salvati reali.
+- **Persistenza locale semplice (UserDefaults/JSON)** scelta di proposito: leggera,
+  nessuna dipendenza; si potrà evolvere (file store / sync) se servirà.
+
 ## Home — featured personalizzata
 
 - **La sezione in alto della Home dà priorità ai viaggi salvati dell'utente** quando

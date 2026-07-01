@@ -1033,6 +1033,83 @@ struct Binario1Tests {
         #expect(response.sourceKind == .mock)                  // fell back to mock, not the fixture
     }
 
+    // MARK: - Saved journeys persistence (SavedJourneyStore) + Home wiring
+
+    private func freshStore(_ suite: String) -> UserDefaultsSavedJourneyStore {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)   // isolate each test
+        return UserDefaultsSavedJourneyStore(defaults: defaults)
+    }
+
+    @Test func savedStoreSaveLoadAddDeleteRoundtrip() {
+        let store = freshStore("binario1.tests.roundtrip")
+        #expect(store.load().isEmpty)
+        let a = Self.savedTo("Venezia Santa Lucia")
+        let b = Self.savedTo("Bologna Centrale")
+        store.save([a, b])
+        #expect(store.load().count == 2)
+        store.add(a)                                       // upsert by id — no duplicate
+        #expect(store.load().count == 2)
+        let c = Self.savedTo("Milano Centrale")
+        store.add(c)
+        #expect(store.load().count == 3)
+        store.delete(id: b.id)
+        let ids = Set(store.load().map(\.id))
+        #expect(ids.contains(a.id))
+        #expect(ids.contains(c.id))
+        #expect(!ids.contains(b.id))
+    }
+
+    @Test func savedStoreSeedsOnceAndRespectsDeletion() {
+        let store = freshStore("binario1.tests.seed")
+        store.seedIfNeeded(SavedJourneySeed.initial())
+        #expect(!store.load().isEmpty)                     // seeded on first launch
+        store.save([])                                     // user clears everything
+        #expect(store.load().isEmpty)
+        store.seedIfNeeded(SavedJourneySeed.initial())     // second launch must NOT re-seed
+        #expect(store.load().isEmpty)
+    }
+
+    @Test func seededJourneysDoNotContainTheRemovedDemo() {
+        // The old Padova → Venezia S. Lucia Home demo must not be real user data.
+        let seeded = SavedJourneySeed.initial()
+        #expect(!seeded.contains { $0.id == "home-demo-padova-venezia" })
+        #expect(!seeded.contains { $0.origin == "Padova" && $0.destination == "Venezia Santa Lucia" })
+    }
+
+    @MainActor
+    @Test func homeUsesPersistedSavedJourneysForPersonalization() async {
+        let store = freshStore("binario1.tests.home-persisted")
+        store.add(Self.savedTo("Venezia Santa Lucia"))     // persisted, NON-demo journey
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "VENEZIA S.LUCIA", 18, 10),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: store.load())
+        await vm.refresh()
+        #expect(vm.usesPersonalizedFeatured == true)
+        #expect(vm.featuredTitleKey == "section.yourNextTrains")
+        #expect(vm.featuredRows.map(\.id) == ["r2"])
+    }
+
+    @MainActor
+    @Test func homeFallsBackToGenericWhenNoPersistedJourneys() async {
+        let store = freshStore("binario1.tests.home-empty")   // empty store
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "Venezia Santa Lucia", 18, 10),
+            Self.boardRow("r3", "Verona Porta Nuova", 18, 20),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: store.load())   // []
+        await vm.refresh()
+        #expect(vm.usesPersonalizedFeatured == false)
+        #expect(vm.featuredTitleKey == "section.nextDepartures")
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser

@@ -2,7 +2,8 @@
 //  TripsViewModel.swift
 //  Binario1
 //
-//  Drives the Viaggi (Trips) dashboard. Mock-only: no networking, no persistence.
+//  Drives the Viaggi (Trips) dashboard. Saved journeys are PERSISTED locally
+//  (`SavedJourneyStore`, shared with the Home spotlight); suggested/recent stay mock.
 //
 
 import Foundation
@@ -25,9 +26,12 @@ final class TripsViewModel {
     private(set) var lastUpdated: Date?
 
     private let service: TripsService
+    /// Persistent saved journeys — the single source of truth shared with Home.
+    private let savedStore: SavedJourneyStoring
 
-    init(service: TripsService) {
+    init(service: TripsService, savedStore: SavedJourneyStoring = UserDefaultsSavedJourneyStore()) {
         self.service = service
+        self.savedStore = savedStore
     }
 
     var hasData: Bool {
@@ -53,7 +57,10 @@ final class TripsViewModel {
         defer { isLoading = false }
         do {
             let data = try await service.loadTrips()
-            savedJourneys = data.saved
+            // Saved journeys come from the persistent store (seeded once on first
+            // launch); suggested/recent remain mock-derived for now.
+            savedStore.seedIfNeeded(SavedJourneySeed.initial())
+            savedJourneys = savedStore.load()
             suggestedJourney = data.suggested
             recentJourneys = data.recent
             lastUpdated = Date()

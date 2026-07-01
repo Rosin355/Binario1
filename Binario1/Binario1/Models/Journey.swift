@@ -10,7 +10,7 @@
 import SwiftUI
 
 /// Punctuality of a journey. Mock-only; never sourced from a live feed yet.
-enum JourneyStatus: Equatable {
+enum JourneyStatus: Codable, Equatable {
     case onTime
     case delayed(minutes: Int)
     case cancelled
@@ -36,7 +36,7 @@ enum JourneyStatus: Equatable {
 
 /// A saved commuter route direction (home ↔ work). Localized role names come from
 /// `journey.home` / `journey.work`.
-enum JourneyDirection: Equatable {
+enum JourneyDirection: Codable, Equatable {
     case homeToWork
     case workToHome
 
@@ -59,7 +59,7 @@ enum TripsFilter: String, CaseIterable, Identifiable {
     }
 }
 
-struct SavedJourney: Identifiable, Equatable {
+struct SavedJourney: Identifiable, Codable, Equatable {
     let id: String
     let direction: JourneyDirection
     let origin: String              // full station name (accessibility source of truth)
