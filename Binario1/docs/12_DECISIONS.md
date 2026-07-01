@@ -115,6 +115,17 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   sopravvive). Direction placeholder `.homeToWork` per i salvataggi da Cerca (limite
   cosmetico noto: titolo card a ruoli, ma la tratta reale resta visibile).
 
+## Modello mentale a 3 tab (copy/gerarchia)
+
+- **Home = tabellone di stazione.** L'header lo dichiara (STAZIONE · Padova ·
+  "Tabellone in tempo reale"); in basso il **tabellone completo** con titolo esplicito
+  station-scoped ("TUTTE LE PARTENZE DA PADOVA" / "TUTTI GLI ARRIVI A PADOVA").
+- **Le righe personalizzate in alto sono solo uno spotlight** ("I tuoi prossimi treni"),
+  non il significato principale dello schermo: gerarchia = alto spotlight utile, basso
+  tabellone completo. Fallback generico "PROSSIME PARTENZE" / "PROSSIMI ARRIVI".
+- **Cerca = ricerca/salvataggio di una tratta.** **Viaggi = archivio dei viaggi
+  salvati.** I tre tab hanno ruoli distinti e non si sovrappongono.
+
 ## Home — featured personalizzata
 
 - **La sezione in alto della Home dà priorità ai viaggi salvati dell'utente** quando

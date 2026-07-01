@@ -516,6 +516,12 @@
         }
       }
     },
+    "header.boardDescriptor" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Real-time board" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tabellone in tempo reale" } }
+      }
+    },
     "header.stationContext" : {
       "localizations" : {
         "en" : {
@@ -527,7 +533,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "STAZIONE DI"
+            "value" : "STAZIONE"
           }
         }
       }
@@ -1016,6 +1022,12 @@
         }
       }
     },
+    "section.allArrivalsTo" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All arrivals to %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tutti gli arrivi a %@" } }
+      }
+    },
     "section.allDepartures" : {
       "localizations" : {
         "en" : {
@@ -1030,6 +1042,12 @@
             "value" : "Tutte le partenze"
           }
         }
+      }
+    },
+    "section.allDeparturesFrom" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All departures from %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tutte le partenze da %@" } }
       }
     },
     "section.nextArrivals" : {

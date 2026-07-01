@@ -32,7 +32,7 @@ struct StationBoardHeaderView: View {
         VStack(alignment: .leading, spacing: 4) {
             // Row 1 — station context label + updated + favorite
             HStack(alignment: .center, spacing: 10) {
-                Text("header.stationContext")        // "STAZIONE DI" / "STATION"
+                Text("header.stationContext")        // "STAZIONE" / "STATION"
                     .font(BoardFont.text(11, .semibold))
                     .tracking(2)
                     .foregroundStyle(BoardColors.amberDim)
@@ -47,6 +47,15 @@ struct StationBoardHeaderView: View {
                 Spacer(minLength: 8)
                 if onChangeStation != nil { changeButton.padding(.bottom, 4) }
             }
+
+            // Row 3 — screen purpose: this is the live station board.
+            Text("header.boardDescriptor")           // "Tabellone in tempo reale" / "Real-time board"
+                .font(BoardFont.text(11, .semibold))
+                .tracking(1)
+                .textCase(.uppercase)
+                .foregroundStyle(BoardColors.amberDim)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .padding(.horizontal, 18)
         .padding(.top, 2)

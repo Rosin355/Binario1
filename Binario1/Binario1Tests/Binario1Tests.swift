@@ -989,6 +989,12 @@ struct Binario1Tests {
         #expect(vm.featuredRows.count == 2)                       // generic top rows
     }
 
+    @Test func fullBoardTitleFormatKeysAreStationScoped() {
+        // Full-board section title is station-scoped ("… da/ a %@").
+        #expect(BoardType.departures.allSectionTitleFormatKey == "section.allDeparturesFrom")
+        #expect(BoardType.arrivals.allSectionTitleFormatKey == "section.allArrivalsTo")
+    }
+
     private final class RecordingBackendFetcher: BackendBoardFetching, @unchecked Sendable {
         private let lock = NSLock()
         private var _types: [BoardType] = []

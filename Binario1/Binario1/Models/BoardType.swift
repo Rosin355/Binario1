@@ -35,6 +35,16 @@ enum BoardType: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// Station-scoped full-board title FORMAT key (takes the station name as `%@`):
+    /// "Tutte le partenze da %@" / "Tutti gli arrivi a %@". Resolved via
+    /// `NSLocalizedString` since the key is board-type-dependent.
+    var allSectionTitleFormatKey: String {
+        switch self {
+        case .departures: "section.allDeparturesFrom"
+        case .arrivals:   "section.allArrivalsTo"
+        }
+    }
+
     /// Column header for the place column (DESTINAZIONE / PROVENIENZA).
     var placeColumnKey: LocalizedStringKey {
         switch self {

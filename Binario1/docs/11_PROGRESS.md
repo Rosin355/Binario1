@@ -2,6 +2,36 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-01 — Clarify Home station board UX
+
+Stato: completata (solo copy/gerarchia UI). Niente backend/Supabase; Release `.mock`.
+
+### Cosa
+- **Header Home** comunica il contesto tabellone: eyebrow `STAZIONE`, titolo `Padova`,
+  nuova riga descrittiva `header.boardDescriptor` = "Tabellone in tempo reale" /
+  "Real-time board". (`header.stationContext` IT "STAZIONE DI" → "STAZIONE".)
+- **Switch** `PARTENZE` / `ARRIVI` invariato (già chiaro).
+- **Titolo board completo esplicito e station-scoped**: `TrainBoardListSectionView`
+  ora mostra `TUTTE LE PARTENZE DA PADOVA` / `TUTTI GLI ARRIVI A PADOVA`
+  (`section.allDeparturesFrom` "…da %@" / `section.allArrivalsTo` "…a %@", via
+  `BoardType.allSectionTitleFormatKey` + `NSLocalizedString` + nome stazione;
+  `BoardSectionHeader` accetta un `titleString` verbatim).
+- **Hero = spotlight** (invariato): personalizzato `I TUOI PROSSIMI TRENI`, generico
+  `PROSSIME PARTENZE` / `PROSSIMI ARRIVI`. Gerarchia: alto = spotlight utile, basso =
+  tabellone completo di stazione.
+
+### Modello mentale (copy)
+- **Home = tabellone di stazione** (spotlight in alto + tabellone completo sotto).
+- **Cerca = cerca/salva una tratta**. **Viaggi = archivio viaggi salvati**.
+
+### Test
+- `BoardType.allSectionTitleFormatKey` station-scoped (departures→…From, arrivals→…To);
+  test titoli hero (`featuredTitleKey`) esistenti invariati.
+
+### Build / test
+- Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator —
+  ambiente). Nessun backend/Supabase; nessun secret; Release `.mock`.
+
 ## 2026-07-01 — Add save journey action from Search
 
 Stato: completata. Niente backend/Supabase; Release resta `.mock`.

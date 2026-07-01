@@ -11,7 +11,15 @@ import SwiftUI
 struct TrainBoardListSectionView: View {
     let rows: [TrainBoardRow]
     let boardType: BoardType
+    var stationName: String = ""
     var selectedRowID: TrainBoardRow.ID?
+
+    /// "Tutte le partenze da Padova" / "Tutti gli arrivi a Padova" (uppercased by the
+    /// section header). Falls back to the plain title when no station name is given.
+    private var fullBoardTitle: String? {
+        guard !stationName.isEmpty else { return nil }
+        return String(format: NSLocalizedString(boardType.allSectionTitleFormatKey, comment: ""), stationName)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -43,7 +51,7 @@ struct TrainBoardListSectionView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            BoardSectionHeader(titleKey: boardType.allSectionTitleKey)
+            BoardSectionHeader(titleKey: boardType.allSectionTitleKey, titleString: fullBoardTitle)
             Text("column.delay.full")
                 .lineLimit(1).fixedSize()
                 .frame(width: 46, alignment: .trailing)

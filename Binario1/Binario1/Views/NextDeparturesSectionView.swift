@@ -53,9 +53,17 @@ struct NextDeparturesSectionView: View {
 /// trailing label (e.g. "See all" on the Viaggi dashboard).
 struct BoardSectionHeader: View {
     let titleKey: LocalizedStringKey
+    /// Pre-formatted (already localized) title, e.g. "Tutte le partenze da Padova".
+    /// When set it overrides `titleKey` (rendered verbatim, still uppercased).
+    var titleString: String? = nil
     var systemImage: String?
     var trailingKey: LocalizedStringKey? = nil
     var trailingAction: (() -> Void)? = nil
+
+    private var titleText: Text {
+        if let titleString { return Text(verbatim: titleString) }
+        return Text(titleKey)
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -64,7 +72,7 @@ struct BoardSectionHeader: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(BoardColors.amber)
             }
-            Text(titleKey)
+            titleText
                 .font(BoardFont.text(11, .bold))
                 .tracking(0.6)
                 .textCase(.uppercase)

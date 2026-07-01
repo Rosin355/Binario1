@@ -96,6 +96,7 @@ struct StationBoardView: View {
                 TrainBoardListSectionView(
                     rows: viewModel.listRows,
                     boardType: viewModel.boardType,
+                    stationName: viewModel.station.displayName,
                     selectedRowID: viewModel.imminentRowID
                 )
             }
