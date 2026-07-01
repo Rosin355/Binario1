@@ -69,6 +69,10 @@ struct SavedJourney: Identifiable, Codable, Equatable {
     let durationMinutes: Int
     let status: JourneyStatus
     var isFavorite: Bool = false
+    /// True for a custom route the user saved (e.g. from Cerca): the UI shows the real
+    /// `origin → destination` as the title instead of the "Casa → Lavoro" role alias.
+    /// Optional so already-persisted journeys (no key) still decode. nil/false = commute.
+    var isCustomRoute: Bool? = nil
 }
 
 struct SuggestedJourney: Identifiable, Equatable {
@@ -82,6 +86,20 @@ struct SuggestedJourney: Identifiable, Equatable {
     let platform: String?
     let durationMinutes: Int
     let status: JourneyStatus
+}
+
+extension SuggestedJourney {
+    /// Present a saved journey ("Dalle tue abitudini") in the large "useful trip" card
+    /// style. Arrival is derived from the local duration; train is unknown → "--".
+    init(habit j: SavedJourney) {
+        self.init(
+            id: "habit-\(j.id)", origin: j.origin, destination: j.destination,
+            departure: j.departure,
+            arrival: j.departure.addingTimeInterval(Double(j.durationMinutes) * 60),
+            category: "", trainNumber: "", platform: j.platform,
+            durationMinutes: j.durationMinutes, status: j.status
+        )
+    }
 }
 
 struct RecentJourney: Identifiable, Equatable {

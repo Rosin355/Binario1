@@ -11,6 +11,8 @@ import SwiftUI
 
 struct TripsView: View {
     @State var viewModel: TripsViewModel
+    /// Bumped on Viaggi tab entry → replays the title intro animation (as on Home).
+    var animationToken: Int = 0
 
     var body: some View {
         ZStack {
@@ -18,7 +20,7 @@ struct TripsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    TripsHeaderView(lastUpdated: viewModel.lastUpdated, onSearch: {})
+                    TripsHeaderView(lastUpdated: viewModel.lastUpdated, animationToken: animationToken)
 
                     TripsFilterControl(
                         selected: viewModel.selectedFilter,
@@ -64,21 +66,20 @@ struct TripsView: View {
                 }
             }
 
-            if viewModel.showsSuggestedSection, let suggested = viewModel.suggestedJourney {
-                section("trips.section.useful", icon: "clock.fill") {
-                    UsefulJourneyCardView(journey: suggested)
+            // "Dalle tue abitudini" — the next likely trip from the user's saved
+            // journeys, in the liked large-card style. Only shown when something is saved.
+            if (viewModel.selectedFilter == .today || viewModel.selectedFilter == .saved),
+               let habit = viewModel.nextHabitJourney() {
+                section("trips.section.habit", icon: "clock.fill") {
+                    UsefulJourneyCardView(journey: SuggestedJourney(habit: habit))
                 }
             }
 
             if viewModel.showsRecentSection {
-                section("trips.section.recent", icon: "clock.arrow.circlepath",
-                        trailingKey: "trips.seeAll", trailingAction: {}) {
+                section("trips.section.recent", icon: "clock.arrow.circlepath") {
                     recentPanel
                 }
             }
-
-            TripsQuickActionsView()
-                .padding(.top, 2)
         }
     }
 

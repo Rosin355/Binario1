@@ -72,10 +72,14 @@ extension JourneyDisplayData {
     // MARK: - Factories
 
     static func make(_ j: SavedJourney) -> JourneyDisplayData {
+        // Custom routes (saved from Cerca) speak the real route, not the role alias.
+        let isCustom = j.isCustomRoute == true
+        let role1 = isCustom ? j.origin : localized(j.direction.originRoleKey)
+        let role2 = isCustom ? j.destination : localized(j.direction.destinationRoleKey)
         let a11y = String(
             format: String(localized: "accessibility.journey.saved"),
-            localized(j.direction.originRoleKey),
-            localized(j.direction.destinationRoleKey),
+            role1,
+            role2,
             j.origin, j.destination,
             BoardFormatters.spokenTime(j.departure),
             platformOrDash(j.platform),

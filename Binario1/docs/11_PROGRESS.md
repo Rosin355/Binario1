@@ -2,6 +2,49 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-01 — Wire Search modes and simplify Trips
+
+Stato: completata (UI + VM). Niente backend/Supabase; Release resta `.mock`.
+
+### Cerca
+- Le tre card (Stazione / Tratta / Treno) ora sono **funzionali**: `SearchMode`
+  (station/route/train) in `CercaViewModel`; toccare una card apre la modalità
+  (con "Indietro" per tornare). Digitare senza scegliere una card mostra i risultati
+  raggruppati (comportamento precedente).
+- **Cerca tratta**: form `PARTENZA` / `DESTINAZIONE`, **Inverti tratta** (swap) e
+  **Salva tratta** (attivo solo se entrambi i campi valorizzati). Salva via
+  `SavedJourneyStore.add` (upsert, dedup con id canonicalizzato invariati); campi
+  puliti dopo il salvataggio.
+- **Cerca stazione**: elenco stazioni (ricerca) + nota che il tabellone live è per
+  Padova (niente finto supporto per stazioni non verificate).
+- **Cerca treno**: stato "in arrivo" (nessun lookup live, nessun endpoint nuovo).
+
+### Viaggi (semplificazione)
+- Rimosso il brand **"Binario 1"** dall'header; titolo **VIAGGI** ora usa lo stesso
+  componente animato della Home (`DotMatrixStationTitleView`), con token d'animazione
+  al (ri)ingresso del tab.
+- Sezione "Prossimo viaggio utile" **riformulata in "DALLE TUE ABITUDINI"**: mostra il
+  **prossimo viaggio probabile dai viaggi salvati** (orario locale, nessuna
+  predizione/AI), nello stile della card grande apprezzata. Empty state:
+  "Salva una tratta da Cerca per vederla qui."
+- Rimosse le **quick actions** non funzionali e il "Vedi tutti" (no-op) da Recenti.
+
+### Fix titolo tratte salvate
+- Le tratte salvate da Cerca (`isCustomRoute`) mostrano la **rotta reale**
+  ("Padova → Venezia S. Lucia") come titolo (icona bookmark), non l'alias
+  "Casa → Lavoro"; accessibility usa la rotta reale. Gli alias ruolo restano per i
+  viaggi commuter. `SavedJourney.isCustomRoute` è opzionale → dati già persistiti
+  decodificano senza rotture.
+
+### Test
+- Selezione modalità Cerca; form tratta (campi/swap/validazione); tratta non valida
+  non salvata; salva + dedup con `isCustomRoute`; tratta custom espone la rotta reale;
+  habit Viaggi = prossimo salvato per orario; empty state senza salvati. Home invariata.
+
+### Build / test
+- Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator —
+  ambiente). Nessun backend/Supabase; nessun secret; Release `.mock`.
+
 ## 2026-07-01 — Clarify Home station board UX
 
 Stato: completata (solo copy/gerarchia UI). Niente backend/Supabase; Release `.mock`.

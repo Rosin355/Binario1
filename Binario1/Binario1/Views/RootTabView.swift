@@ -29,6 +29,8 @@ struct RootTabView: View {
     @State private var selectedTab: AppTab = .departures
     /// Bumped each time the Partenze tab is (re)selected → replays its intro animation.
     @State private var departuresAnimationToken = 0
+    /// Bumped each time the Viaggi tab is (re)selected → replays its title animation.
+    @State private var tripsAnimationToken = 0
 
     init() {
         Self.configureTabBarAppearance()
@@ -40,7 +42,7 @@ struct RootTabView: View {
                 StationBoardView(viewModel: stationViewModel, animationToken: departuresAnimationToken)
             }
             Tab("tab.trips", systemImage: "suitcase.fill", value: AppTab.trips) {
-                TripsView(viewModel: tripsViewModel)
+                TripsView(viewModel: tripsViewModel, animationToken: tripsAnimationToken)
             }
             // Third primary tab is native Search (Cerca). The old Info/About
             // content (`InfoView`) is kept for a future secondary settings area.
@@ -51,8 +53,9 @@ struct RootTabView: View {
         .tint(BoardColors.amber)
         .preferredColorScheme(.dark)
         .onChange(of: selectedTab) { _, newTab in
-            // Replay the Partenze intro animation on (re)entry — no data reload.
+            // Replay the intro title animation on (re)entry — no data reload.
             if newTab == .departures { departuresAnimationToken += 1 }
+            if newTab == .trips { tripsAnimationToken += 1 }
         }
     }
 

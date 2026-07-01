@@ -2,32 +2,25 @@
 //  TripsHeaderView.swift
 //  Binario1
 //
-//  Viaggi header matching the design: "Binario [1]" brand lockup top-left, a
-//  circular search button top-right, a large LED dot-matrix "VIAGGI" title, and a
-//  subtitle with an "Aggiornato HH:mm ●" status on the right.
+//  Viaggi header: the same animated LED dot-matrix title used on Home (reused
+//  `DotMatrixStationTitleView`), plus a subtitle with an "Aggiornato HH:mm ●" status.
+//  No "Binario 1" brand lockup (Cerca owns search; this stays focused on Viaggi).
 //
 
 import SwiftUI
 
 struct TripsHeaderView: View {
     var lastUpdated: Date?
-    var onSearch: (() -> Void)?
+    /// Bumped on Viaggi tab entry to replay the title's intro animation (as on Home).
+    var animationToken: Int = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Row 1 — brand + search
-            HStack(alignment: .center) {
-                brandLockup
-                Spacer(minLength: 8)
-                searchButton
-            }
+            // Animated LED title — reuses the Home component (no duplicated animation).
+            DotMatrixStationTitleView(stationName: String(localized: "trips.title"),
+                                      animationToken: animationToken)
 
-            // Row 2 — LED board title (hero weight)
-            LEDText(text: titleText, size: 42, color: BoardColors.ledPrimary, glow: 0.55)
-                .accessibilityElement()
-                .accessibilityLabel(Text("trips.title"))
-
-            // Row 3 — subtitle + last-updated (single line, like the mockup)
+            // Subtitle + last-updated (single line).
             HStack(alignment: .firstTextBaseline) {
                 Text("trips.subtitle")
                     .font(BoardFont.text(13))
@@ -39,40 +32,6 @@ struct TripsHeaderView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var titleText: String { String(localized: "trips.title").uppercased() }
-
-    private var brandLockup: some View {
-        HStack(spacing: 6) {
-            Text("app.name.word")                 // "Binario"
-                .font(BoardFont.text(17, .semibold))
-                .foregroundStyle(BoardColors.amber)
-            Text(verbatim: "1")
-                .font(BoardFont.digits(15, .bold))
-                .foregroundStyle(BoardColors.amber)
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(BoardColors.amber.opacity(0.85), lineWidth: 1.5)
-                )
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var searchButton: some View {
-        Button { onSearch?() } label: {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(BoardColors.amber)
-                .frame(width: 42, height: 42)
-                .background(
-                    Circle().stroke(BoardColors.amber.opacity(0.55), lineWidth: 1.3)
-                )
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("action.search"))
     }
 
     @ViewBuilder
@@ -97,7 +56,7 @@ struct TripsHeaderView: View {
 }
 
 #Preview {
-    TripsHeaderView(lastUpdated: Date(), onSearch: {})
+    TripsHeaderView(lastUpdated: Date())
         .padding()
         .background(BoardColors.background)
 }

@@ -115,6 +115,17 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   sopravvive). Direction placeholder `.homeToWork` per i salvataggi da Cerca (limite
   cosmetico noto: titolo card a ruoli, ma la tratta reale resta visibile).
 
+## Ruoli dei 3 tab (funzionali)
+
+- **Home = tabellone di stazione** (spotlight in alto + tabellone completo sotto).
+- **Cerca = punto di ingresso ricerca** stazione / tratta / treno. Le card aprono le
+  rispettive modalità (non sono decorative). "Cerca tratta" salva una tratta custom.
+- **Viaggi = abitudini/tratte salvate dell'utente.** Il "viaggio utile" è riformulato
+  come **abituale** ("Dalle tue abitudini"): il prossimo viaggio probabile ricavato dai
+  soli viaggi salvati (orario locale), NON una predizione generica/AI.
+- **Tratte custom** (salvate da Cerca) mostrano la rotta reale come titolo; gli alias
+  "Casa → Lavoro" restano solo per viaggi commuter dedicati.
+
 ## Modello mentale a 3 tab (copy/gerarchia)
 
 - **Home = tabellone di stazione.** L'header lo dichiara (STAZIONE · Padova ·

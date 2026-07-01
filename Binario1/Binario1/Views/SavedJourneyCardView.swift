@@ -15,6 +15,9 @@ struct SavedJourneyCardView: View {
     var onRemove: (() -> Void)? = nil
 
     private var data: JourneyDisplayData { .make(journey) }
+    /// Custom routes (saved from Cerca) show the real route as the title, not the
+    /// "Casa → Lavoro" role alias.
+    private var isCustom: Bool { journey.isCustomRoute == true }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -107,7 +110,7 @@ struct SavedJourneyCardView: View {
             Circle()
                 .fill(BoardColors.amber.opacity(0.12))
                 .overlay(Circle().stroke(BoardColors.amber.opacity(0.55), lineWidth: 1.2))
-            Image(systemName: journey.direction == .homeToWork ? "house.fill" : "briefcase.fill")
+            Image(systemName: isCustom ? "bookmark.fill" : (journey.direction == .homeToWork ? "house.fill" : "briefcase.fill"))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(BoardColors.amber)
         }
@@ -115,7 +118,11 @@ struct SavedJourneyCardView: View {
     }
 
     private var directionTitle: Text {
-        Text(LocalizedStringKey(journey.direction.originRoleKey))
+        if isCustom {
+            // Real route, e.g. "Padova → Venezia S. Lucia" (uses the board-short names).
+            return Text(verbatim: data.boardRoute)
+        }
+        return Text(LocalizedStringKey(journey.direction.originRoleKey))
         + Text(verbatim: "  →  ")
         + Text(LocalizedStringKey(journey.direction.destinationRoleKey))
     }

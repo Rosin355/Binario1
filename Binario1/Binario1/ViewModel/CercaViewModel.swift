@@ -17,6 +17,12 @@ enum SaveJourneyResult: Equatable {
     case invalid   // couldn't parse a departure + destination pair
 }
 
+/// Which search flow the Cerca cards open.
+enum SearchMode: String, CaseIterable, Identifiable, Equatable {
+    case station, route, train
+    var id: String { rawValue }
+}
+
 @Observable
 @MainActor
 final class CercaViewModel {
@@ -32,6 +38,12 @@ final class CercaViewModel {
     /// Ids of routes already saved — drives the "Saved" state without hitting the
     /// store on every row render. Refreshed after each save.
     private(set) var savedRouteIDs: Set<String> = []
+
+    /// Which search flow is open. `nil` = the three category cards are shown.
+    var selectedMode: SearchMode?
+    /// Route-form fields (used when `selectedMode == .route`).
+    var departureField: String = ""
+    var destinationField: String = ""
 
     init(stations: [String] = CercaViewModel.mockStations,
          routes: [String] = CercaViewModel.mockRoutes,
@@ -56,6 +68,27 @@ final class CercaViewModel {
     private func matches(_ items: [String]) -> [String] {
         guard isSearching else { return items }
         return items.filter { $0.localizedCaseInsensitiveContains(trimmedQuery) }
+    }
+
+    // MARK: - Search mode + route form
+
+    func selectMode(_ mode: SearchMode?) { selectedMode = mode }
+
+    /// Reverse the route-form departure/destination.
+    func swapRoute() { swap(&departureField, &destinationField) }
+
+    /// True when both route-form fields are non-empty (save allowed).
+    var canSaveCurrentRoute: Bool {
+        !departureField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !destinationField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Save the route-form pair. On success the fields are cleared.
+    @discardableResult
+    func saveCurrentRoute(now: Date = Date()) -> SaveJourneyResult {
+        let result = saveRoute(origin: departureField, destination: destinationField, now: now)
+        if result == .saved { departureField = ""; destinationField = "" }
+        return result
     }
 
     // MARK: - Save a route as a saved journey
@@ -92,21 +125,31 @@ final class CercaViewModel {
         savedRouteIDs = Set(savedStore.load().map(\.id))
     }
 
-    /// Save the route as a saved journey (upsert by stable id → no duplicates).
+    /// Save a "Origin → Destination" route string as a saved journey.
     @discardableResult
-    func saveRoute(_ route: String, now: @autoclosure () -> Date = Date()) -> SaveJourneyResult {
+    func saveRoute(_ route: String, now: Date = Date()) -> SaveJourneyResult {
         guard let c = routeComponents(route) else { return .invalid }
-        let id = routeID(origin: c.origin, destination: c.destination)
+        return saveRoute(origin: c.origin, destination: c.destination, now: now)
+    }
+
+    /// Save an origin/destination pair as a saved journey (upsert by stable id → no
+    /// duplicates). Marked `isCustomRoute` so Viaggi shows the REAL route as the title
+    /// (not the "Casa → Lavoro" role alias).
+    @discardableResult
+    func saveRoute(origin: String, destination: String, now: Date = Date()) -> SaveJourneyResult {
+        let o = origin.trimmingCharacters(in: .whitespacesAndNewlines)
+        let d = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !o.isEmpty, !d.isEmpty else { return .invalid }
+        let id = routeID(origin: o, destination: d)
         refreshSavedState()   // reflect deletions made elsewhere before deciding
         if savedRouteIDs.contains(id) { return .alreadySaved }
         // Departure/platform/duration are unknown for a search-saved route (display
-        // placeholders — Home matches on origin/destination only). Direction is a
-        // placeholder `.homeToWork`; the card still shows the real route sub-line.
+        // placeholders — Home matches on origin/destination only).
         let journey = SavedJourney(
             id: id, direction: .homeToWork,
-            origin: c.origin, destination: c.destination,
-            departure: now(), platform: nil, durationMinutes: 0,
-            status: .onTime, isFavorite: false
+            origin: o, destination: d,
+            departure: now, platform: nil, durationMinutes: 0,
+            status: .onTime, isFavorite: false, isCustomRoute: true
         )
         savedStore.add(journey)   // upsert
         refreshSavedState()

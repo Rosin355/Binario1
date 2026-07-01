@@ -88,4 +88,25 @@ final class TripsViewModel {
         savedStore.delete(id: id)
         savedJourneys = savedStore.load()
     }
+
+    // MARK: - "Dalle tue abitudini" — next likely saved journey
+
+    /// The user's next likely trip = the saved journey whose scheduled time-of-day is
+    /// soonest upcoming from `now` (wrapping past midnight). Nil when nothing is saved.
+    /// Uses only the local saved-journey timing — no prediction/AI.
+    func nextHabitJourney(now: Date = Date()) -> SavedJourney? {
+        guard !savedJourneys.isEmpty else { return nil }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = BoardFormatters.romeTimeZone
+        func minutesOfDay(_ date: Date) -> Int {
+            let c = cal.dateComponents([.hour, .minute], from: date)
+            return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        }
+        let nowMin = minutesOfDay(now)
+        func minutesUntil(_ j: SavedJourney) -> Int {
+            let diff = minutesOfDay(j.departure) - nowMin
+            return diff >= 0 ? diff : diff + 24 * 60
+        }
+        return savedJourneys.min { minutesUntil($0) < minutesUntil($1) }
+    }
 }

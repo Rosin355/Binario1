@@ -1223,6 +1223,96 @@ struct Binario1Tests {
         #expect(vm.featuredRows.map(\.id) == ["r2"])
     }
 
+    // MARK: - Cerca search modes + route form; Viaggi habit card
+
+    private static func savedAt(_ origin: String, _ destination: String, _ h: Int, _ m: Int) -> SavedJourney {
+        SavedJourney(id: "\(origin)->\(destination)@\(h):\(m)", direction: .homeToWork,
+                     origin: origin, destination: destination, departure: romeDate(2026, 6, 17, h, m),
+                     platform: nil, durationMinutes: 30, status: .onTime)
+    }
+
+    @MainActor
+    @Test func cercaSelectModeUpdatesSelectedMode() {
+        let vm = CercaViewModel(savedStore: freshStore("binario1.tests.cerca-mode"))
+        #expect(vm.selectedMode == nil)          // cards shown initially
+        vm.selectMode(.route)
+        #expect(vm.selectedMode == .route)
+        vm.selectMode(.station)
+        #expect(vm.selectedMode == .station)
+        vm.selectMode(nil)                        // back
+        #expect(vm.selectedMode == nil)
+    }
+
+    @MainActor
+    @Test func cercaRouteFormExposesFieldsSwapAndValidation() {
+        let vm = CercaViewModel(savedStore: freshStore("binario1.tests.cerca-form"))
+        #expect(vm.canSaveCurrentRoute == false)
+        vm.departureField = "Padova"
+        #expect(vm.canSaveCurrentRoute == false)  // destination still empty
+        vm.destinationField = "Venezia Santa Lucia"
+        #expect(vm.canSaveCurrentRoute == true)
+        vm.swapRoute()
+        #expect(vm.departureField == "Venezia Santa Lucia")
+        #expect(vm.destinationField == "Padova")
+    }
+
+    @MainActor
+    @Test func cercaRouteFormInvalidNotSaved() {
+        let store = freshStore("binario1.tests.cerca-form-invalid")
+        let vm = CercaViewModel(savedStore: store)
+        vm.departureField = "Padova"
+        vm.destinationField = "   "               // blank destination
+        #expect(vm.saveCurrentRoute() == .invalid)
+        #expect(store.load().isEmpty)
+    }
+
+    @MainActor
+    @Test func cercaRouteFormSavesCustomRouteAndDedups() {
+        let store = freshStore("binario1.tests.cerca-form-save")
+        let vm = CercaViewModel(savedStore: store)
+        vm.departureField = "Padova"; vm.destinationField = "Venezia Santa Lucia"
+        #expect(vm.saveCurrentRoute() == .saved)
+        #expect(store.load().count == 1)
+        #expect(store.load().first?.isCustomRoute == true)   // real-route title in Viaggi
+        #expect(vm.departureField == "")                     // fields cleared after save
+        vm.departureField = "padova"; vm.destinationField = "VENEZIA santa lucia"
+        #expect(vm.saveCurrentRoute() == .alreadySaved)      // canonical dedup
+        #expect(store.load().count == 1)
+    }
+
+    @Test func customSavedRouteExposesRealRoute() {
+        let j = SavedJourney(id: "cerca:x", direction: .homeToWork, origin: "Padova",
+                             destination: "Venezia Santa Lucia", departure: Self.romeDate(2026, 6, 17, 10, 0),
+                             platform: nil, durationMinutes: 0, status: .onTime,
+                             isFavorite: false, isCustomRoute: true)
+        let data = JourneyDisplayData.make(j)
+        #expect(data.routeText == "Padova → Venezia Santa Lucia")
+        #expect(data.accessibilityLabel.contains("Padova"))
+        #expect(data.accessibilityLabel.contains("Venezia Santa Lucia"))
+    }
+
+    @MainActor
+    @Test func tripsNextHabitPicksSoonestUpcomingSavedJourney() async {
+        let store = freshStore("binario1.tests.habit")
+        store.save([
+            Self.savedAt("Padova", "Venezia Santa Lucia", 8, 0),
+            Self.savedAt("Padova", "Bologna Centrale", 18, 0),
+        ])
+        let service = MockTripsService(); service.artificialDelay = .zero
+        let vm = TripsViewModel(service: service, savedStore: store)
+        await vm.load()   // seed skipped (store non-empty) → keeps my two journeys
+        #expect(vm.nextHabitJourney(now: Self.romeDate(2026, 6, 17, 17, 0))?.destination == "Bologna Centrale")
+        #expect(vm.nextHabitJourney(now: Self.romeDate(2026, 6, 17, 7, 0))?.destination == "Venezia Santa Lucia")
+    }
+
+    @MainActor
+    @Test func tripsEmptyStateWhenNoSavedJourneys() {
+        let vm = TripsViewModel(service: MockTripsService(), savedStore: freshStore("binario1.tests.trips-empty"))
+        #expect(vm.savedJourneys.isEmpty)          // no load() → nothing loaded
+        #expect(vm.showsSavedEmptyState == true)   // Oggi filter + empty → empty state
+        #expect(vm.nextHabitJourney() == nil)      // no habit card without saved journeys
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser

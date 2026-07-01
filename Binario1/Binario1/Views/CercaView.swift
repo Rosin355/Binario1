@@ -37,31 +37,90 @@ struct CercaView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isSearching {
-            if viewModel.hasResults {
-                VStack(alignment: .leading, spacing: 18) {
-                    if !viewModel.stations.isEmpty {
-                        resultSection("search.stations", "tram.fill",
-                                      viewModel.stations, rowIcon: "mappin.and.ellipse")
-                    }
-                    if !viewModel.routes.isEmpty {
-                        resultSection("search.routes", "arrow.left.arrow.right",
-                                      viewModel.routes, rowIcon: "arrow.triangle.swap", savable: true)
-                    }
-                    if !viewModel.trains.isEmpty {
-                        resultSection("search.trains", "train.side.front.car",
-                                      viewModel.trains, rowIcon: "train.side.front.car")
-                    }
+        if let mode = viewModel.selectedMode {
+            VStack(alignment: .leading, spacing: 16) {
+                modeHeader(mode)
+                switch mode {
+                case .station: stationModeContent
+                case .route:   routeForm
+                case .train:   trainComingSoon
                 }
-            } else {
-                emptyState
+            }
+        } else if viewModel.isSearching {
+            groupedResults
+        } else {
+            categoryCards
+        }
+    }
+
+    // MARK: - Grouped results (free-text search without a chosen mode)
+
+    @ViewBuilder
+    private var groupedResults: some View {
+        if viewModel.hasResults {
+            VStack(alignment: .leading, spacing: 18) {
+                if !viewModel.stations.isEmpty {
+                    resultSection("search.stations", "tram.fill",
+                                  viewModel.stations, rowIcon: "mappin.and.ellipse")
+                }
+                if !viewModel.routes.isEmpty {
+                    resultSection("search.routes", "arrow.left.arrow.right",
+                                  viewModel.routes, rowIcon: "arrow.triangle.swap", savable: true)
+                }
+                if !viewModel.trains.isEmpty {
+                    resultSection("search.trains", "train.side.front.car",
+                                  viewModel.trains, rowIcon: "train.side.front.car")
+                }
             }
         } else {
-            VStack(spacing: 12) {
-                categoryRow("search.station", "mappin.and.ellipse")
-                categoryRow("search.route", "arrow.triangle.swap")
-                categoryRow("search.train", "train.side.front.car")
+            emptyState
+        }
+    }
+
+    // MARK: - Category cards → open a search mode
+
+    private var categoryCards: some View {
+        VStack(spacing: 12) {
+            categoryButton(.station, "search.station", "mappin.and.ellipse")
+            categoryButton(.route, "search.route", "arrow.triangle.swap")
+            categoryButton(.train, "search.train", "train.side.front.car")
+        }
+    }
+
+    private func categoryButton(_ mode: SearchMode, _ titleKey: LocalizedStringKey, _ icon: String) -> some View {
+        Button { viewModel.selectMode(mode) } label: { categoryRow(titleKey, icon) }
+            .buttonStyle(.plain)
+    }
+
+    private func modeHeader(_ mode: SearchMode) -> some View {
+        HStack(spacing: 10) {
+            Button { viewModel.selectMode(nil) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(BoardColors.amber)
+                    .frame(width: 34, height: 34)
+                    .overlay(Circle().stroke(BoardColors.amber.opacity(0.5), lineWidth: 1.2))
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("action.back"))
+            BoardSectionHeader(titleKey: modeTitleKey(mode), systemImage: modeIcon(mode))
+        }
+    }
+
+    private func modeTitleKey(_ mode: SearchMode) -> LocalizedStringKey {
+        switch mode {
+        case .station: "search.station"
+        case .route:   "search.route"
+        case .train:   "search.train"
+        }
+    }
+
+    private func modeIcon(_ mode: SearchMode) -> String {
+        switch mode {
+        case .station: "mappin.and.ellipse"
+        case .route:   "arrow.triangle.swap"
+        case .train:   "train.side.front.car"
         }
     }
 
@@ -187,6 +246,106 @@ struct CercaView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    // MARK: - Route mode — Partenza / Destinazione / swap / save
+
+    private var routeForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            routeField("search.departure", text: $viewModel.departureField)
+
+            HStack {
+                Spacer()
+                Button { viewModel.swapRoute() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up.arrow.down")
+                        Text("search.swapRoute")
+                    }
+                    .font(BoardFont.text(12, .semibold))
+                    .foregroundStyle(BoardColors.amber)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(BoardColors.amber.opacity(0.5), lineWidth: 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("search.swapRoute"))
+            }
+
+            routeField("search.destination", text: $viewModel.destinationField)
+
+            Button { viewModel.saveCurrentRoute() } label: {
+                Text("search.saveRoute")
+                    .font(BoardFont.text(15, .bold))
+                    .tracking(0.5)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .foregroundStyle(viewModel.canSaveCurrentRoute ? BoardColors.background : BoardColors.amberDim)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(viewModel.canSaveCurrentRoute ? BoardColors.amber : BoardColors.panel))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(BoardColors.borderDim, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.canSaveCurrentRoute)
+            .accessibilityLabel(Text("search.saveRoute"))
+        }
+    }
+
+    private func routeField(_ labelKey: LocalizedStringKey, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(labelKey)
+                .font(BoardFont.text(9, .semibold))
+                .tracking(0.8)
+                .textCase(.uppercase)
+                .foregroundStyle(BoardColors.amberDim)
+            TextField("", text: text)
+                .textFieldStyle(.plain)
+                .font(BoardFont.text(16, .semibold))
+                .foregroundStyle(BoardColors.amberBright)
+                .tint(BoardColors.amber)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(BoardColors.panel))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(BoardColors.borderDim, lineWidth: 1))
+        }
+    }
+
+    // MARK: - Station mode (informational: live board is Padova-only for now)
+
+    @ViewBuilder
+    private var stationModeContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if viewModel.stations.isEmpty {
+                emptyState
+            } else {
+                resultSection("search.stations", "tram.fill",
+                              viewModel.stations, rowIcon: "mappin.and.ellipse")
+            }
+            Text("search.station.note")
+                .font(BoardFont.text(12))
+                .foregroundStyle(BoardColors.amberDim)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Train mode (no live lookup yet — clear coming state)
+
+    private var trainComingSoon: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "train.side.front.car")
+                .font(.largeTitle)
+                .foregroundStyle(BoardColors.amberDim)
+            Text("search.train.coming")
+                .font(BoardFont.text(14))
+                .foregroundStyle(BoardColors.amberDim)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 40)
     }
 }
 

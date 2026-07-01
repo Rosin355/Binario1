@@ -197,14 +197,18 @@
     },
     "action.removeSavedJourney" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove saved journey" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Rimuovi viaggio salvato" } }
-      }
-    },
-    "action.saveJourney" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save journey" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salva viaggio" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove saved journey"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi viaggio salvato"
+          }
+        }
       }
     },
     "action.retry" : {
@@ -221,6 +225,28 @@
             "value" : "Riprova"
           }
         }
+      }
+    },
+    "action.saveJourney" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save journey"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva viaggio"
+          }
+        }
+      }
+    },
+    "action.back" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Indietro" } }
       }
     },
     "action.search" : {
@@ -518,8 +544,18 @@
     },
     "header.boardDescriptor" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Real-time board" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tabellone in tempo reale" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Real-time board"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabellone in tempo reale"
+          }
+        }
       }
     },
     "header.stationContext" : {
@@ -914,18 +950,6 @@
         }
       }
     },
-    "search.save" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salva" } }
-      }
-    },
-    "search.saved" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salvato" } }
-      }
-    },
     "search.routes" : {
       "localizations" : {
         "en" : {
@@ -938,6 +962,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tratte"
+          }
+        }
+      }
+    },
+    "search.departure" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Departure" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Partenza" } }
+      }
+    },
+    "search.destination" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Destination" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Destinazione" } }
+      }
+    },
+    "search.saveRoute" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save route" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salva tratta" } }
+      }
+    },
+    "search.station.note" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Real-time board currently available for Padova." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tabellone in tempo reale disponibile per Padova." } }
+      }
+    },
+    "search.swapRoute" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Swap route" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Inverti tratta" } }
+      }
+    },
+    "search.train.coming" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Train search coming soon." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Ricerca treno in arrivo." } }
+      }
+    },
+    "search.save" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva"
+          }
+        }
+      }
+    },
+    "search.saved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvato"
           }
         }
       }
@@ -1023,9 +1115,20 @@
       }
     },
     "section.allArrivalsTo" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "All arrivals to %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tutti gli arrivi a %@" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All arrivals to %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tutti gli arrivi a %@"
+          }
+        }
       }
     },
     "section.allDepartures" : {
@@ -1045,9 +1148,20 @@
       }
     },
     "section.allDeparturesFrom" : {
+      "extractionState" : "stale",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "All departures from %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tutte le partenze da %@" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All departures from %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tutte le partenze da %@"
+          }
+        }
       }
     },
     "section.nextArrivals" : {
@@ -1612,6 +1726,28 @@
         }
       }
     },
+    "trips.saved.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save a route from Search to see it here."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva una tratta da Cerca per vederla qui."
+          }
+        }
+      }
+    },
+    "trips.section.habit" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "From your habits" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Dalle tue abitudini" } }
+      }
+    },
     "trips.section.recent" : {
       "localizations" : {
         "en" : {
@@ -1626,12 +1762,6 @@
             "value" : "Recenti"
           }
         }
-      }
-    },
-    "trips.saved.empty" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No saved journeys yet. Save a trip to see it here." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Nessun viaggio salvato. Salva una tratta per vederla qui." } }
       }
     },
     "trips.section.saved" : {
