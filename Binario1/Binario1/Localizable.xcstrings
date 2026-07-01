@@ -201,6 +201,12 @@
         "it" : { "stringUnit" : { "state" : "translated", "value" : "Rimuovi viaggio salvato" } }
       }
     },
+    "action.saveJourney" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save journey" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salva viaggio" } }
+      }
+    },
     "action.retry" : {
       "localizations" : {
         "en" : {
@@ -900,6 +906,18 @@
             "value" : "Cerca tratta"
           }
         }
+      }
+    },
+    "search.save" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salva" } }
+      }
+    },
+    "search.saved" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salvato" } }
       }
     },
     "search.routes" : {

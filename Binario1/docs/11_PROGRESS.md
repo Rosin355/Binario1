@@ -2,6 +2,48 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-01 — Add save journey action from Search
+
+Stato: completata. Niente backend/Supabase; Release resta `.mock`.
+
+### Cosa
+- **Salva da Cerca**: le righe "Tratte" ("Origine → Destinazione") hanno un piccolo
+  affordance bookmark. `CercaViewModel.saveRoute` fa parsing della coppia, costruisce
+  un `SavedJourney` e fa `SavedJourneyStore.add` (upsert). Solo le righe tratta sono
+  salvabili (stazioni/treni no).
+- **Dedup**: id stabile `cerca:<canon origine>>​<canon destinazione>`
+  (`StationNameMatcher.canonical`) → risalvare la stessa coppia = `.alreadySaved`,
+  nessuna riga duplicata. Coppia non valida (senza `→` / destinazione vuota) →
+  `.invalid`, non salvata (bottone assente se non parsabile).
+- **Stato UI**: bottone "Salva" → "Salvato" (+ disabilitato) quando persistito;
+  `refreshSavedState()` risincronizza al (ri)comparire del tab così una delete fatta
+  in Viaggi riabilita il salvataggio.
+- **Cross-feature**: stesso store (`UserDefaults.standard`) → dopo il salvataggio la
+  tratta compare in Viaggi (al load) e la Home la usa al prossimo refresh (provider).
+  Logica di matching Home invariata.
+- Nuove chiavi loc: `action.saveJourney`, `search.save`, `search.saved` (IT/EN).
+
+### Review (adversariale, multi-agent) — findings risolti
+- **Critico**: `seedIfNeeded` sovrascriveva un viaggio salvato da Cerca prima del
+  primo load di Viaggi (perdita dato). Fix: seed **solo se lo store è vuoto** (flag
+  seeded impostato comunque una volta) → non clobbera i dati utente.
+- **Minore**: cache `savedRouteIDs` stantia dopo delete cross-tab → risincronizzata
+  in `saveRoute` e al `.task` di comparsa di Cerca (riabilita il salvataggio).
+- **Minore (cosmetico, noto)**: i viaggi salvati da Cerca usano `direction .homeToWork`
+  placeholder → la card Viaggi mostra il titolo ruolo "Casa → Lavoro" (la sotto-riga
+  mostra comunque la tratta reale). Nessuna perdita dato; sistemarlo richiederebbe un
+  flag/redesign della card → rimandato.
+
+### Test
+- Salvataggio valido aggiunge allo store; duplicato non crea righe (canonical dedup);
+  coppia non valida non salvata; la tratta salvata compare in `TripsViewModel` dopo
+  reload; la Home personalizza da un viaggio salvato via Cerca; il seed non clobbera
+  dati esistenti.
+
+### Build / test
+- Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator —
+  ambiente). Nessun backend/Supabase; nessun secret; Release `.mock`.
+
 ## 2026-07-01 — Add saved journey delete UI
 
 Stato: completata. Niente backend/Supabase; Release resta `.mock`.

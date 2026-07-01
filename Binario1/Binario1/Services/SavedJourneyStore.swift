@@ -60,7 +60,11 @@ final class UserDefaultsSavedJourneyStore: SavedJourneyStoring, @unchecked Senda
 
     func seedIfNeeded(_ journeys: @autoclosure () -> [SavedJourney]) {
         guard !defaults.bool(forKey: seededKey) else { return }
-        save(journeys())
-        defaults.set(true, forKey: seededKey)
+        defaults.set(true, forKey: seededKey)   // mark seeded once, regardless
+        // Never clobber data the user already added (e.g. a journey saved from Cerca
+        // before Viaggi's first load). Only seed samples into a genuinely empty store.
+        if load().isEmpty {
+            save(journeys())
+        }
     }
 }

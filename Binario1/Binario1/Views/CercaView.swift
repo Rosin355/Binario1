@@ -30,6 +30,9 @@ struct CercaView: View {
             .searchable(text: $vm.query, prompt: Text("search.prompt"))
         }
         .preferredColorScheme(.dark)
+        // Re-sync saved state on (re)appear so a deletion made in Viaggi clears the
+        // stale "Saved" state and re-enables saving.
+        .task { viewModel.refreshSavedState() }
     }
 
     @ViewBuilder
@@ -43,7 +46,7 @@ struct CercaView: View {
                     }
                     if !viewModel.routes.isEmpty {
                         resultSection("search.routes", "arrow.left.arrow.right",
-                                      viewModel.routes, rowIcon: "arrow.triangle.swap")
+                                      viewModel.routes, rowIcon: "arrow.triangle.swap", savable: true)
                     }
                     if !viewModel.trains.isEmpty {
                         resultSection("search.trains", "train.side.front.car",
@@ -65,12 +68,12 @@ struct CercaView: View {
     // MARK: - Results
 
     private func resultSection(_ titleKey: LocalizedStringKey, _ icon: String,
-                               _ items: [String], rowIcon: String) -> some View {
+                               _ items: [String], rowIcon: String, savable: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             BoardSectionHeader(titleKey: titleKey, systemImage: icon)
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element) { index, item in
-                    resultRow(item, icon: rowIcon)
+                    resultRow(item, icon: rowIcon, savable: savable)
                     if index < items.count - 1 {
                         Rectangle().fill(BoardColors.gridLine).frame(height: 1)
                     }
@@ -86,7 +89,7 @@ struct CercaView: View {
         }
     }
 
-    private func resultRow(_ text: String, icon: String) -> some View {
+    private func resultRow(_ text: String, icon: String, savable: Bool = false) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
@@ -98,11 +101,43 @@ struct CercaView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
             Spacer(minLength: 6)
+            if savable, viewModel.canSaveRoute(text) {
+                saveRouteButton(text)
+            }
         }
         .padding(.vertical, 11)
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        // Savable rows keep the save button as its own accessible element.
+        .accessibilityElement(children: savable ? .contain : .combine)
+    }
+
+    /// Small bookmark save affordance for a route row; shows "Saved" once persisted.
+    @ViewBuilder
+    private func saveRouteButton(_ route: String) -> some View {
+        let saved = viewModel.isRouteSaved(route)
+        Button {
+            viewModel.saveRoute(route)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: saved ? "bookmark.fill" : "bookmark")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(saved ? "search.saved" : "search.save")
+                    .font(BoardFont.text(11, .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(saved ? BoardColors.amberBright : BoardColors.amber)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke((saved ? BoardColors.amberBright : BoardColors.amber).opacity(0.5), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(saved)
+        .accessibilityLabel(Text(saved ? "search.saved" : "action.saveJourney"))
     }
 
     // MARK: - Idle categories

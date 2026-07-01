@@ -1146,6 +1146,77 @@ struct Binario1Tests {
         #expect(vm.featuredTitleKey == "section.nextDepartures")
     }
 
+    // MARK: - Save journey from Cerca (Search)
+
+    @MainActor
+    @Test func cercaSaveAddsValidRouteToStore() {
+        let store = freshStore("binario1.tests.cerca-save")
+        let vm = CercaViewModel(savedStore: store)
+        #expect(vm.saveRoute("Padova → Venezia Santa Lucia", now: Self.romeDate(2026, 6, 17, 10, 0)) == .saved)
+        let saved = store.load()
+        #expect(saved.count == 1)
+        #expect(saved.first?.origin == "Padova")
+        #expect(saved.first?.destination == "Venezia Santa Lucia")
+        #expect(vm.isRouteSaved("Padova → Venezia Santa Lucia") == true)
+    }
+
+    @MainActor
+    @Test func cercaSaveIsIdempotentNoDuplicates() {
+        let store = freshStore("binario1.tests.cerca-dup")
+        let vm = CercaViewModel(savedStore: store)
+        #expect(vm.saveRoute("Padova → Venezia Santa Lucia") == .saved)
+        #expect(vm.saveRoute("padova → VENEZIA santa lucia") == .alreadySaved)   // canonical dedup
+        #expect(store.load().count == 1)
+    }
+
+    @MainActor
+    @Test func cercaSaveRejectsInvalidPair() {
+        let store = freshStore("binario1.tests.cerca-invalid")
+        let vm = CercaViewModel(savedStore: store)
+        #expect(vm.saveRoute("Padova") == .invalid)          // no separator
+        #expect(vm.saveRoute("Padova → ") == .invalid)       // empty destination
+        #expect(vm.canSaveRoute("Padova") == false)
+        #expect(store.load().isEmpty)
+    }
+
+    @Test func seedDoesNotClobberExistingSavedJourneys() {
+        // A journey saved (e.g. from Cerca) before Viaggi's first seed must survive.
+        let store = freshStore("binario1.tests.seed-noclobber")
+        let j = Self.savedTo("Venezia Santa Lucia")
+        store.add(j)
+        store.seedIfNeeded(SavedJourneySeed.initial())
+        #expect(store.load().contains { $0.id == j.id })   // not overwritten by the seed
+    }
+
+    @MainActor
+    @Test func savedFromCercaAppearsInTripsAfterReload() async {
+        let store = freshStore("binario1.tests.cerca-trips")
+        let cerca = CercaViewModel(savedStore: store)
+        #expect(cerca.saveRoute("Padova → Venezia Santa Lucia") == .saved)
+        let service = MockTripsService(); service.artificialDelay = .zero
+        let trips = TripsViewModel(service: service, savedStore: store)
+        await trips.load()
+        #expect(trips.savedJourneys.contains { $0.origin == "Padova" && $0.destination == "Venezia Santa Lucia" })
+    }
+
+    @MainActor
+    @Test func homePersonalizesFromCercaSavedJourney() async {
+        let store = freshStore("binario1.tests.cerca-home")
+        let cerca = CercaViewModel(savedStore: store)
+        #expect(cerca.saveRoute("Padova → Venezia Santa Lucia") == .saved)
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "VENEZIA S.LUCIA", 18, 10),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: store.load(), savedJourneysProvider: { store.load() })
+        await vm.refresh(force: true)
+        #expect(vm.usesPersonalizedFeatured == true)
+        #expect(vm.featuredTitleKey == "section.yourNextTrains")
+        #expect(vm.featuredRows.map(\.id) == ["r2"])
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser

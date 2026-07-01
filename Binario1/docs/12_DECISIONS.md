@@ -109,6 +109,11 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   cestino + azione VoiceOver (niente swipe-to-delete List), empty state minimale.
   La Home rilegge lo store al prossimo refresh (provider) → le cancellazioni si
   propagano senza toccare la logica di matching.
+- **Salva da Cerca**: le tratte cercate si salvano nello stesso store (upsert con id
+  canonicalizzato → niente duplicati). Il seed una-tantum **non sovrascrive** dati
+  utente già presenti (un salvataggio da Cerca prima del primo load di Viaggi
+  sopravvive). Direction placeholder `.homeToWork` per i salvataggi da Cerca (limite
+  cosmetico noto: titolo card a ruoli, ma la tratta reale resta visibile).
 
 ## Home — featured personalizzata
 
