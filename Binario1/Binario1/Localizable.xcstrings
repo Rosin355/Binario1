@@ -195,6 +195,12 @@
         }
       }
     },
+    "action.removeSavedJourney" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove saved journey" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Rimuovi viaggio salvato" } }
+      }
+    },
     "action.retry" : {
       "localizations" : {
         "en" : {
@@ -1584,6 +1590,12 @@
             "value" : "Recenti"
           }
         }
+      }
+    },
+    "trips.saved.empty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No saved journeys yet. Save a trip to see it here." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Nessun viaggio salvato. Salva una tratta per vederla qui." } }
       }
     },
     "trips.section.saved" : {

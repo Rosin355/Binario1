@@ -2,6 +2,39 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-01 — Add saved journey delete UI
+
+Stato: completata. Niente backend/Supabase; Release resta `.mock`.
+
+### Cosa
+- **Delete in Viaggi**: le card salvate (`SavedJourneyCardView`) hanno ora un piccolo
+  affordance cestino (`onRemove`) accanto alla stella + azione VoiceOver
+  "Rimuovi viaggio salvato" (la card ignora i children a11y, quindi azione a livello
+  card). Layout a card custom → niente swipe-to-delete List; approccio conservativo.
+- **VM**: `TripsViewModel.deleteSavedJourney(id:)` → `store.delete` + ricarica
+  `savedJourneys`. Suggested/recent (mock) restano separati dai salvati reali.
+- **Empty state**: quando il filtro Oggi/Salvati è attivo ma non ci sono viaggi
+  salvati, la sezione "Tratte salvate" mostra un piccolo pannello vuoto
+  (`trips.saved.empty`), stile board.
+- **Home riflette le cancellazioni al prossimo refresh/load**: `StationBoardViewModel`
+  accetta un `savedJourneysProvider` e rilegge i viaggi salvati persistiti a ogni
+  refresh; RootTabView passa `{ HomeSavedJourneys.current() }`. La logica di matching
+  è invariata.
+- **No re-seed dei cancellati**: `seedIfNeeded` resta una tantum (flag) → le
+  cancellazioni utente non ritornano.
+- Nuove chiavi loc: `action.removeSavedJourney`, `trips.saved.empty` (IT/EN).
+
+### Test
+- `TripsViewModel.deleteSavedJourney` rimuove dallo store e dalla lista; il viaggio
+  cancellato non riappare dopo reload.
+- Home torna alla sezione generica dopo aver cancellato l'unico viaggio corrispondente
+  (via provider al refresh).
+- Seed una tantum rispetta la cancellazione (test esistente).
+
+### Build / test
+- Build Debug+Release OK; test target compila (esecuzione bloccata da CoreSimulator —
+  ambiente). Nessun backend/Supabase; nessun secret; Release `.mock`.
+
 ## 2026-07-01 — Persist saved journeys for personalized Home
 
 Stato: completata. Niente backend/Supabase; Release resta `.mock`.

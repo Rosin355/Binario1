@@ -1110,6 +1110,42 @@ struct Binario1Tests {
         #expect(vm.featuredTitleKey == "section.nextDepartures")
     }
 
+    @MainActor
+    @Test func tripsViewModelDeleteRemovesJourneyAndItDoesNotReappear() async {
+        let store = freshStore("binario1.tests.trips-delete")
+        let service = MockTripsService(); service.artificialDelay = .zero
+        let vm = TripsViewModel(service: service, savedStore: store)
+        await vm.load()                                            // seeds sample saved journeys
+        #expect(!vm.savedJourneys.isEmpty)
+        let target = vm.savedJourneys[0].id
+        vm.deleteSavedJourney(id: target)
+        #expect(!vm.savedJourneys.contains { $0.id == target })    // Viaggi list updated
+        #expect(!store.load().contains { $0.id == target })        // store updated
+        await vm.load()                                            // reload
+        #expect(!vm.savedJourneys.contains { $0.id == target })    // deleted journey does not reappear
+    }
+
+    @MainActor
+    @Test func homeFallsBackAfterDeletingTheOnlyMatchingJourney() async {
+        let store = freshStore("binario1.tests.home-delete")
+        let saved = Self.savedTo("Venezia Santa Lucia")
+        store.add(saved)
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "VENEZIA S.LUCIA", 18, 10),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: store.load(),
+                                       savedJourneysProvider: { store.load() })
+        await vm.refresh(force: true)
+        #expect(vm.usesPersonalizedFeatured == true)               // matches while saved
+        store.delete(id: saved.id)                                 // deleted in Viaggi (same store)
+        await vm.refresh(force: true)                              // Home re-reads on refresh
+        #expect(vm.usesPersonalizedFeatured == false)
+        #expect(vm.featuredTitleKey == "section.nextDepartures")
+    }
+
 #if DEBUG
     // MARK: - RFI live Padova spike (DEBUG-only)
     // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser

@@ -50,10 +50,15 @@ final class StationBoardViewModel {
     /// station title can never disagree with the board rows.
     let allowsStationChange: Bool
 
-    /// The user's saved journeys (from Viaggi), used to personalize the featured
-    /// section. Empty → the generic "next departures" behavior. MVP/mock-backed for
-    /// now (see `HomeSavedJourneys`); becomes real when saved journeys are persisted.
-    private let savedJourneys: [SavedJourney]
+    /// The user's saved journeys (from Viaggi, persisted), used to personalize the
+    /// featured section. Empty → the generic "next departures" behavior. Refreshed
+    /// from `savedJourneysProvider` (if set) on each board refresh, so add/delete in
+    /// Viaggi is reflected on Home's next refresh/load.
+    private var savedJourneys: [SavedJourney]
+
+    /// Re-reads the persisted saved journeys on refresh. Nil → keep the initial
+    /// snapshot (used by tests/previews that inject a fixed list).
+    private let savedJourneysProvider: (() -> [SavedJourney])?
 
     /// Current-time source, injectable for deterministic tests of the scheduled
     /// demo window. Defaults to the wall clock.
@@ -61,12 +66,14 @@ final class StationBoardViewModel {
 
     init(service: TrainBoardService, station: Station = .bolognaCentrale,
          allowsStationChange: Bool = true, now: @escaping () -> Date = { Date() },
-         savedJourneys: [SavedJourney] = []) {
+         savedJourneys: [SavedJourney] = [],
+         savedJourneysProvider: (() -> [SavedJourney])? = nil) {
         self.service = service
         self.station = station
         self.allowsStationChange = allowsStationChange
         self.now = now
         self.savedJourneys = savedJourneys
+        self.savedJourneysProvider = savedJourneysProvider
     }
 
     // MARK: - Derived data
@@ -161,6 +168,9 @@ final class StationBoardViewModel {
             #endif
             return
         }
+        // Re-read persisted saved journeys so Home reflects Viaggi add/delete on the
+        // next refresh/load (no-op when no provider was injected).
+        if let savedJourneysProvider { savedJourneys = savedJourneysProvider() }
         isRefreshing = true
         isLoading = rows.isEmpty
         defer {

@@ -11,6 +11,8 @@ import SwiftUI
 
 struct SavedJourneyCardView: View {
     let journey: SavedJourney
+    /// When provided, shows a small remove (trash) affordance + a VoiceOver action.
+    var onRemove: (() -> Void)? = nil
 
     private var data: JourneyDisplayData { .make(journey) }
 
@@ -33,9 +35,21 @@ struct SavedJourneyCardView: View {
                         .minimumScaleFactor(0.6)
                 }
                 Spacer(minLength: 6)
-                Image(systemName: journey.isFavorite ? "star.fill" : "star")
-                    .font(.system(size: 14))
-                    .foregroundStyle(journey.isFavorite ? BoardColors.amberBright : BoardColors.amberDim)
+                HStack(spacing: 10) {
+                    Image(systemName: journey.isFavorite ? "star.fill" : "star")
+                        .font(.system(size: 14))
+                        .foregroundStyle(journey.isFavorite ? BoardColors.amberBright : BoardColors.amberDim)
+                    if let onRemove {
+                        Button(action: onRemove) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(BoardColors.amberDim)
+                                .frame(width: 30, height: 30)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
 
             Rectangle().fill(BoardColors.gridLine).frame(height: 1)
@@ -79,6 +93,13 @@ struct SavedJourneyCardView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(data.accessibilityLabel))
         .accessibilityAddTraits(.isButton)
+        .accessibilityActions {
+            // The visible trash button is hidden by `children: .ignore`; expose an
+            // equivalent VoiceOver action when the card is removable.
+            if let onRemove {
+                Button("action.removeSavedJourney", action: onRemove)
+            }
+        }
     }
 
     private var directionIcon: some View {

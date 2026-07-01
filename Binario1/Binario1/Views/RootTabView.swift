@@ -21,7 +21,8 @@ struct RootTabView: View {
         service: AppEnvironment.makeTrainBoardService(),
         station: AppEnvironment.initialStation,
         allowsStationChange: AppEnvironment.allowsStationChange,
-        savedJourneys: HomeSavedJourneys.current()   // mock-backed for now (see HomeSavedJourneys)
+        savedJourneys: HomeSavedJourneys.current(),            // initial snapshot (persisted)
+        savedJourneysProvider: { HomeSavedJourneys.current() } // re-read on refresh → reflects Viaggi deletes
     )
     @State private var tripsViewModel = TripsViewModel(service: MockTripsService())
 

@@ -43,8 +43,16 @@ final class TripsViewModel {
     var showsSuggestedSection: Bool {
         selectedFilter == .today && suggestedJourney != nil
     }
+    /// The saved section is relevant on Oggi/Salvati regardless of count.
+    private var savedSectionRelevant: Bool {
+        selectedFilter == .today || selectedFilter == .saved
+    }
     var showsSavedSection: Bool {
-        (selectedFilter == .today || selectedFilter == .saved) && !savedJourneys.isEmpty
+        savedSectionRelevant && !savedJourneys.isEmpty
+    }
+    /// Show a small empty state when the saved section is relevant but has no journeys.
+    var showsSavedEmptyState: Bool {
+        savedSectionRelevant && savedJourneys.isEmpty
     }
     var showsRecentSection: Bool {
         (selectedFilter == .today || selectedFilter == .recent) && !recentJourneys.isEmpty
@@ -72,5 +80,12 @@ final class TripsViewModel {
 
     func selectFilter(_ filter: TripsFilter) {
         selectedFilter = filter
+    }
+
+    /// Delete a saved journey from the persistent store and refresh the visible list.
+    /// Home reflects the change on its next refresh/load (it re-reads the same store).
+    func deleteSavedJourney(id: String) {
+        savedStore.delete(id: id)
+        savedJourneys = savedStore.load()
     }
 }

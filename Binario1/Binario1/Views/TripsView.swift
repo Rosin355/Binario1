@@ -50,8 +50,17 @@ struct TripsView: View {
             if viewModel.showsSavedSection {
                 section("trips.section.saved", icon: "bookmark.fill") {
                     VStack(spacing: 10) {
-                        ForEach(viewModel.savedJourneys) { SavedJourneyCardView(journey: $0) }
+                        ForEach(viewModel.savedJourneys) { journey in
+                            SavedJourneyCardView(
+                                journey: journey,
+                                onRemove: { viewModel.deleteSavedJourney(id: journey.id) }
+                            )
+                        }
                     }
+                }
+            } else if viewModel.showsSavedEmptyState {
+                section("trips.section.saved", icon: "bookmark.fill") {
+                    savedEmptyState
                 }
             }
 
@@ -71,6 +80,30 @@ struct TripsView: View {
             TripsQuickActionsView()
                 .padding(.top, 2)
         }
+    }
+
+    private var savedEmptyState: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bookmark")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(BoardColors.amberDim)
+            Text("trips.saved.empty")
+                .font(BoardFont.text(13))
+                .foregroundStyle(BoardColors.amberDim)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(BoardColors.panel)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(BoardColors.borderDim, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var recentPanel: some View {

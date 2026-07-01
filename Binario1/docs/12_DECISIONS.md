@@ -105,6 +105,10 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   dipende più da un viaggio demo hardcoded — funziona con i viaggi salvati reali.
 - **Persistenza locale semplice (UserDefaults/JSON)** scelta di proposito: leggera,
   nessuna dipendenza; si potrà evolvere (file store / sync) se servirà.
+- **Gestione salvati in Viaggi = delete conservativo**: card custom → affordance
+  cestino + azione VoiceOver (niente swipe-to-delete List), empty state minimale.
+  La Home rilegge lo store al prossimo refresh (provider) → le cancellazioni si
+  propagano senza toccare la logica di matching.
 
 ## Home — featured personalizzata
 
