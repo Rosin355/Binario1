@@ -279,6 +279,14 @@ local `.xcconfig` for installed-device validation.
 stays `.mock`. The app token is **lightweight abuse reduction, not real mobile
 security** (a token shipped in an app can be extracted).
 
+**Validated on a real iPhone (2026-06-23):** with the local `.xcconfig` token, the
+installed app opened from the Home screen (not launched by Xcode) shows header
+**`Backend · RFI online`** (not "Backend fixture") and logs
+`[BackendLive] OK · rows=40 · source=rfiLive · fallback=false · stale=false` — no
+fixture fallback, no stale cache, no `[RFILive]` logs. Confirms the earlier root cause
+(Xcode Run env vars don't survive Home-screen launches) and the build-time fix. Token
+file stays gitignored; Release stays `.mock`.
+
 ## Station registry plan
 
 Stations must be **centrally mapped** — the RFI **live** `placeId` and the PRM

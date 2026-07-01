@@ -2,6 +2,24 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-06-23 — Validate installed DEBUG backend token configuration
+
+Stato: **validato su iPhone reale.** Il token DEBUG build-time funziona anche aprendo
+l'app installata dall'icona (non solo da Xcode).
+
+### Evidenza (iPhone reale)
+- Header mostra **`Backend · RFI online`** (NON `Backend fixture · RFI online`).
+- Console: `[BackendLive] OK · rows=40 · source=rfiLive · fallback=false · stale=false`.
+- Nessun fallback alla fixture; nessun dato stale-cache; righe backend live nel board;
+  nessun log `[RFILive]` in modalità backend.
+
+### Conferma fix
+- **Causa**: le env var dello schema Xcode non sopravvivono al lancio dell'app
+  installata dall'icona → nessun `X-Binario-App-Token` → 401 → fixture.
+- **Fix**: token DEBUG iniettato a build-time via `.xcconfig` locale (gitignored) →
+  chiave Info.plist custom, letto con precedenza build-time → env var → vuoto. Il file
+  token resta gitignored; nessun secret committato. Release resta `.mock`.
+
 ## 2026-06-23 — Fix installed DEBUG app token configuration
 
 Stato: completata. Niente token committato; Release invariato (`.mock`).

@@ -127,6 +127,10 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   non aprendo l'icona. Quindi il token è iniettato nel binario DEBUG via `.xcconfig` →
   chiave Info.plist custom; precedenza build-time → env var → vuoto.
 - **Release non riceve token** (nessun baseConfigurationReference) e resta `.mock`.
+- **Validato su iPhone reale (2026-06-23)**: app installata aperta da icona →
+  `Backend · RFI online` + `[BackendLive] OK · rows=40 · …fallback=false · stale=false`,
+  nessuna fixture. Conferma che le env var Xcode non bastano per l'app installata e
+  che il token build-time (gitignored) è la soluzione. Nessun secret committato.
 
 ## Station registry & board type (arrivi/partenze)
 
