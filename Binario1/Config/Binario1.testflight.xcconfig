@@ -1,0 +1,24 @@
+// TestFlight archive configuration for the Binario1 app target.
+//
+// This is a Release-family build used ONLY for TestFlight beta archives. It does two
+// things a plain Release build must NOT do:
+//   1. Bakes the LOCAL (gitignored) app token into the archived binary via a custom
+//      Info.plist key, so the installed beta can call the protected backend even when
+//      launched from the Home screen (Xcode Run scheme env vars are absent then).
+//   2. Defines the TESTFLIGHT compilation flag so `AppEnvironment.sourceMode`
+//      resolves to `.backendLivePadova` (live Padova board) instead of `.mock`.
+//
+// Plain Release (App Store) does NOT include this file: no token, TESTFLIGHT undefined,
+// source stays `.mock`. The app token is lightweight abuse-reduction, NOT a real
+// secret — never commit a real value (it lives only in Binario1Secrets.local.xcconfig).
+
+// Optional: provides BINARIO_BOARD_APP_TOKEN. Gitignored; absent on fresh clones
+// (then the token is empty → backend returns 401 → visible fixture fallback).
+#include? "Binario1Secrets.local.xcconfig"
+
+// Expose the token to the app via a custom Info.plist key (same partial plist used by
+// the Debug config; Xcode merges the generated CFBundle* keys on top of it).
+INFOPLIST_FILE = Config/Binario1-Info.plist
+
+// Enable the TestFlight-only source branch in AppEnvironment.sourceMode.
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) TESTFLIGHT

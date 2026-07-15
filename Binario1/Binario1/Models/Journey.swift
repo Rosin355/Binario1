@@ -88,20 +88,6 @@ struct SuggestedJourney: Identifiable, Equatable {
     let status: JourneyStatus
 }
 
-extension SuggestedJourney {
-    /// Present a saved journey ("Dalle tue abitudini") in the large "useful trip" card
-    /// style. Arrival is derived from the local duration; train is unknown → "--".
-    init(habit j: SavedJourney) {
-        self.init(
-            id: "habit-\(j.id)", origin: j.origin, destination: j.destination,
-            departure: j.departure,
-            arrival: j.departure.addingTimeInterval(Double(j.durationMinutes) * 60),
-            category: "", trainNumber: "", platform: j.platform,
-            durationMinutes: j.durationMinutes, status: j.status
-        )
-    }
-}
-
 struct RecentJourney: Identifiable, Equatable {
     let id: String
     let origin: String

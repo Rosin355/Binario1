@@ -25,13 +25,24 @@ final class TripsViewModel {
     /// When the dashboard was last (mock-)refreshed — shown as "Aggiornato HH:mm".
     private(set) var lastUpdated: Date?
 
+    /// Next REAL train per saved journey (keyed by id), resolved against the live/mock
+    /// board via `resolver`. Missing/`.unavailable` → the card shows an honest state,
+    /// never a placeholder. Empty until `load()` resolves (or when no resolver is set).
+    private(set) var nextTrainResolutions: [String: NextTrainResolution] = [:]
+
     private let service: TripsService
     /// Persistent saved journeys — the single source of truth shared with Home.
     private let savedStore: SavedJourneyStoring
+    /// Resolves the next real train for saved routes against the board. Nil (tests /
+    /// previews without a board) → every route falls into the honest state.
+    private let resolver: NextTrainResolving?
 
-    init(service: TripsService, savedStore: SavedJourneyStoring = UserDefaultsSavedJourneyStore()) {
+    init(service: TripsService,
+         savedStore: SavedJourneyStoring = UserDefaultsSavedJourneyStore(),
+         resolver: NextTrainResolving? = nil) {
         self.service = service
         self.savedStore = savedStore
+        self.resolver = resolver
     }
 
     var hasData: Bool {
@@ -54,9 +65,10 @@ final class TripsViewModel {
     var showsSavedEmptyState: Bool {
         savedSectionRelevant && savedJourneys.isEmpty
     }
-    var showsRecentSection: Bool {
-        (selectedFilter == .today || selectedFilter == .recent) && !recentJourneys.isEmpty
-    }
+    /// B4: Recents are HIDDEN until there is REAL journey history. The mock recents
+    /// are kept in the model (for when a real history source lands) but are never
+    /// shown, so the dashboard can't present demo data as if it were a real history.
+    var showsRecentSection: Bool { false }
 
     // MARK: - Actions
 
@@ -66,7 +78,7 @@ final class TripsViewModel {
         do {
             let data = try await service.loadTrips()
             // Saved journeys come from the persistent store (seeded once on first
-            // launch); suggested/recent remain mock-derived for now.
+            // launch); suggested/recent remain mock-derived (recents are not shown).
             savedStore.seedIfNeeded(SavedJourneySeed.initial())
             savedJourneys = savedStore.load()
             suggestedJourney = data.suggested
@@ -76,6 +88,9 @@ final class TripsViewModel {
         } catch {
             errorMessageKey = "error.dataUnavailable"
         }
+        // Resolve each saved route's next REAL train against the board. Kept separate
+        // from the mock load so a resolver failure never blocks the dashboard.
+        await resolveNextTrains()
     }
 
     func selectFilter(_ filter: TripsFilter) {
@@ -87,26 +102,41 @@ final class TripsViewModel {
     func deleteSavedJourney(id: String) {
         savedStore.delete(id: id)
         savedJourneys = savedStore.load()
+        // Drop the stale resolution; the remaining routes' next trains are unchanged
+        // (same board), so the habit centerpiece recomputes without a refetch.
+        nextTrainResolutions[id] = nil
     }
 
-    // MARK: - "Dalle tue abitudini" — next likely saved journey
+    // MARK: - Next real train (resolved from the board)
 
-    /// The user's next likely trip = the saved journey whose scheduled time-of-day is
-    /// soonest upcoming from `now` (wrapping past midnight). Nil when nothing is saved.
-    /// Uses only the local saved-journey timing — no prediction/AI.
-    func nextHabitJourney(now: Date = Date()) -> SavedJourney? {
-        guard !savedJourneys.isEmpty else { return nil }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = BoardFormatters.romeTimeZone
-        func minutesOfDay(_ date: Date) -> Int {
-            let c = cal.dateComponents([.hour, .minute], from: date)
-            return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    /// Resolves the next real train for every saved route. No-op (all unavailable)
+    /// when no resolver is injected.
+    private func resolveNextTrains() async {
+        guard let resolver else {
+            nextTrainResolutions = [:]
+            return
         }
-        let nowMin = minutesOfDay(now)
-        func minutesUntil(_ j: SavedJourney) -> Int {
-            let diff = minutesOfDay(j.departure) - nowMin
-            return diff >= 0 ? diff : diff + 24 * 60
+        nextTrainResolutions = await resolver.resolve(savedJourneys)
+    }
+
+    /// The resolved next real train for a saved route, or nil when it can't be
+    /// resolved (→ the card shows an honest "not available" state, never a placeholder).
+    func nextTrain(for journeyID: String) -> NextTrainDisplay? {
+        guard case .resolved(let train)? = nextTrainResolutions[journeyID] else { return nil }
+        return NextTrainDisplay.make(train)
+    }
+
+    // MARK: - "Dalle tue abitudini" — the soonest REAL next train
+
+    /// The soonest resolved real train across the saved routes — the centerpiece card.
+    /// Nil when nothing resolves (the section is then hidden; per-route honest states
+    /// still show in the saved list). Real board data only — no save-time placeholder.
+    var habitNextTrain: NextTrainDisplay? {
+        let resolved = nextTrainResolutions.values.compactMap { resolution -> ResolvedNextTrain? in
+            if case .resolved(let train) = resolution { return train }
+            return nil
         }
-        return savedJourneys.min { minutesUntil($0) < minutesUntil($1) }
+        guard let soonest = resolved.min(by: { $0.scheduledTime < $1.scheduledTime }) else { return nil }
+        return NextTrainDisplay.make(soonest)
     }
 }

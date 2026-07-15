@@ -24,7 +24,16 @@ struct RootTabView: View {
         savedJourneys: HomeSavedJourneys.current(),            // initial snapshot (persisted)
         savedJourneysProvider: { HomeSavedJourneys.current() } // re-read on refresh → reflects Viaggi deletes
     )
-    @State private var tripsViewModel = TripsViewModel(service: MockTripsService())
+    @State private var tripsViewModel = TripsViewModel(
+        service: MockTripsService(),
+        // Resolve saved routes' next REAL train against the same board the Home uses.
+        // The served station is derived from the environment (Padova in DEBUG/
+        // TESTFLIGHT, mock otherwise) — never hardcoded in the resolver.
+        resolver: NextTrainResolver(
+            service: AppEnvironment.makeTrainBoardService(),
+            boardStation: AppEnvironment.initialStation
+        )
+    )
 
     @State private var selectedTab: AppTab = .departures
     /// Bumped each time the Partenze tab is (re)selected → replays its intro animation.

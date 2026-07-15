@@ -2,6 +2,141 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-15 — Ticket B4: prossimo treno REALE nelle tratte salvate (Viaggi)
+
+Stato: completata (logica + UI + test). Nessun dato inventato: dato reale o stato
+onesto. A1/A3 e i guardrail Release NON toccati.
+
+### Problema risolto
+- Le tratte salvate mostravano segnaposto: `departure` = ora del salvataggio,
+  `platform` = nil, `durationMinutes` = 0, `status` = onTime hardcoded → "PROSSIMA
+  PARTENZA 16:10" (spesso nel passato), "BINARIO ----", "DURATA 0 min". "Dalle tue
+  abitudini" duplicava la stessa tratta col glitch minuti sul LED grande.
+
+### Cosa
+- **Helper condiviso** `Services/SavedJourneyMatcher.swift` (puro): estratto il
+  predicate da `StationBoardViewModel.personalizedFeaturedRows` (origine = stazione
+  servita, destinazione via `StationNameMatcher`). Home e Viaggi ora usano LO STESSO
+  helper → non possono divergere. Home invariata (test spotlight verdi).
+- **Resolver** `Services/NextTrainResolver.swift`: dato l'insieme dei viaggi salvati,
+  fetcha UNA volta il board della stazione servita via `TrainBoardService.fetchBoard`
+  (stazione **derivata** da `AppEnvironment.initialStation`, MAI hardcoded), e per ogni
+  tratta la cui origine è servita prende la **prima riga futura** (`scheduledTime >=
+  now`) che matcha la destinazione. Campi reali (orario/ritardo/binario/numero/stato).
+- **Modelli**: `ResolvedNextTrain` (campi reali; niente durata/arrivo, che il board non
+  fornisce), `NextTrainResolution { .resolved | .unavailable }`, display
+  `Models/NextTrainDisplay.swift` (solo campi reali).
+- **Stato onesto**: origine non servita (oggi solo Padova) o nessuna riga futura →
+  `.unavailable` → card mostra "Prossimo treno non disponibile", MAI 0 min/----/save-time.
+- **"Dalle tue abitudini"** ora è il **prossimo treno reale più imminente** tra le
+  tratte risolte (LED grande con destinazione + numero + binario + ritardo reali); se
+  nessuna risolve, la sezione è nascosta. Niente glitch minuti (valore completo o niente).
+- **RECENTI nascosti** (`showsRecentSection == false`): scelta **meno ingannevole** —
+  i recenti mock non devono sembrare cronologia reale finché non c'è storia vera. Il
+  mock resta nel modello per un futuro riaggancio.
+- **Colonna card salvata**: "Durata" (che sarebbe stata finta) → **"Treno"** (numero
+  reale). Wiring: `TripsViewModel` inietta un `NextTrainResolving`; `RootTabView` passa
+  `NextTrainResolver(service: AppEnvironment.makeTrainBoardService(), boardStation:
+  AppEnvironment.initialStation)`. suggested/recent restano fuori dal dato reale.
+- Loc IT/EN: `journey.nextTrain.unavailable`, `accessibility.journey.nextTrain`,
+  `accessibility.journey.nextTrainUnavailable`.
+
+### Checkpoint (verificato sul board LIVE Padova, non assunto)
+- **Padova → Roma Termini** risolve a un AV reale: board live mostra AV 9435 → Roma
+  Termini @ 18:56 **+5'** e AV 9437 @ 19:56 → orario/ritardo/numero reali. **Binario**:
+  al momento il board live restituisce **0/40 righe con binario** (RFI non lo pubblica
+  ancora per queste corse) → card mostra "--" ONESTO, mai inventato; comparirà quando
+  RFI assegna il binario. Match richiede il nome pieno ("Roma Termini"): un bare "Roma"
+  (1 token) NON matcha per la regola ≥2-token dello `StationNameMatcher` (condiviso).
+- **Montegrotto → Padova**: origine non servita dal board Padova → stato onesto
+  ("Prossimo treno non disponibile"), NON 0 min/----. (Test `…UnavailableWhenOriginNotServed`.)
+
+### Test
+- Nuovi (deterministici, clock Europe/Rome, `FixedBoardService`, nessuna rete):
+  resolver risolve prima riga futura con campi reali; unavailable senza riga futura;
+  unavailable se origine non servita; display usa l'orario del board non il save-time;
+  habit = più imminente risolto; helper condiviso dà stessi risultati per Home e Viaggi.
+  Aggiornati `tripsViewModelLoadsAndFilters` (recenti nascosti) e sostituito il vecchio
+  test `nextHabitJourney`.
+- **Suite: 106 test, 99 pass / 7 fail.** I 7 sono i **pre-esistenti** (StubURLProtocol +
+  rfiMapper) NON legati a B4: il mio diff non tocca quei file. Zero regressioni nuove;
+  Home spotlight verde.
+
+### Build
+- build-for-testing Debug OK; Release OK (guardrail `.mock` intatto: in Release il
+  resolver gira contro il board mock Bologna → tratte Padova non servite → stato onesto).
+
+### Risks / next
+- Con board live senza binari, la card mostra "--" (onesto). Se si vuole il binario
+  bisogna che la sorgente lo pubblichi (nulla da fare lato app).
+- Multi-stazione (origine ≠ Padova che risolve davvero) è B1/B3: oggi correttamente
+  stato onesto. Recenti reali = lavoro futuro (fonte cronologia).
+- I 7 test rossi pre-esistenti restano da sistemare in un task dedicato (fuori B4).
+
+## 2026-07-15 — TestFlight live Padova build (A1 Info reachable + A3 TESTFLIGHT source)
+
+Stato: completata (codice + config Xcode + validazione live server-side). Build
+commuter TestFlight per un tester Padova→Roma. Release App Store resta `.mock`.
+
+### A1 — InfoView / disclaimer di affidabilità di nuovo raggiungibile
+- Dopo il passaggio al tab **Cerca**, `InfoView` era orfana: il disclaimer
+  `disclaimer.officialDisplays` non era raggiungibile da nessuna navigazione.
+- **Fix**: pulsante info (ⓘ) nell'header Home (`StationBoardHeaderView`, accanto alla
+  stella, gated su `onShowInfo` → non compare dove non passato, preview invariati) che
+  presenta `InfoView` come **sheet**; `InfoView` ora ha un pulsante **Chiudi** (X) via
+  `@Environment(\.dismiss)`. Nessun nuovo tab (resta Partenze/Viaggi/Cerca).
+- Loc IT/EN in sync: `accessibility.info`, `action.close`.
+
+### A3 — Sorgente `.backendLivePadova` nella config ARCHIVIO TestFlight
+- **Nuova build configuration "TestFlight"** (famiglia Release) su progetto + 3 target;
+  scheme `ArchiveAction` → `TestFlight` (Run/Test restano Debug). L'App Store si
+  archivia solo cambiando a Release → `.mock` (guardrail intatto).
+- **`AppEnvironment.sourceMode`**: nuovo ramo `#elseif TESTFLIGHT → .backendLivePadova`;
+  `#else` (plain Release) resta `.mock`. Guard estesi a `#if DEBUG || TESTFLIGHT` per
+  `.backendLivePadova` + factory `makeBackendLiveService`/`makeBackendFixtureService` e
+  per `BackendEndpointConfig.debug`/token. `.rfiLivePadova`/`.backendFixturePadova`
+  restano DEBUG-only.
+- **Token baked-in**: nuovo `Config/Binario1.testflight.xcconfig` (committato, NESSUN
+  secret) — `#include?` del gitignored `Binario1Secrets.local.xcconfig`, `INFOPLIST_FILE
+  = Config/Binario1-Info.plist`, `SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited)
+  TESTFLIGHT`. Il token finisce nel binario via chiave Info.plist custom.
+
+### Validazione (checkpoint: l'archivio TestFlight riceve dati LIVE, non fixture?)
+- **Build**: Debug OK, Release OK, **TestFlight OK** (ramo live compila).
+- **Token bakato**: Info.plist del prodotto **TestFlight** ha `BINARIO_BOARD_APP_TOKEN`
+  len 64 hex, nessuna sostituzione irrisolta. **Release**: chiave **ASSENTE** (→ `.mock`).
+- **Backend live (curl con token bakato, come farebbe l'app archiviata)**: **HTTP 200**,
+  `source.kind=rfiLive`, **`isFallback=false`**, `isStale=false`, **40 righe** reali.
+  Senza token → **HTTP 401** (path fixture). ⇒ Log runtime atteso su device:
+  `[BackendLive] OK · rows=40 · source=rfiLive · fallback=false · stale=false`.
+- Se il backend fosse giù o il token non fosse bakato (es. su clone senza il file
+  `.local.xcconfig`) → 401 → **fallback visibile alla fixture**, mai dati inventati.
+
+### Test
+- Aggiornato guardrail `sourceModeMatchesBuildConfiguration` (era **già disallineato**:
+  atteso `.scheduledPadova` in DEBUG mentre il codice è `.backendLivePadova`) + ramo
+  `#elseif TESTFLIGHT`. Nuovo `infoAndCloseLabelsAreLocalized`. **Entrambi passano.**
+- Esecuzione suite (prima volta effettiva in questo ambiente, CoreSimulator ha girato):
+  **101 test, 94 pass / 7 fail**. I 7 sono **pre-esistenti e indipendenti** dalle
+  modifiche A1/A3: 6 usano `StubURLProtocol` (il fetcher `URLSession` non viene
+  intercettato in questo toolchain iOS 26) + `rfiMapperBuildsValidRows` (drift
+  `.onTime`/`.departing`). Nessuno dei file coinvolti è nel diff.
+
+### Sicurezza
+- Nessun secret committato: il token vive solo in `Binario1Secrets.local.xcconfig`
+  (gitignored) e nello scheme (in `xcshareddata/` gitignorato apposta). Il nuovo
+  `Binario1.testflight.xcconfig` non contiene valori, solo `#include?`.
+
+### Rischi / next step
+- I 7 test rossi pre-esistenti (stub di rete + RFI mapper) andrebbero sistemati in un
+  task dedicato (test-infra `StubURLProtocol` su iOS 26) — fuori scope A1/A3.
+- Lo scheme (con `ArchiveAction=TestFlight`) è gitignored → il setting vive **solo su
+  questa macchina**. Va bene per l'archivio locale del singolo tester; da rifare se si
+  archivia altrove.
+- Next: l'utente esegue **Archive** (config TestFlight) su device, verifica header
+  `Backend · RFI online` + il log `[BackendLive] OK … fallback=false`, e trova l'AV/FR
+  Padova→Roma con binario nel tabellone completo.
+
 ## 2026-07-01 — Wire Search modes and simplify Trips
 
 Stato: completata (UI + VM). Niente backend/Supabase; Release resta `.mock`.

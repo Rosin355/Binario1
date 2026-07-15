@@ -10,7 +10,8 @@ import SwiftUI
 /// Composition root. Selects the board data source.
 enum AppEnvironment {
     /// Active board data source, resolved per build configuration:
-    /// **DEBUG → `.backendLivePadova` (backend-adapter Phase 2B), RELEASE → `.mock`**.
+    /// **DEBUG → `.backendLivePadova`, TESTFLIGHT → `.backendLivePadova`,
+    /// RELEASE → `.mock`**.
     ///
     /// To switch DEBUG source, flip the value below:
     ///   • `.backendLivePadova`    — deployed Supabase backend adapter (falls back to
@@ -18,10 +19,16 @@ enum AppEnvironment {
     ///   • `.backendFixturePadova` — normalized backend JSON fixture (Phase 1 path)
     ///   • `.rfiLivePadova`        — DEBUG-only direct RFI live monitor (dev fallback)
     ///   • `.scheduledPadova`      — PRM Quadro Orario programmed-timetable demo
-    ///   • `.mock`                 — bundled mock (also the RELEASE default)
-    /// All of these except `.mock` are **DEBUG-only**; RELEASE always uses `.mock`,
-    /// so no spike/fixture/backend mode can become the production default.
+    ///   • `.mock`                 — bundled mock (also the plain-RELEASE default)
+    ///
+    /// `TESTFLIGHT` is set ONLY by the dedicated TestFlight archive build
+    /// configuration (a Release-family config that also bakes in the backend app
+    /// token). A plain RELEASE build has neither `DEBUG` nor `TESTFLIGHT` defined and
+    /// therefore always resolves to `.mock` — no spike/fixture/backend mode can ever
+    /// become the production (App Store) default.
     #if DEBUG
+    static let sourceMode: BoardSourceMode = .backendLivePadova
+    #elseif TESTFLIGHT
     static let sourceMode: BoardSourceMode = .backendLivePadova
     #else
     static let sourceMode: BoardSourceMode = .mock
@@ -46,16 +53,18 @@ enum AppEnvironment {
             return MockTrainBoardService()   // backend fixture never ships as a release default
             #endif
         case .backendLivePadova:
-            #if DEBUG
+            #if DEBUG || TESTFLIGHT
             return makeBackendLiveService()
             #else
-            return MockTrainBoardService()   // backend live never ships as a release default
+            return MockTrainBoardService()   // backend live never ships as a plain-release default
             #endif
         }
     }
 
-    #if DEBUG
-    /// Local normalized-fixture backend service (no network).
+    #if DEBUG || TESTFLIGHT
+    /// Local normalized-fixture backend service (no network). Also the fallback used
+    /// by `makeBackendLiveService` when the endpoint is unreachable, so it must be
+    /// available under TESTFLIGHT too (not only DEBUG).
     private static func makeBackendFixtureService() -> TrainBoardService {
         BackendBoardService(fetcher: FixtureBackendBoardFetcher(),
                             fallback: MockTrainBoardService(),

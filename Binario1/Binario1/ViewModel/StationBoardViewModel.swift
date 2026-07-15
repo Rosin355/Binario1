@@ -100,11 +100,11 @@ final class StationBoardViewModel {
     /// the user still wants to see "my train", problems included.
     var personalizedFeaturedRows: [TrainBoardRow] {
         guard boardType == .departures, !savedJourneys.isEmpty, !isScheduledSampleOutOfWindow else { return [] }
-        let fromHere = savedJourneys.filter { StationNameMatcher.matches(station.displayName, $0.origin) }
+        // Same predicate the Viaggi next-train resolver uses (shared helper) so the
+        // two features can never diverge.
+        let fromHere = SavedJourneyMatcher.journeysDeparting(from: station.displayName, in: savedJourneys)
         guard !fromHere.isEmpty else { return [] }
-        let matched = sortedRows.filter { row in
-            fromHere.contains { StationNameMatcher.matches(row.destination, $0.destination) }
-        }
+        let matched = SavedJourneyMatcher.rows(sortedRows, matchingDestinationsOf: fromHere)
         return Array(matched.prefix(3))
     }
 

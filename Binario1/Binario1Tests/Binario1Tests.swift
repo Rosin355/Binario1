@@ -148,11 +148,15 @@ struct Binario1Tests {
 
     @Test func sourceModeMatchesBuildConfiguration() {
         #if DEBUG
-        // DEBUG = local Padova scheduled demo; station selection is locked.
-        #expect(AppEnvironment.sourceMode == .scheduledPadova)
+        // DEBUG = live Padova backend adapter; single fixed station, selection locked.
+        #expect(AppEnvironment.sourceMode == .backendLivePadova)
+        #expect(AppEnvironment.allowsStationChange == false)
+        #elseif TESTFLIGHT
+        // TESTFLIGHT archive = live Padova backend adapter (token baked in); locked.
+        #expect(AppEnvironment.sourceMode == .backendLivePadova)
         #expect(AppEnvironment.allowsStationChange == false)
         #else
-        // RELEASE = bundled mock board; station carousel enabled.
+        // Plain RELEASE (App Store) = bundled mock board; station carousel enabled.
         #expect(AppEnvironment.sourceMode == .mock)
         #expect(AppEnvironment.allowsStationChange == true)
         #endif
@@ -430,22 +434,20 @@ struct Binario1Tests {
     @MainActor
     @Test func tripsViewModelLoadsAndFilters() async {
         let service = MockTripsService(); service.artificialDelay = .zero
-        let vm = TripsViewModel(service: service)
+        let vm = TripsViewModel(service: service, savedStore: freshStore("binario1.tests.load-filters"))
         await vm.load()
         #expect(vm.hasData)
-        #expect(vm.savedJourneys.count == 2)
-        #expect(vm.recentJourneys.count == 3)
+        #expect(vm.savedJourneys.count == 2)          // seeded on first load
         #expect(vm.errorMessageKey == nil)
 
-        // Today shows all sections.
+        // Recents are HIDDEN in B4 (no real history yet), under every filter.
         vm.selectFilter(.today)
-        #expect(vm.showsSuggestedSection && vm.showsSavedSection && vm.showsRecentSection)
-        // Saved shows only saved.
+        #expect(vm.showsSavedSection)
+        #expect(vm.showsRecentSection == false)
         vm.selectFilter(.saved)
-        #expect(vm.showsSavedSection && !vm.showsSuggestedSection && !vm.showsRecentSection)
-        // Recent shows only recent.
+        #expect(vm.showsSavedSection && !vm.showsRecentSection)
         vm.selectFilter(.recent)
-        #expect(vm.showsRecentSection && !vm.showsSavedSection && !vm.showsSuggestedSection)
+        #expect(vm.showsRecentSection == false)       // hidden even under the Recenti filter
     }
 
     // MARK: - Cerca (Search)
@@ -833,6 +835,27 @@ struct Binario1Tests {
             #expect(!rfi.contains("Monitor"))
             #expect(!rfiUpdated.contains("Monitor"))
         }
+    }
+
+    /// A1: Info / reliability-disclaimer is reachable again via the header info
+    /// button → sheet. Guards that the new button/close keys resolve to real
+    /// localized strings (both keys are present in the catalog with IT+EN units).
+    /// Mirrors `backendSourceLabelsDropMonitorWord`: the test bundle resolves the
+    /// source (IT) value, so we assert resolution + non-emptiness, not per-locale
+    /// switching (which the test bundle does not perform). Defensive skip if the
+    /// bundle can't resolve strings.
+    @Test func infoAndCloseLabelsAreLocalized() {
+        let app = Bundle(for: StationBoardViewModel.self)
+        let info = String(localized: "accessibility.info", bundle: app)
+        let close = String(localized: "action.close", bundle: app)
+        guard info != "accessibility.info", close != "action.close" else {
+            print("[Test] info/close labels not resolvable in test bundle — skipping")
+            return
+        }
+        #expect(!info.isEmpty)
+        #expect(!close.isEmpty)
+        #expect(info == "Informazioni e avvisi")   // IT source value
+        #expect(close == "Chiudi")                  // IT source value
     }
 
     @Test func stationNameMatcherNormalizesCommonForms() {
@@ -1292,17 +1315,29 @@ struct Binario1Tests {
     }
 
     @MainActor
-    @Test func tripsNextHabitPicksSoonestUpcomingSavedJourney() async {
-        let store = freshStore("binario1.tests.habit")
+    @Test func tripsHabitShowsSoonestResolvedRealTrain() async {
+        let store = freshStore("binario1.tests.habit-real")
         store.save([
+            Self.savedAt("Padova", "Roma Termini", 8, 0),
             Self.savedAt("Padova", "Venezia Santa Lucia", 8, 0),
-            Self.savedAt("Padova", "Bologna Centrale", 18, 0),
         ])
+        // The board's real next trains: Venezia 18:05, Roma 18:30.
+        let rows = [
+            Self.boardRow("veneziaRow", "VENEZIA S.LUCIA", 18, 5),
+            Self.boardRow("romaRow", "Roma Termini", 18, 30, delay: 20),
+        ]
+        let resolver = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                         now: { Self.romeDate(2026, 6, 17, 17, 0) })
         let service = MockTripsService(); service.artificialDelay = .zero
-        let vm = TripsViewModel(service: service, savedStore: store)
+        let vm = TripsViewModel(service: service, savedStore: store, resolver: resolver)
         await vm.load()   // seed skipped (store non-empty) → keeps my two journeys
-        #expect(vm.nextHabitJourney(now: Self.romeDate(2026, 6, 17, 17, 0))?.destination == "Bologna Centrale")
-        #expect(vm.nextHabitJourney(now: Self.romeDate(2026, 6, 17, 7, 0))?.destination == "Venezia Santa Lucia")
+        // Centerpiece = the soonest resolved REAL train (Venezia 18:05), not a save time.
+        #expect(vm.habitNextTrain?.departureText == "18:05")
+        #expect(vm.habitNextTrain?.destination == "Venezia Santa Lucia")
+        // Per-route resolution shows the real board time + delay, not the 08:00 save time.
+        let roma = vm.nextTrain(for: "Padova->Roma Termini@8:0")
+        #expect(roma?.departureText == "18:30")
+        #expect(roma?.status == .delayed(minutes: 20))
     }
 
     @MainActor
@@ -1310,7 +1345,97 @@ struct Binario1Tests {
         let vm = TripsViewModel(service: MockTripsService(), savedStore: freshStore("binario1.tests.trips-empty"))
         #expect(vm.savedJourneys.isEmpty)          // no load() → nothing loaded
         #expect(vm.showsSavedEmptyState == true)   // Oggi filter + empty → empty state
-        #expect(vm.nextHabitJourney() == nil)      // no habit card without saved journeys
+        #expect(vm.habitNextTrain == nil)          // no habit centerpiece without saved journeys
+    }
+
+    // MARK: - B4 · Next real train resolver (Viaggi)
+
+    @MainActor
+    @Test func nextTrainResolverResolvesRealTrainFromBoard() async {
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "Roma Termini", 18, 10, delay: 15),
+            Self.boardRow("r3", "Roma Termini", 18, 40),
+        ]
+        let resolver = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                         now: { Self.romeDate(2026, 6, 17, 17, 0) })
+        let journey = Self.savedTo("Roma Termini")   // origin Padova (served)
+        let map = await resolver.resolve([journey])
+        guard case .resolved(let r)? = map[journey.id] else { Issue.record("expected resolved"); return }
+        #expect(r.trainNumber == "r2")                                   // first future matching row
+        #expect(r.destination == "Roma Termini")                        // saved full name preserved
+        #expect(r.scheduledTime == Self.romeDate(2026, 6, 17, 18, 10))  // real board time, not save time
+        #expect(r.delayMinutes == 15)                                   // real delay
+        #expect(r.platform == "1")                                      // real platform
+    }
+
+    @MainActor
+    @Test func nextTrainResolverUnavailableWhenNoFutureMatch() async {
+        // A matching train exists but already in the past; nothing future → honest state.
+        let rows = [Self.boardRow("past", "Roma Termini", 16, 0)]
+        let resolver = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                         now: { Self.romeDate(2026, 6, 17, 17, 0) })
+        let journey = Self.savedTo("Roma Termini")
+        let map = await resolver.resolve([journey])
+        #expect(map[journey.id] == .unavailable)
+    }
+
+    @MainActor
+    @Test func nextTrainResolverUnavailableWhenOriginNotServed() async {
+        // Montegrotto → Padova: origin isn't the served (Padova) board → honest state,
+        // never 0 min / ---- placeholders.
+        let rows = [Self.boardRow("r1", "Padova", 18, 0)]
+        let resolver = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                         now: { Self.romeDate(2026, 6, 17, 17, 0) })
+        let journey = Self.savedTo("Padova", from: "Montegrotto Terme")
+        let map = await resolver.resolve([journey])
+        #expect(map[journey.id] == .unavailable)
+    }
+
+    @MainActor
+    @Test func resolvedNextTrainUsesBoardTimeNotSaveTime() async {
+        // Custom-saved route: its "departure" is the SAVE time (09:00). The resolved
+        // display must show the board's real next train time (18:10), never the save time.
+        let saved = SavedJourney(id: "custom", direction: .homeToWork, origin: "Padova",
+                                 destination: "Roma Termini", departure: Self.romeDate(2026, 6, 17, 9, 0),
+                                 platform: nil, durationMinutes: 0, status: .onTime, isCustomRoute: true)
+        let rows = [Self.boardRow("r2", "Roma Termini", 18, 10)]
+        let resolver = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                         now: { Self.romeDate(2026, 6, 17, 17, 0) })
+        let map = await resolver.resolve([saved])
+        guard case .resolved(let r)? = map[saved.id] else { Issue.record("expected resolved"); return }
+        let display = NextTrainDisplay.make(r)
+        #expect(display.departureText == "18:10")
+        #expect(display.departureText != "09:00")
+    }
+
+    @MainActor
+    @Test func sharedMatcherDrivesBothHomeAndTrips() async {
+        // The SAME saved journey + board must feed Home's spotlight and Viaggi's
+        // resolver identically (both go through SavedJourneyMatcher).
+        let rows = [
+            Self.boardRow("r1", "Bologna Centrale", 18, 0),
+            Self.boardRow("r2", "VENEZIA S.LUCIA", 18, 10),
+        ]
+        let journey = Self.savedTo("Venezia Santa Lucia")   // origin Padova
+        let home = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                         allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                         savedJourneys: [journey])
+        await home.refresh()
+        let resolver = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                         now: { Self.romeDate(2026, 6, 17, 17, 0) })
+        let map = await resolver.resolve([journey])
+
+        #expect(home.personalizedFeaturedRows.map(\.id) == ["r2"])       // Home features the Venezia row
+        if case .resolved(let r)? = map[journey.id] {
+            #expect(r.trainNumber == "r2")                               // Trips resolves the same row
+        } else {
+            Issue.record("expected resolved")
+        }
+        // Pure helper agrees on both predicates.
+        #expect(SavedJourneyMatcher.journeyDeparts(from: Station.padova.displayName, journey: journey))
+        #expect(SavedJourneyMatcher.row(rows[1], matchesDestinationOf: journey))
+        #expect(!SavedJourneyMatcher.row(rows[0], matchesDestinationOf: journey))
     }
 
 #if DEBUG

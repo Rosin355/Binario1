@@ -46,9 +46,11 @@ struct BackendEndpointConfig {
         return ""
     }
 
-    #if DEBUG
-    /// DEBUG backend base URL for `.backendLivePadova` — the deployed Supabase
-    /// Edge Function `board` for the "Binario 1" project.
+    #if DEBUG || TESTFLIGHT
+    /// Backend base URL for `.backendLivePadova` — the deployed Supabase Edge
+    /// Function `board` for the "Binario 1" project. Compiled for DEBUG and for the
+    /// TESTFLIGHT archive config (both run the live backend); a plain Release build
+    /// has neither flag, so this config and the app token are absent there.
     ///
     /// The project ref is **public, not a secret** (it appears in every function
     /// URL); no anon/service_role key and no Authorization header are used (the
@@ -63,10 +65,11 @@ struct BackendEndpointConfig {
 
     /// Local app token for the protected backend (see `resolveAppToken`): a
     /// **build-time** value from the gitignored `Config/Binario1Secrets.local.xcconfig`
-    /// (baked into the DEBUG binary via the custom Info.plist key — survives a
-    /// Home-screen launch of the installed app), else the Xcode Run scheme env var
-    /// (only when launched by Xcode), else empty (→ fixture fallback). MUST match the
-    /// Supabase `BINARIO_BOARD_APP_TOKEN` secret. NEVER hardcode a real token here.
+    /// (baked into the DEBUG *and* TestFlight binary via the custom Info.plist key —
+    /// survives a Home-screen launch of the installed app), else the Xcode Run scheme
+    /// env var (only when launched by Xcode), else empty (→ fixture fallback). MUST
+    /// match the Supabase `BINARIO_BOARD_APP_TOKEN` secret. NEVER hardcode a real
+    /// token here. Without it the archived TestFlight build gets 401 → fixture.
     private static var debugAppToken: String {
         resolveAppToken(
             infoValue: Bundle.main.object(forInfoDictionaryKey: "BINARIO_BOARD_APP_TOKEN") as? String,

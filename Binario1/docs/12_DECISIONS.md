@@ -175,6 +175,45 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   nessuna fixture. Conferma che le env var Xcode non bastano per l'app installata e
   che il token build-time (gitignored) è la soluzione. Nessun secret committato.
 
+## Viaggi — prossimo treno reale (B4)
+
+- **Dato reale o stato onesto, mai segnaposto**: le tratte salvate mostrano il prossimo
+  treno REALE dal tabellone (orario/binario/ritardo/numero) risolto via
+  `NextTrainResolver` attraverso `TrainBoardService`. Se non risolvibile (origine non
+  servita dal board — oggi solo Padova — o nessuna riga futura che matcha) → "Prossimo
+  treno non disponibile". Mai orari/binari/durate finti; l'ora-di-salvataggio NON è mai
+  mostrata come partenza.
+- **Un solo predicate di matching** (`SavedJourneyMatcher`, puro) condiviso da Home
+  (spotlight) e Viaggi (resolver): estratto da `personalizedFeaturedRows` così le due
+  feature non divergono. Origine = stazione servita dal board; destinazione via
+  `StationNameMatcher` (regola ≥2-token → un bare "Roma" non matcha "Roma Termini").
+- **Stazione servita derivata, non hardcoded**: il resolver riceve
+  `AppEnvironment.initialStation` (Padova in DEBUG/TESTFLIGHT, mock altrove). Il board è
+  single-station; tratte con origine diversa ricadono nello stato onesto (previsto).
+- **Niente durata/arrivo inventati**: il board non fornisce l'arrivo, quindi la card
+  reale mostra numero treno al posto della "durata" e nessun arrivo.
+- **"Dalle tue abitudini" = prossimo treno reale più imminente** tra le tratte risolte
+  (non una scelta per ora-del-giorno). Se nulla risolve, la sezione è nascosta.
+- **Recenti nascosti finché non c'è cronologia reale**: mostrare recenti mock come se
+  fossero storia vera è ingannevole; il mock resta nel modello per un futuro riaggancio.
+
+## Sorgente TestFlight vs Release (guardrail a 3 rami)
+
+- **La live NON è mai il default di Release App Store**: `AppEnvironment.sourceMode` è
+  risolto a 3 rami — `#if DEBUG → .backendLivePadova`, `#elseif TESTFLIGHT →
+  .backendLivePadova`, `#else (plain Release) → .mock`. Il flag `TESTFLIGHT` è definito
+  SOLO da una **build configuration "TestFlight" dedicata** (famiglia Release); una
+  Release senza flag non ha né live né token → `.mock`. Guard runtime `#if DEBUG ||
+  TESTFLIGHT` attorno alle factory backend-live e a `BackendEndpointConfig.debug`.
+- **Il token è bakato SOLO nelle config che devono chiamare il backend** (Debug e
+  TestFlight) via `INFOPLIST_FILE = Config/Binario1-Info.plist` + `#include?` del
+  gitignored `Binario1Secrets.local.xcconfig`. Release non ha `INFOPLIST_FILE` custom →
+  nessuna chiave token nel plist (verificato ASSENTE). Senza token → 401 → fixture.
+- **L'archivio TestFlight passa dalla config TestFlight, non da Release**: lo scheme
+  `ArchiveAction` punta a `TestFlight`. Per l'App Store si archivia con Release (`.mock`).
+- **Lo scheme resta gitignored** (`*.xcodeproj/xcshareddata/`): può portare env var col
+  token; l'`ArchiveAction=TestFlight` quindi vive localmente, non nel repo.
+
 ## Station registry & board type (arrivi/partenze)
 
 - **Gli id stazione devono essere VERIFICATI prima dell'attivazione**: una stazione

@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "it",
   "strings" : {
+    "" : {
+
+    },
     "accessibility.changeStation" : {
       "localizations" : {
         "en" : {
@@ -61,6 +64,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aggiungi ai preferiti"
+          }
+        }
+      }
+    },
+    "accessibility.info" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Information and disclaimer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informazioni e avvisi"
+          }
+        }
+      }
+    },
+    "accessibility.journey.nextTrain" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next train %1$@ → %2$@: %3$@ departing at %4$@ from platform %5$@. %6$@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prossimo treno %1$@ → %2$@: %3$@ in partenza alle %4$@ dal binario %5$@. %6$@"
+          }
+        }
+      }
+    },
+    "accessibility.journey.nextTrainUnavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ → %2$@. Next train unavailable."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ → %2$@. Prossimo treno non disponibile."
           }
         }
       }
@@ -179,6 +230,22 @@
         }
       }
     },
+    "action.back" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indietro"
+          }
+        }
+      }
+    },
     "action.changeStation.short" : {
       "localizations" : {
         "en" : {
@@ -191,6 +258,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cambia"
+          }
+        }
+      }
+    },
+    "action.close" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
           }
         }
       }
@@ -243,13 +326,8 @@
         }
       }
     },
-    "action.back" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Indietro" } }
-      }
-    },
     "action.search" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -283,6 +361,7 @@
       }
     },
     "app.name.word" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -607,6 +686,7 @@
       }
     },
     "journey.arrival" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -623,6 +703,7 @@
       }
     },
     "journey.duration" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -699,6 +780,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Prossima partenza"
+          }
+        }
+      }
+    },
+    "journey.nextTrain.unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next train unavailable"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prossimo treno non disponibile"
           }
         }
       }
@@ -902,6 +999,38 @@
         }
       }
     },
+    "search.departure" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Departure"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partenza"
+          }
+        }
+      }
+    },
+    "search.destination" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destination"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destinazione"
+          }
+        }
+      }
+    },
     "search.noResults" : {
       "localizations" : {
         "en" : {
@@ -966,42 +1095,6 @@
         }
       }
     },
-    "search.departure" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Departure" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Partenza" } }
-      }
-    },
-    "search.destination" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Destination" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Destinazione" } }
-      }
-    },
-    "search.saveRoute" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save route" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Salva tratta" } }
-      }
-    },
-    "search.station.note" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Real-time board currently available for Padova." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Tabellone in tempo reale disponibile per Padova." } }
-      }
-    },
-    "search.swapRoute" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Swap route" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Inverti tratta" } }
-      }
-    },
-    "search.train.coming" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Train search coming soon." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Ricerca treno in arrivo." } }
-      }
-    },
     "search.save" : {
       "localizations" : {
         "en" : {
@@ -1034,6 +1127,22 @@
         }
       }
     },
+    "search.saveRoute" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save route"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva tratta"
+          }
+        }
+      }
+    },
     "search.station" : {
       "localizations" : {
         "en" : {
@@ -1046,6 +1155,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cerca stazione"
+          }
+        }
+      }
+    },
+    "search.station.note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Real-time board currently available for Padova."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabellone in tempo reale disponibile per Padova."
           }
         }
       }
@@ -1066,6 +1191,22 @@
         }
       }
     },
+    "search.swapRoute" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swap route"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inverti tratta"
+          }
+        }
+      }
+    },
     "search.train" : {
       "localizations" : {
         "en" : {
@@ -1078,6 +1219,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cerca treno"
+          }
+        }
+      }
+    },
+    "search.train.coming" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Train search coming soon."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricerca treno in arrivo."
           }
         }
       }
@@ -1744,8 +1901,18 @@
     },
     "trips.section.habit" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "From your habits" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Dalle tue abitudini" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From your habits"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dalle tue abitudini"
+          }
+        }
       }
     },
     "trips.section.recent" : {
@@ -1781,6 +1948,7 @@
       }
     },
     "trips.section.useful" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1797,6 +1965,7 @@
       }
     },
     "trips.seeAll" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

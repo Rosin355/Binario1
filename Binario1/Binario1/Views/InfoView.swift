@@ -9,24 +9,34 @@
 import SwiftUI
 
 struct InfoView: View {
+    /// Dismisses the sheet when Info is presented modally (its only use after
+    /// Info stopped being a primary tab). A no-op in standalone previews.
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         ZStack {
             BoardBackgroundView()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("trips.brand")               // BINARIO1
-                            .font(BoardFont.text(11, .semibold))
-                            .tracking(3)
-                            .foregroundStyle(BoardColors.amberDim)
-                        Text("tab.info")                  // INFO
-                            .font(BoardFont.digits(34, .heavy))
-                            .textCase(.uppercase)
-                            .foregroundStyle(BoardColors.amberBright)
-                            .ledGlow(BoardColors.amber, radius: 4, opacity: 0.35)
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("trips.brand")               // BINARIO1
+                                .font(BoardFont.text(11, .semibold))
+                                .tracking(3)
+                                .foregroundStyle(BoardColors.amberDim)
+                            Text("tab.info")                  // INFO
+                                .font(BoardFont.digits(34, .heavy))
+                                .textCase(.uppercase)
+                                .foregroundStyle(BoardColors.amberBright)
+                                .ledGlow(BoardColors.amber, radius: 4, opacity: 0.35)
+                        }
+                        .accessibilityElement(children: .combine)
+
+                        Spacer(minLength: 8)
+
+                        closeButton
                     }
-                    .accessibilityElement(children: .combine)
 
                     Text("info.tagline")
                         .font(BoardFont.text(14))
@@ -55,6 +65,23 @@ struct InfoView: View {
             .scrollIndicators(.hidden)
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var closeButton: some View {
+        Button {
+            dismiss()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(BoardColors.amber)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle().stroke(Color(red: 0.34, green: 0.27, blue: 0.16).opacity(0.8), lineWidth: 1.2)
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("action.close"))
     }
 
     private func panel<Content: View>(@ViewBuilder content: () -> Content) -> some View {

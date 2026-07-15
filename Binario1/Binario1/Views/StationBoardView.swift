@@ -12,6 +12,9 @@ import SwiftUI
 struct StationBoardView: View {
     @State var viewModel: StationBoardViewModel
     @State private var isFavorite = false
+    /// Presents the Info / reliability-disclaimer screen as a sheet. This is the
+    /// entry point to `InfoView` after Info stopped being a primary tab.
+    @State private var showsInfo = false
     /// Bumped when the Partenze tab is (re)entered → replays the title intro
     /// animation without reloading data.
     var animationToken: Int = 0
@@ -34,7 +37,8 @@ struct StationBoardView: View {
                     animationToken: animationToken,
                     isFavorite: isFavorite,
                     onToggleFavorite: { isFavorite.toggle() },
-                    onChangeStation: { Task { await viewModel.changeStation() } }
+                    onChangeStation: { Task { await viewModel.changeStation() } },
+                    onShowInfo: { showsInfo = true }
                 )
                 .padding(.top, 2)
 
@@ -58,6 +62,9 @@ struct StationBoardView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showsInfo) {
+            InfoView()
+        }
         .task(id: viewModel.boardType) {
             await viewModel.refresh()
             while !Task.isCancelled {

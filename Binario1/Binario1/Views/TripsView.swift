@@ -55,6 +55,7 @@ struct TripsView: View {
                         ForEach(viewModel.savedJourneys) { journey in
                             SavedJourneyCardView(
                                 journey: journey,
+                                nextTrain: viewModel.nextTrain(for: journey.id),
                                 onRemove: { viewModel.deleteSavedJourney(id: journey.id) }
                             )
                         }
@@ -66,15 +67,16 @@ struct TripsView: View {
                 }
             }
 
-            // "Dalle tue abitudini" — the next likely trip from the user's saved
-            // journeys, in the liked large-card style. Only shown when something is saved.
+            // "Dalle tue abitudini" — the soonest REAL next train across the saved
+            // routes. Shown only when a real train resolves (never save-time placeholders).
             if (viewModel.selectedFilter == .today || viewModel.selectedFilter == .saved),
-               let habit = viewModel.nextHabitJourney() {
+               let habit = viewModel.habitNextTrain {
                 section("trips.section.habit", icon: "clock.fill") {
-                    UsefulJourneyCardView(journey: SuggestedJourney(habit: habit))
+                    UsefulJourneyCardView(nextTrain: habit)
                 }
             }
 
+            // Recents are hidden until there is real journey history (see TripsViewModel).
             if viewModel.showsRecentSection {
                 section("trips.section.recent", icon: "clock.arrow.circlepath") {
                     recentPanel

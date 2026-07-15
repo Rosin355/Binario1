@@ -11,9 +11,14 @@ import SwiftUI
 
 struct SavedJourneyCardView: View {
     let journey: SavedJourney
+    /// The next REAL train for this route (resolved from the board). Nil → an honest
+    /// "next train unavailable" state instead of placeholder time/platform/duration.
+    var nextTrain: NextTrainDisplay? = nil
     /// When provided, shows a small remove (trash) affordance + a VoiceOver action.
     var onRemove: (() -> Void)? = nil
 
+    /// Identity-only projection (route/title). Its time/duration fields are NOT used
+    /// here — the detail row shows the resolved real train instead.
     private var data: JourneyDisplayData { .make(journey) }
     /// Custom routes (saved from Cerca) show the real route as the title, not the
     /// "Casa → Lavoro" role alias.
@@ -57,32 +62,7 @@ struct SavedJourneyCardView: View {
 
             Rectangle().fill(BoardColors.gridLine).frame(height: 1)
 
-            // Detail row — a clean 4-column board grid: labels aligned on top,
-            // values aligned on one shared text baseline. 07:18 is the largest
-            // value; the platform is smaller so it doesn't dominate the row.
-            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
-                GridRow {
-                    detailLabel("journey.nextDeparture")
-                    detailLabel("journey.platform")
-                    detailLabel("journey.duration")
-                    detailLabel("journey.status")
-                }
-                GridRow(alignment: .firstTextBaseline) {
-                    LEDText(text: data.departureText, size: 22, animatesNumeric: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    LEDText(text: data.platformDisplay, size: 18, color: BoardColors.platform, animatesNumeric: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(data.durationText)
-                        .font(BoardFont.text(14, .semibold))
-                        .foregroundStyle(BoardColors.amberDim)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .boardNumericTransition(data.durationText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    JourneyStatusBadgeView(status: journey.status, fontSize: 12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
+            detailRow
         }
         .padding(13)
         .background(
@@ -94,7 +74,7 @@ struct SavedJourneyCardView: View {
                 )
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(data.accessibilityLabel))
+        .accessibilityLabel(Text(accessibilityText))
         .accessibilityAddTraits(.isButton)
         .accessibilityActions {
             // The visible trash button is hidden by `children: .ignore`; expose an
@@ -103,6 +83,55 @@ struct SavedJourneyCardView: View {
                 Button("action.removeSavedJourney", action: onRemove)
             }
         }
+    }
+
+    /// Real next-train detail (4-column board grid) when resolved, otherwise an honest
+    /// "next train unavailable" line — never a placeholder time/platform/duration.
+    @ViewBuilder
+    private var detailRow: some View {
+        if let nextTrain {
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
+                GridRow {
+                    detailLabel("journey.nextDeparture")
+                    detailLabel("journey.platform")
+                    detailLabel("journey.train")
+                    detailLabel("journey.status")
+                }
+                GridRow(alignment: .firstTextBaseline) {
+                    LEDText(text: nextTrain.departureText, size: 22, animatesNumeric: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    LEDText(text: nextTrain.platformDisplay, size: 18, color: BoardColors.platform, animatesNumeric: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(nextTrain.trainText)
+                        .font(BoardFont.text(13, .semibold))
+                        .foregroundStyle(BoardColors.amber)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    JourneyStatusBadgeView(status: nextTrain.status, fontSize: 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        } else {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.badge.questionmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(BoardColors.amberDim)
+                Text("journey.nextTrain.unavailable")
+                    .font(BoardFont.text(12.5, .semibold))
+                    .foregroundStyle(BoardColors.amberDim)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var accessibilityText: String {
+        if let nextTrain { return nextTrain.accessibilityLabel }
+        return String(format: String(localized: "accessibility.journey.nextTrainUnavailable"),
+                      journey.origin, journey.destination)
     }
 
     private var directionIcon: some View {
@@ -140,8 +169,19 @@ struct SavedJourneyCardView: View {
 }
 
 #Preview {
-    VStack(spacing: 12) {
-        ForEach(MockTripsService.sample(on: Date()).saved) { SavedJourneyCardView(journey: $0) }
+    let saved = MockTripsService.sample(on: Date()).saved
+    let row = TrainBoardRow(
+        id: "r", trainNumber: "9437", category: "AV", operatorName: nil,
+        origin: nil, destination: saved[0].destination,
+        scheduledTime: Date().addingTimeInterval(600), expectedTime: nil, delayMinutes: 12,
+        plannedPlatform: "3", actualPlatform: "3", status: .delayed, notes: nil, lastUpdated: Date()
+    )
+    return VStack(spacing: 12) {
+        // Resolved: real next train (time / platform / train / delay).
+        SavedJourneyCardView(journey: saved[0],
+                             nextTrain: .make(ResolvedNextTrain(journey: saved[0], row: row)))
+        // Honest state: no real next train available.
+        SavedJourneyCardView(journey: saved[1])
     }
     .padding()
     .background(BoardColors.background)

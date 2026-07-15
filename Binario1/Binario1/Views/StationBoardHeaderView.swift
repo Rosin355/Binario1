@@ -27,6 +27,8 @@ struct StationBoardHeaderView: View {
     var isFavorite: Bool = false
     var onToggleFavorite: (() -> Void)?
     var onChangeStation: (() -> Void)?
+    /// Opens the Info / reliability-disclaimer screen. Nil → the info button is hidden.
+    var onShowInfo: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -38,6 +40,7 @@ struct StationBoardHeaderView: View {
                     .foregroundStyle(BoardColors.amberDim)
                 Spacer(minLength: 8)
                 updatedLabel
+                infoButton
                 favoriteButton
             }
 
@@ -95,6 +98,29 @@ struct StationBoardHeaderView: View {
             button
         } else {
             button.accessibilityHint(Text("accessibility.stationLocked"))
+        }
+    }
+
+    /// Entry point to the Info / reliability-disclaimer screen (presented as a
+    /// sheet). Shown only when `onShowInfo` is provided; matches the circular
+    /// favorite-button styling so the header keeps one visual language.
+    @ViewBuilder
+    private var infoButton: some View {
+        if let onShowInfo {
+            Button {
+                onShowInfo()
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(BoardColors.amber.opacity(0.85))
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle().stroke(Color(red: 0.34, green: 0.27, blue: 0.16).opacity(0.8), lineWidth: 1.2)
+                    )
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("accessibility.info"))
         }
     }
 
