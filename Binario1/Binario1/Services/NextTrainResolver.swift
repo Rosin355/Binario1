@@ -61,12 +61,15 @@ protocol NextTrainResolving: Sendable {
 final class NextTrainResolver: NextTrainResolving, @unchecked Sendable {
     private let service: TrainBoardService
     private let boardStation: Station
+    private let catalog: StationCatalog?
     private let now: @Sendable () -> Date
 
     init(service: TrainBoardService, boardStation: Station,
+         catalog: StationCatalog? = nil,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
         self.boardStation = boardStation
+        self.catalog = catalog
         self.now = now
     }
 
@@ -96,7 +99,7 @@ final class NextTrainResolver: NextTrainResolving, @unchecked Sendable {
         for journey in served {
             // First future row (scheduled at/after now) heading to the destination.
             if let row = rows.first(where: {
-                $0.scheduledTime >= currentTime && SavedJourneyMatcher.row($0, matchesDestinationOf: journey)
+                $0.scheduledTime >= currentTime && SavedJourneyMatcher.row($0, matchesDestinationOf: journey, catalog: catalog)
             }) {
                 result[journey.id] = .resolved(ResolvedNextTrain(journey: journey, row: row))
             } else {

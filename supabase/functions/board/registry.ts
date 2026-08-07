@@ -10,15 +10,23 @@ export interface StationEntry {
   slug: string;
   displayName: string;
   rfiLivePlaceId: string; // RFI live station-monitor placeId (Monitor?placeId=…)
-  prmScheduledId: string; // PRM "Quadro Orario" id — different system, not interchangeable
+  /// PRM "Quadro Orario" id — a DIFFERENT id system, not interchangeable. OPTIONAL:
+  /// omitted when not verified for a station. The LIVE board path never reads it
+  /// (it uses `rfiLivePlaceId` only), so a station can be live-active without it.
+  /// A scheduled/PRM feature must NOT be activated for a station lacking this id.
+  prmScheduledId?: string;
 }
 
-/// Verified-active stations only.
+/// Verified-active stations only — each `rfiLivePlaceId` confirmed against the live
+/// RFI monitor (https://iechub.rfi.it/…/Monitor?placeId=…, page title "Stazione di X").
 /// TODO(future — each requires a VERIFIED rfiLivePlaceId before activation):
 ///   Bologna Centrale, Venezia Santa Lucia, Montegrotto Terme, Milano Centrale.
 ///   Do NOT add them with guessed placeIds.
 export const STATIONS: Record<string, StationEntry> = {
   padova: { slug: "padova", displayName: "Padova", rfiLivePlaceId: "2000", prmScheduledId: "1861" },
+  // Verified: placeId 2416 → "Stazione di ROMA TERMINI". prmScheduledId NOT verified
+  // → intentionally omitted (never guessed); live board works without it.
+  "roma-termini": { slug: "roma-termini", displayName: "Roma Termini", rfiLivePlaceId: "2416" },
 };
 
 export function resolveStation(slug: string | null | undefined): StationEntry | undefined {

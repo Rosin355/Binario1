@@ -4,8 +4,9 @@
 //
 //  The Cerca (Search) tab — backs the native `Tab(role: .search)`. Uses the system
 //  `.searchable` field; when idle it offers three category entries (stazione /
-//  tratta / treno), and while searching it shows mock results grouped into
-//  Stazioni / Tratte / Treni (or "Nessun risultato"). Mock data only.
+//  tratta / treno). Station search draws real catalog ENTITIES; the route form's
+//  PARTENZA / DESTINAZIONE resolve to catalog stations (canonical names) before
+//  saving, so a saved route matches the live board reliably (B4).
 //
 
 import SwiftUI
@@ -53,25 +54,12 @@ struct CercaView: View {
         }
     }
 
-    // MARK: - Grouped results (free-text search without a chosen mode)
+    // MARK: - Grouped results (free-text search without a chosen mode) → stations only
 
     @ViewBuilder
     private var groupedResults: some View {
         if viewModel.hasResults {
-            VStack(alignment: .leading, spacing: 18) {
-                if !viewModel.stations.isEmpty {
-                    resultSection("search.stations", "tram.fill",
-                                  viewModel.stations, rowIcon: "mappin.and.ellipse")
-                }
-                if !viewModel.routes.isEmpty {
-                    resultSection("search.routes", "arrow.left.arrow.right",
-                                  viewModel.routes, rowIcon: "arrow.triangle.swap", savable: true)
-                }
-                if !viewModel.trains.isEmpty {
-                    resultSection("search.trains", "train.side.front.car",
-                                  viewModel.trains, rowIcon: "train.side.front.car")
-                }
-            }
+            stationsSection(viewModel.stations)
         } else {
             emptyState
         }
@@ -124,79 +112,42 @@ struct CercaView: View {
         }
     }
 
-    // MARK: - Results
+    // MARK: - Station results (real catalog entities)
 
-    private func resultSection(_ titleKey: LocalizedStringKey, _ icon: String,
-                               _ items: [String], rowIcon: String, savable: Bool = false) -> some View {
+    private func stationsSection(_ stations: [Station]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            BoardSectionHeader(titleKey: titleKey, systemImage: icon)
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element) { index, item in
-                    resultRow(item, icon: rowIcon, savable: savable)
-                    if index < items.count - 1 {
-                        Rectangle().fill(BoardColors.gridLine).frame(height: 1)
-                    }
-                }
+            BoardSectionHeader(titleKey: "search.stations", systemImage: "tram.fill")
+            panelList(stations) { station in
+                stationRow(station)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(BoardColors.panel)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(BoardColors.borderDim, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 
-    private func resultRow(_ text: String, icon: String, savable: Bool = false) -> some View {
+    private func stationRow(_ station: Station) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
+            Image(systemName: "mappin.and.ellipse")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(BoardColors.amber)
                 .frame(width: 22)
-            Text(text)
-                .font(BoardFont.text(15, .semibold))
-                .foregroundStyle(BoardColors.amberBright)
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-            Spacer(minLength: 6)
-            if savable, viewModel.canSaveRoute(text) {
-                saveRouteButton(text)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(station.displayName)
+                    .font(BoardFont.text(15, .semibold))
+                    .foregroundStyle(BoardColors.amberBright)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+                if let city = station.city, city != station.displayName {
+                    Text(city)
+                        .font(BoardFont.text(11))
+                        .foregroundStyle(BoardColors.amberDim)
+                        .lineLimit(1)
+                }
             }
+            Spacer(minLength: 6)
         }
         .padding(.vertical, 11)
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
-        // Savable rows keep the save button as its own accessible element.
-        .accessibilityElement(children: savable ? .contain : .combine)
-    }
-
-    /// Small bookmark save affordance for a route row; shows "Saved" once persisted.
-    @ViewBuilder
-    private func saveRouteButton(_ route: String) -> some View {
-        let saved = viewModel.isRouteSaved(route)
-        Button {
-            viewModel.saveRoute(route)
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: saved ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 12, weight: .semibold))
-                Text(saved ? "search.saved" : "search.save")
-                    .font(BoardFont.text(11, .semibold))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(saved ? BoardColors.amberBright : BoardColors.amber)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke((saved ? BoardColors.amberBright : BoardColors.amber).opacity(0.5), lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(saved)
-        .accessibilityLabel(Text(saved ? "search.saved" : "action.saveJourney"))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Idle categories
@@ -248,11 +199,13 @@ struct CercaView: View {
         .padding(.top, 60)
     }
 
-    // MARK: - Route mode — Partenza / Destinazione / swap / save
+    // MARK: - Route mode — Partenza / Destinazione / swap / save (catalog entities)
 
     private var routeForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            routeField("search.departure", text: $viewModel.departureField)
+            routeStationField("search.departure", text: $viewModel.departureField,
+                              suggestions: viewModel.departureSuggestions(),
+                              onPick: { viewModel.selectDeparture($0) })
 
             HStack {
                 Spacer()
@@ -273,7 +226,14 @@ struct CercaView: View {
                 .accessibilityLabel(Text("search.swapRoute"))
             }
 
-            routeField("search.destination", text: $viewModel.destinationField)
+            routeStationField("search.destination", text: $viewModel.destinationField,
+                              suggestions: viewModel.destinationSuggestions(),
+                              onPick: { viewModel.selectDestination($0) })
+
+            Text("search.route.pickStations")
+                .font(BoardFont.text(11))
+                .foregroundStyle(BoardColors.amberDim)
+                .fixedSize(horizontal: false, vertical: true)
 
             Button { viewModel.saveCurrentRoute() } label: {
                 Text("search.saveRoute")
@@ -291,6 +251,40 @@ struct CercaView: View {
             .disabled(!viewModel.canSaveCurrentRoute)
             .accessibilityLabel(Text("search.saveRoute"))
         }
+    }
+
+    /// A route field + its live catalog suggestions (tap to select a canonical station).
+    private func routeStationField(_ labelKey: LocalizedStringKey, text: Binding<String>,
+                                   suggestions: [Station], onPick: @escaping (Station) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            routeField(labelKey, text: text)
+            if !suggestions.isEmpty {
+                panelList(suggestions) { station in
+                    Button { onPick(station) } label: { suggestionRow(station) }
+                        .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func suggestionRow(_ station: Station) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(BoardColors.amber)
+                .frame(width: 18)
+            Text(station.displayName)
+                .font(BoardFont.text(14, .semibold))
+                .foregroundStyle(BoardColors.amberBright)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Spacer(minLength: 6)
+        }
+        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityAddTraits(.isButton)
     }
 
     private func routeField(_ labelKey: LocalizedStringKey, text: Binding<String>) -> some View {
@@ -321,8 +315,7 @@ struct CercaView: View {
             if viewModel.stations.isEmpty {
                 emptyState
             } else {
-                resultSection("search.stations", "tram.fill",
-                              viewModel.stations, rowIcon: "mappin.and.ellipse")
+                stationsSection(viewModel.stations)
             }
             Text("search.station.note")
                 .font(BoardFont.text(12))
@@ -346,6 +339,25 @@ struct CercaView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 40)
+    }
+
+    // MARK: - Shared panel list container
+
+    private func panelList<Element: Identifiable, RowContent: View>(
+        _ items: [Element],
+        @ViewBuilder row: @escaping (Element) -> RowContent
+    ) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, element in
+                row(element)
+                if index < items.count - 1 {
+                    Rectangle().fill(BoardColors.gridLine).frame(height: 1)
+                }
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(BoardColors.panel))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(BoardColors.borderDim, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

@@ -79,7 +79,11 @@ struct StationBoardView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let errorKey = viewModel.errorMessageKey, !viewModel.hasData {
+        if viewModel.isBoardUnavailableForStation {
+            // Expected state (station not served by the live board / unknown_station):
+            // an honest message, never raw error text and never another station's rows.
+            boardUnavailableState
+        } else if let errorKey = viewModel.errorMessageKey, !viewModel.hasData {
             errorState(errorKey)
         } else if viewModel.isLoading && !viewModel.hasData {
             loadingState
@@ -151,6 +155,40 @@ struct StationBoardView: View {
                     )
             }
             .buttonStyle(.plain)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Honest "no live board for this station" state. Offers switching back to a
+    /// served station rather than pretending data exists.
+    private var boardUnavailableState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "mappin.slash")
+                .font(.largeTitle)
+                .foregroundStyle(BoardColors.amberDim)
+            Text("board.unavailableForStation")
+                .font(BoardFont.text(15, .semibold))
+                .foregroundStyle(BoardColors.amberBright)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if viewModel.allowsStationChange {
+                Button {
+                    Task { await viewModel.changeStation() }
+                } label: {
+                    Text("action.changeStation.short")
+                        .font(BoardFont.text(14, .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(BoardColors.amber)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(BoardColors.amber.opacity(0.6), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

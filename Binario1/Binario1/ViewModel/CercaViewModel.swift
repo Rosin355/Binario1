@@ -2,9 +2,11 @@
 //  CercaViewModel.swift
 //  Binario1
 //
-//  Drives the Cerca (Search) tab. Search catalog is MOCK-ONLY (stations / routes /
-//  trains filtered by the query). Route results can be SAVED as a saved journey into
-//  the persistent `SavedJourneyStore` (shared with Viaggi + the Home spotlight).
+//  Drives the Cerca (Search) tab. Station search now comes from the REAL bundled
+//  catalog (`StationCatalog`) and returns canonical Station entities. Route results
+//  can be SAVED as a saved journey into the persistent `SavedJourneyStore` (shared
+//  with Viaggi + the Home spotlight); the saved origin/destination are the catalog's
+//  CANONICAL displayNames, so the B4 resolver can match the live board reliably.
 //
 
 import Foundation
@@ -30,10 +32,7 @@ final class CercaViewModel {
     /// Bound to the native `.searchable` field.
     var query: String = ""
 
-    let allStations: [String]
-    let allRoutes: [String]
-    let allTrains: [String]
-
+    private let catalog: StationCatalog
     private let savedStore: SavedJourneyStoring
     /// Ids of routes already saved — drives the "Saved" state without hitting the
     /// store on every row render. Refreshed after each save.
@@ -45,13 +44,9 @@ final class CercaViewModel {
     var departureField: String = ""
     var destinationField: String = ""
 
-    init(stations: [String] = CercaViewModel.mockStations,
-         routes: [String] = CercaViewModel.mockRoutes,
-         trains: [String] = CercaViewModel.mockTrains,
+    init(catalog: StationCatalog = DefaultStationCatalog.shared,
          savedStore: SavedJourneyStoring = UserDefaultsSavedJourneyStore()) {
-        self.allStations = stations
-        self.allRoutes = routes
-        self.allTrains = trains
+        self.catalog = catalog
         self.savedStore = savedStore
         self.savedRouteIDs = Set(savedStore.load().map(\.id))
     }
@@ -59,16 +54,10 @@ final class CercaViewModel {
     var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     var isSearching: Bool { !trimmedQuery.isEmpty }
 
-    var stations: [String] { matches(allStations) }
-    var routes: [String] { matches(allRoutes) }
-    var trains: [String] { matches(allTrains) }
+    /// Station search results as real catalog ENTITIES (ranked). Empty query → all.
+    var stations: [Station] { catalog.search(trimmedQuery) }
 
-    var hasResults: Bool { !stations.isEmpty || !routes.isEmpty || !trains.isEmpty }
-
-    private func matches(_ items: [String]) -> [String] {
-        guard isSearching else { return items }
-        return items.filter { $0.localizedCaseInsensitiveContains(trimmedQuery) }
-    }
+    var hasResults: Bool { !stations.isEmpty }
 
     // MARK: - Search mode + route form
 
@@ -77,16 +66,40 @@ final class CercaViewModel {
     /// Reverse the route-form departure/destination.
     func swapRoute() { swap(&departureField, &destinationField) }
 
-    /// True when both route-form fields are non-empty (save allowed).
-    var canSaveCurrentRoute: Bool {
-        !departureField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !destinationField.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// The catalog station currently entered in each field (canonical resolution).
+    /// Nil when the text isn't a known station (e.g. a bare "Roma" → must be
+    /// disambiguated to "Roma Termini" via the suggestions).
+    var departureStation: Station? { catalog.station(named: departureField) }
+    var destinationStation: Station? { catalog.station(named: destinationField) }
+
+    /// Save is allowed only when BOTH fields resolve to catalog stations, so the
+    /// saved journey always stores canonical names (no free-text footgun).
+    var canSaveCurrentRoute: Bool { departureStation != nil && destinationStation != nil }
+
+    /// Ranked suggestions for a route field; empty once the field already holds an
+    /// exact station name.
+    func departureSuggestions(limit: Int = 6) -> [Station] { suggestions(departureField, limit: limit) }
+    func destinationSuggestions(limit: Int = 6) -> [Station] { suggestions(destinationField, limit: limit) }
+
+    private func suggestions(_ text: String, limit: Int) -> [Station] {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return [] }
+        if let s = catalog.station(named: t),
+           DefaultStationCatalog.fold(s.displayName) == DefaultStationCatalog.fold(t) {
+            return []   // exact station already entered → no dropdown
+        }
+        return catalog.search(t, limit: limit)
     }
 
-    /// Save the route-form pair. On success the fields are cleared.
+    /// Pick a station suggestion into a route field (sets the canonical displayName).
+    func selectDeparture(_ station: Station) { departureField = station.displayName }
+    func selectDestination(_ station: Station) { destinationField = station.displayName }
+
+    /// Save the route-form pair (canonical station names). On success fields clear.
     @discardableResult
     func saveCurrentRoute(now: Date = Date()) -> SaveJourneyResult {
-        let result = saveRoute(origin: departureField, destination: destinationField, now: now)
+        guard let origin = departureStation, let destination = destinationStation else { return .invalid }
+        let result = saveRoute(origin: origin.displayName, destination: destination.displayName, now: now)
         if result == .saved { departureField = ""; destinationField = "" }
         return result
     }
@@ -133,18 +146,19 @@ final class CercaViewModel {
     }
 
     /// Save an origin/destination pair as a saved journey (upsert by stable id → no
-    /// duplicates). Marked `isCustomRoute` so Viaggi shows the REAL route as the title
-    /// (not the "Casa → Lavoro" role alias).
+    /// duplicates). Names are resolved to the catalog's CANONICAL displayName when the
+    /// station is known (so B4 matches the live board); an unknown name is stored as
+    /// typed (best-effort). Marked `isCustomRoute` so Viaggi shows the REAL route.
     @discardableResult
     func saveRoute(origin: String, destination: String, now: Date = Date()) -> SaveJourneyResult {
-        let o = origin.trimmingCharacters(in: .whitespacesAndNewlines)
-        let d = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        let o = canonicalName(origin)
+        let d = canonicalName(destination)
         guard !o.isEmpty, !d.isEmpty else { return .invalid }
         let id = routeID(origin: o, destination: d)
         refreshSavedState()   // reflect deletions made elsewhere before deciding
         if savedRouteIDs.contains(id) { return .alreadySaved }
-        // Departure/platform/duration are unknown for a search-saved route (display
-        // placeholders — Home matches on origin/destination only).
+        // Departure/platform/duration are unknown for a search-saved route; Viaggi
+        // resolves the REAL next train from the board (B4), Home matches on names.
         let journey = SavedJourney(
             id: id, direction: .homeToWork,
             origin: o, destination: d,
@@ -156,17 +170,10 @@ final class CercaViewModel {
         return .saved
     }
 
-    // MARK: - Mock catalog
-
-    static let mockStations = [
-        "Padova", "Bologna Centrale", "Montegrotto Terme", "Venezia Santa Lucia",
-        "Firenze Santa Maria Novella", "Milano Porta Garibaldi", "Reggio Emilia AV Mediopadana",
-    ]
-    static let mockRoutes = [
-        "Padova → Venezia Santa Lucia", "Montegrotto Terme → Padova",
-        "Bologna Centrale → Padova", "Padova → Bologna Centrale",
-    ]
-    static let mockTrains = [
-        "REG 1722", "REG 1741", "FR 8602", "RV 2774", "ITALO 9902",
-    ]
+    /// Canonical catalog displayName for a typed name, or the trimmed text if the
+    /// station isn't in the catalog (kept honest — no invented name).
+    private func canonicalName(_ text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return catalog.station(named: t)?.displayName ?? t
+    }
 }

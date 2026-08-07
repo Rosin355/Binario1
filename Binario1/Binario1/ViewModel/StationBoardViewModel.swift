@@ -60,6 +60,25 @@ final class StationBoardViewModel {
     /// snapshot (used by tests/previews that inject a fixed list).
     private let savedJourneysProvider: (() -> [SavedJourney])?
 
+    /// Station catalog used for alias-aware destination matching (so a saved
+    /// "Venezia Santa Lucia" matches an abbreviated board row). Nil → plain canonical
+    /// matching (existing behavior; keeps Home/Viaggi identical when both omit it).
+    private let catalog: StationCatalog?
+
+    /// Stations the `Cambia` action cycles through (live: only the ones the backend
+    /// serves; mock: the demo carousel).
+    private let selectableStations: [Station]
+
+    /// Ids the LIVE board serves. Nil → no restriction (mock/demo sources). When set,
+    /// a station outside it never triggers a fetch: the UI shows the honest
+    /// "board unavailable for this station" state instead of another station's board.
+    private let liveServedStationIDs: Set<String>?
+
+    /// True when the current station has no board to show (not served by the live
+    /// backend, or the backend replied `unknown_station`). An expected state, not an
+    /// error: the UI renders an honest message, never raw error text or stale rows.
+    private(set) var isBoardUnavailableForStation = false
+
     /// Current-time source, injectable for deterministic tests of the scheduled
     /// demo window. Defaults to the wall clock.
     private let now: () -> Date
@@ -67,13 +86,25 @@ final class StationBoardViewModel {
     init(service: TrainBoardService, station: Station = .bolognaCentrale,
          allowsStationChange: Bool = true, now: @escaping () -> Date = { Date() },
          savedJourneys: [SavedJourney] = [],
-         savedJourneysProvider: (() -> [SavedJourney])? = nil) {
+         savedJourneysProvider: (() -> [SavedJourney])? = nil,
+         catalog: StationCatalog? = nil,
+         selectableStations: [Station] = Station.demoStations,
+         liveServedStationIDs: Set<String>? = nil) {
         self.service = service
         self.station = station
         self.allowsStationChange = allowsStationChange
         self.now = now
         self.savedJourneys = savedJourneys
         self.savedJourneysProvider = savedJourneysProvider
+        self.catalog = catalog
+        self.selectableStations = selectableStations
+        self.liveServedStationIDs = liveServedStationIDs
+    }
+
+    /// Whether the live board serves `station` (always true when unrestricted).
+    private func isServed(_ station: Station) -> Bool {
+        guard let liveServedStationIDs else { return true }
+        return liveServedStationIDs.contains(station.id)
     }
 
     // MARK: - Derived data
@@ -104,7 +135,7 @@ final class StationBoardViewModel {
         // two features can never diverge.
         let fromHere = SavedJourneyMatcher.journeysDeparting(from: station.displayName, in: savedJourneys)
         guard !fromHere.isEmpty else { return [] }
-        let matched = SavedJourneyMatcher.rows(sortedRows, matchingDestinationsOf: fromHere)
+        let matched = SavedJourneyMatcher.rows(sortedRows, matchingDestinationsOf: fromHere, catalog: catalog)
         return Array(matched.prefix(3))
     }
 
@@ -160,6 +191,12 @@ final class StationBoardViewModel {
     /// skipped so accidental duplicate triggers never double-fetch.
     func refresh(force: Bool = false) async {
         guard !isRefreshing else { return }                 // never overlap requests
+        // A station the live board doesn't serve must never trigger a fetch (its
+        // fallback would belong to another station). Honest state, no rows.
+        guard isServed(station) else {
+            markBoardUnavailable()
+            return
+        }
         let key = "\(station.id)|\(boardType.rawValue)"
         if !force, key == lastFetchKey, let last = lastFetchAt,
            now().timeIntervalSince(last) < minAutoRefreshInterval {
@@ -189,15 +226,35 @@ final class StationBoardViewModel {
             sourceKind = response.sourceKind
             sourceIsFallback = response.sourceIsFallback
             errorMessageKey = nil
+            isBoardUnavailableForStation = false
+            lastFetchKey = key
+            lastFetchAt = now()
+        } catch is BoardUnavailableError {
+            if Task.isCancelled { return }
+            // Expected: this station has no board (unknown_station / no station-specific
+            // fallback). Honest state — never another station's rows, never raw error.
+            markBoardUnavailable()
             lastFetchKey = key
             lastFetchAt = now()
         } catch {
             if Task.isCancelled { return }                  // superseded by a newer refresh
             errorMessageKey = "error.dataUnavailable"
+            isBoardUnavailableForStation = false
             sourceIsStale = true
             lastFetchKey = key
             lastFetchAt = now()
         }
+    }
+
+    /// Enter the honest "no board for this station" state: drop any rows (they belong
+    /// to a different station) and clear the raw-error message.
+    private func markBoardUnavailable() {
+        rows = []
+        isBoardUnavailableForStation = true
+        errorMessageKey = nil
+        isLoading = false
+        sourceIsStale = false
+        lastUpdated = nil
     }
 
     /// Switches board type. Mutating `boardType` retriggers the view's `.task(id:)`,
@@ -208,15 +265,26 @@ final class StationBoardViewModel {
         boardType = type
     }
 
-    /// Cycle to the next mock station (drives the header station-change flip and
-    /// exercises long-name layout). The board data remains mock.
+    /// Cycle to the next selectable station and reload its board. In live mode the
+    /// cycle covers ONLY the stations the backend serves (Padova ↔ Roma Termini);
+    /// in mock mode it's the demo carousel.
     func changeStation() async {
         // Single-station sources (e.g. Padova scheduled timetable) stay put so the
         // station title and the board rows can never disagree.
         guard allowsStationChange else { return }
-        let all = Station.demoStations
-        let next = (all.firstIndex(of: station).map { $0 + 1 } ?? 0) % all.count
+        let all = selectableStations
+        guard !all.isEmpty else { return }
+        // Match by id: the same station can carry different metadata depending on where
+        // it came from (catalog entry vs code constant), so whole-struct equality would
+        // silently fail to advance.
+        let next = (all.firstIndex { $0.id == station.id }.map { $0 + 1 } ?? 0) % all.count
         station = all[next]
-        await refresh()
+        // Drop the previous station's rows immediately: they must never be visible
+        // under the new station's name while the new board loads.
+        rows = []
+        isBoardUnavailableForStation = false
+        errorMessageKey = nil
+        lastUpdated = nil
+        await refresh(force: true)
     }
 }

@@ -43,17 +43,24 @@ final class BackendBoardService: TrainBoardService, @unchecked Sendable {
     private let stampSourceKind: BoardSourceKind
     /// When set, emit concise DEBUG logs under `[<tag>]` (e.g. "BackendLive").
     private let debugLogTag: String?
+    /// Station the `fallback` actually represents (the bundled fixture is Padova).
+    /// When set, the fallback is used ONLY for that station: for any other station a
+    /// failure surfaces `BoardUnavailableError` instead, so one station's board can
+    /// never be shown under another station's name. Nil → unconstrained (tests/mock).
+    private let fallbackStationID: String?
 
     init(fetcher: BackendBoardFetching = FixtureBackendBoardFetcher(),
          fallback: TrainBoardService = MockTrainBoardService(),
          referenceDate: @escaping @Sendable () -> Date = { Date() },
          stampSourceKind: BoardSourceKind = .backendFixture,
-         debugLogTag: String? = nil) {
+         debugLogTag: String? = nil,
+         fallbackStationID: String? = nil) {
         self.fetcher = fetcher
         self.fallback = fallback
         self.referenceDate = referenceDate
         self.stampSourceKind = stampSourceKind
         self.debugLogTag = debugLogTag
+        self.fallbackStationID = fallbackStationID
     }
 
     func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
@@ -66,15 +73,31 @@ final class BackendBoardService: TrainBoardService, @unchecked Sendable {
             // Stamp where the data came through so the header never misrepresents it.
             response.sourceKind = stampSourceKind
             guard !response.rows.isEmpty else {
-                log("FALLBACK · reason=empty-parse · using=fixture")
-                return try await fallback.fetchBoard(stationId: stationId, type: type)
+                return try await fallbackBoard(stationId: stationId, type: type, reason: "empty-parse")
             }
             log("OK · rows=\(response.rows.count) · source=\(dto.source.kind) · fallback=\(dto.source.isFallback ?? false) · stale=\(dto.source.isStale ?? false)")
             return response
         } catch {
-            log("FALLBACK · reason=fetch-error · using=fixture · error=\(error)")
-            return try await fallback.fetchBoard(stationId: stationId, type: type)
+            return try await fallbackBoard(stationId: stationId, type: type,
+                                           reason: "fetch-error · error=\(error)")
         }
+    }
+
+    /// Fall back ONLY when the fallback data belongs to the requested station.
+    /// Otherwise surface `BoardUnavailableError` → the UI shows the honest
+    /// "board unavailable for this station" state instead of another station's board.
+    private func fallbackBoard(stationId: String, type: BoardType, reason: String) async throws -> StationBoardResponse {
+        guard fallbackApplies(to: stationId) else {
+            log("UNAVAILABLE · station=\(stationId) · reason=\(reason) · no fallback for this station")
+            throw BoardUnavailableError.stationNotServed(stationID: stationId)
+        }
+        log("FALLBACK · reason=\(reason) · using=fixture")
+        return try await fallback.fetchBoard(stationId: stationId, type: type)
+    }
+
+    private func fallbackApplies(to stationId: String) -> Bool {
+        guard let fallbackStationID else { return true }   // unconstrained (tests / mock source)
+        return fallbackStationID == stationId
     }
 
     private func log(_ message: String) {

@@ -17,6 +17,15 @@ enum TrainBoardServiceError: Error {
     case decodingFailed(underlying: Error)
 }
 
+/// The board cannot be shown for THIS station — an expected outcome, not a crash:
+/// the station isn't served by the live backend (404 `unknown_station`), or the only
+/// available fallback belongs to a DIFFERENT station and must never be shown in its
+/// place. The UI renders an honest "board unavailable for this station" state.
+enum BoardUnavailableError: Error, Equatable {
+    /// The live backend does not serve this station (or replied 404 unknown_station).
+    case stationNotServed(stationID: String)
+}
+
 // MARK: - DTOs (mirror the backend JSON contract — never used by views directly)
 
 struct StationDTO: Decodable {

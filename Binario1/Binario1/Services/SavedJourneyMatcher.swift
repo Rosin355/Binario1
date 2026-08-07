@@ -25,12 +25,23 @@ enum SavedJourneyMatcher {
     }
 
     /// True when a DEPARTURES board row heads to the saved journey's destination.
-    static func row(_ row: TrainBoardRow, matchesDestinationOf journey: SavedJourney) -> Bool {
-        StationNameMatcher.matches(row.destination, journey.destination)
+    ///
+    /// When a `catalog` is provided and the saved destination resolves to a catalog
+    /// station, matching also considers that station's `boardAliases` (so an
+    /// abbreviated board row like "VENEZIA S.L." matches a saved "Venezia Santa
+    /// Lucia"). Without a catalog it's the plain canonical name match — identical to
+    /// before, so Home/Viaggi keep the SAME shared behavior when no catalog is passed.
+    static func row(_ row: TrainBoardRow, matchesDestinationOf journey: SavedJourney,
+                    catalog: StationCatalog? = nil) -> Bool {
+        if let catalog, let station = catalog.station(named: journey.destination) {
+            return StationNameMatcher.matches(station: station, boardName: row.destination)
+        }
+        return StationNameMatcher.matches(row.destination, journey.destination)
     }
 
     /// Board rows (departures) matching ANY of the given saved journeys' destinations.
-    static func rows(_ rows: [TrainBoardRow], matchingDestinationsOf journeys: [SavedJourney]) -> [TrainBoardRow] {
-        rows.filter { candidate in journeys.contains { row(candidate, matchesDestinationOf: $0) } }
+    static func rows(_ rows: [TrainBoardRow], matchingDestinationsOf journeys: [SavedJourney],
+                     catalog: StationCatalog? = nil) -> [TrainBoardRow] {
+        rows.filter { candidate in journeys.contains { row(candidate, matchesDestinationOf: $0, catalog: catalog) } }
     }
 }

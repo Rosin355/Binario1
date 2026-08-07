@@ -22,16 +22,23 @@ struct RootTabView: View {
         station: AppEnvironment.initialStation,
         allowsStationChange: AppEnvironment.allowsStationChange,
         savedJourneys: HomeSavedJourneys.current(),            // initial snapshot (persisted)
-        savedJourneysProvider: { HomeSavedJourneys.current() } // re-read on refresh → reflects Viaggi deletes
+        savedJourneysProvider: { HomeSavedJourneys.current() }, // re-read on refresh → reflects Viaggi deletes
+        catalog: DefaultStationCatalog.shared,                 // alias-aware destination matching
+        // Live: only the stations the backend registry serves (derived from the
+        // catalog flag, not a hand-kept list); other stations → honest unavailable.
+        selectableStations: AppEnvironment.selectableStations,
+        liveServedStationIDs: AppEnvironment.liveServedStationIDs
     )
     @State private var tripsViewModel = TripsViewModel(
         service: MockTripsService(),
         // Resolve saved routes' next REAL train against the same board the Home uses.
         // The served station is derived from the environment (Padova in DEBUG/
-        // TESTFLIGHT, mock otherwise) — never hardcoded in the resolver.
+        // TESTFLIGHT, mock otherwise) — never hardcoded in the resolver. The SAME
+        // catalog feeds Home and the resolver so their matching stays consistent.
         resolver: NextTrainResolver(
             service: AppEnvironment.makeTrainBoardService(),
-            boardStation: AppEnvironment.initialStation
+            boardStation: AppEnvironment.initialStation,
+            catalog: DefaultStationCatalog.shared
         )
     )
 

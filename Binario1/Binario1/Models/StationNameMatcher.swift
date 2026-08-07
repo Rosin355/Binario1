@@ -52,6 +52,17 @@ enum StationNameMatcher {
         return ta.isSubset(of: tb) || tb.isSubset(of: ta)
     }
 
+    /// Alias-aware match between a catalog `station` and a free-text board name.
+    /// True when the board name matches the station's displayName OR any of its
+    /// `boardAliases` (e.g. "Venezia S.L." → Venezia Santa Lucia). Each comparison
+    /// goes through `matches(_:_:)`, so the ≥2-token rule is preserved: an alias can
+    /// only ADD true matches, never make "Venezia Mestre" match "Venezia Santa Lucia".
+    static func matches(station: Station, boardName: String?) -> Bool {
+        if matches(station.displayName, boardName) { return true }
+        for alias in station.boardAliases ?? [] where matches(alias, boardName) { return true }
+        return false
+    }
+
     private static func collapseSpaces(_ s: String) -> String {
         var t = s.trimmingCharacters(in: .whitespaces)
         while t.contains("  ") { t = t.replacingOccurrences(of: "  ", with: " ") }

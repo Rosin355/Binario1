@@ -2,6 +2,156 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-15 — Ticket B3-lite: cambio-stazione live Padova ↔ Roma Termini
+
+Stato: completata lato codice (backend registry + iOS). **Richiede il redeploy della
+Edge Function** perché Roma diventi live end-to-end (vedi checkpoint). Release `.mock`;
+guardrail A3 intatti; A1/B1/B4 non regrediti.
+
+### Backend (`supabase/functions/board/registry.ts`)
+- Aggiunta **Roma Termini** `slug "roma-termini"`, `rfiLivePlaceId "2416"`.
+  **Verificato da me** sul monitor RFI pubblico: `Monitor?placeId=2416` → HTTP 200,
+  `<title>Stazione di ROMA TERMINI</title>` (e 2000 → PADOVA). Nessun id indovinato.
+- **`prmScheduledId` reso OPZIONALE** (`prmScheduledId?: string`) e **omesso** per Roma
+  (non verificato). Verificato che **nessun code path live lo usa**: `index.ts` legge
+  solo `rfiLivePlaceId`/`slug`/`displayName` (grep: solo commenti + test lo citano).
+  Un'eventuale feature scheduled/PRM non va attivata per stazioni senza questo id.
+- Fetch/parse **non toccati** (già generici). Test deno aggiornati: 2 stazioni verificate,
+  Roma senza prmScheduledId, key ↔ slug allineati, bare "roma" → undefined (404).
+
+### iOS
+- **Fetch già parametrico**: `URLSessionBackendBoardFetcher` invia `stationSlug =
+  station.id`. Il vincolo non era il fetch ma il picker bloccato + il fallback.
+- **Allineamento slug (footgun)**: `Resources/stations.json` marca Padova e Roma Termini
+  con `servedByLiveBoard: true`; i loro `id` ("padova", "roma-termini") **coincidono
+  esatti** con le chiavi del registry (test lo asserisce → un drift fallisce in CI, non
+  in produzione con un 404 silenzioso).
+- **Stazioni servite derivate, non duplicate**: `StationCatalog.liveServed` filtra il
+  flag del catalogo; `AppEnvironment.selectableStations` / `liveServedStationIDs` ne
+  derivano. `allowsStationChange` in live = `selectableStations.count > 1`.
+- **FOOTGUN CRITICO risolto**: prima, un fallimento su una stazione qualsiasi faceva
+  fallback alla **fixture PADOVA** → si sarebbero viste righe di Padova sotto il nome
+  di un'altra stazione. Ora `BackendBoardService` ha `fallbackStationID` (= Padova, la
+  stazione che la fixture rappresenta): per altre stazioni lancia il nuovo
+  **`BoardUnavailableError.stationNotServed`** invece di ricadere su dati altrui.
+- **Stato onesto**: `StationBoardViewModel.isBoardUnavailableForStation` +
+  `board.unavailableForStation` ("Tabellone non disponibile per questa stazione" /
+  "Live board unavailable for this station"). Attivo se la stazione non è servita
+  (nessun fetch tentato) o su `unknown_station`/404. **Mai** errore grezzo, **mai**
+  righe di un'altra stazione: `changeStation` e lo stato onesto **azzerano `rows`**.
+- **`changeStation`** cicla solo le stazioni selezionabili, ricarica (`force`) e
+  confronta **per `id`** (bug trovato in corsa: l'uguaglianza di struct falliva perché
+  la voce di catalogo porta metadati diversi dalla costante `Station.padova` → il
+  cambio stazione sarebbe rimasto bloccato su Padova).
+
+### Checkpoint (verificato, non assunto)
+- **Backend deployato OGGI**: `padova` → HTTP 200, 40 righe; **`roma-termini` → HTTP 404
+  `unknown_station`** perché la function **non è ancora rideployata** con il nuovo
+  registry. Quindi, allo stato attuale, in app Roma mostra **correttamente lo stato
+  onesto** (non il tabellone di Padova). Dopo `supabase functions deploy board
+  --no-verify-jwt` Roma servirà il proprio tabellone.
+- **Compatibilità parser per Roma verificata**: l'HTML di `placeId=2416` ha la stessa
+  struttura di Padova (`<tbody>` con 40 `<tr>`) → il parser generico produrrà righe.
+- **Stazione non servita (es. Firenze)**: `firenze-smn` → 404 `unknown_station` lato
+  backend e, lato app, nessun fetch tentato → stato onesto. **Non** mostra Padova/Roma.
+
+### Test
+- Nuovi (deterministici, nessuna rete): catalogo deriva `liveServed` == {padova,
+  roma-termini} (allineamento slug-registry); `changeStation` cicla le servite, invia
+  lo slug giusto e mostra le righe di quella stazione (mai le precedenti); stazione non
+  servita → stato onesto **senza fetch**; `BoardUnavailableError` → stato onesto, non
+  `error.dataUnavailable`; `BackendBoardService` rifiuta il fallback di un'altra
+  stazione ma lo usa per Padova; URL builder porta lo slug selezionato.
+  Aggiornato il guardrail `sourceModeMatchesBuildConfiguration` (live ora consente il
+  cambio, ma solo tra servite).
+- **Suite: 120 test, 113 pass / 7 fail.** I 7 sono i **pre-esistenti** (StubURLProtocol +
+  rfiMapper), NON toccati dal diff.
+- **Test deno NON eseguiti**: Deno non è installato in questo ambiente (come da storico).
+  Vanno eseguiti insieme al deploy.
+
+### Build
+- Debug OK · build-for-testing OK · **Release OK** (`.mock`, nessun cambio stazione live)
+  · **TestFlight OK** (guardrail A3 intatti).
+
+### Risks / next
+- **Azione richiesta**: redeploy della Edge Function (`supabase functions deploy board
+  --no-verify-jwt`) + `deno test` — senza, Roma resta in stato onesto (comportamento
+  corretto ma non è ancora il valore atteso dal ticket).
+- `prmScheduledId` di Roma resta ignoto: nessuna feature scheduled va attivata per Roma.
+- Il catalogo iOS e il registry backend restano **due fonti da tenere allineate a mano**
+  (il test asserisce gli id attesi; un vero single-source richiederebbe un endpoint
+  `/stations`) — candidato per un B3-full.
+- I 7 test rossi pre-esistenti restano fuori scope.
+
+## 2026-07-15 — Ticket B1: catalogo stazioni reale + naming canonico in Cerca
+
+Stato: completata (catalogo + ricerca entità + salvataggio canonico + alias). Sorgente
+board invariata (Padova/partenze); Release resta `.mock`; A1/A3/B4 non regrediti.
+
+### Problema risolto
+- Cerca usava 7 stazioni mock hardcoded + testo libero. Un "Roma" digitato a mano NON
+  matchava la riga board "ROMA TERMINI" (regola ≥2-token) → footgun: la tratta salvata
+  non si agganciava al treno reale in Viaggi (B4).
+
+### Cosa
+- **Catalogo reale** `Resources/stations.json` (17 stazioni ITALIane reali). Schema
+  `Station`. `providerCodes` compilati SOLO dove già verificati nel codice (Padova rfi
+  1861, Bologna/Firenze/Milano PG/Venezia SL/Reggio) → `null` altrove (mai fabbricati).
+  Nuovo campo opzionale `Station.boardAliases: [String]?` (Codable-tollerante).
+- **`Services/StationCatalog.swift`**: protocollo + `DefaultStationCatalog` che decodifica
+  il JSON dal bundle una volta e lo cache-a; `search` ranked (prefix > token-prefix >
+  substring > città, fold diacritici, nessuna espansione abbreviazioni → "s" ≠ SANTA);
+  `station(named:)` lookup canonico (displayName o alias). Fallback embedded (stazioni
+  già note nel codice) se il JSON manca → mai catalogo vuoto.
+- **Cerca usa il catalogo** (`CercaViewModel`): rimossi `mockStations/Routes/Trains`;
+  `stations` ora sono ENTITÀ `Station`. Il form tratta risolve PARTENZA/DESTINAZIONE a
+  stazioni del catalogo (suggerimenti tappabili) e **salva il displayName CANONICO**
+  (es. "Roma Termini"), non il testo digitato. `canSaveCurrentRoute` richiede che
+  entrambi i campi risolvano a una stazione → un bare "Roma" è bloccato finché non si
+  sceglie "Roma Termini"/"Roma Tiburtina". `saveRoute(_:)` string resta (retro-compat)
+  e canonicalizza i nomi noti.
+- **Alias-aware matching** (`StationNameMatcher.matches(station:boardName:)`): confronta
+  displayName + `boardAliases`, riusando `matches(_:_:)` → la **regola ≥2-token resta
+  intatta** (Venezia Mestre ≠ Venezia Santa Lucia). Wired nel `SavedJourneyMatcher`
+  condiviso via un `catalog` OPZIONALE (default nil = comportamento stringa attuale):
+  RootTabView inietta LO STESSO catalogo in Home (`StationBoardViewModel`) e nel
+  resolver B4 → coerenti e alias-aware insieme; i test senza catalogo restano invariati.
+- Loc IT/EN: `search.route.pickStations`.
+
+### Checkpoint (verificato sul board LIVE Padova)
+- "roma" → **Roma Termini** + Roma Tiburtina come entità selezionabili (catalogo).
+- Salvata **Padova → Roma Termini** (canonico), il resolver B4 aggancia la riga live
+  "ROMA TERMINI" (oggi IC 594 @ 15:50; in altre fasce AV/FR) → treno reale + orario +
+  ritardo. **Binario**: il board live non pubblica binari in questo momento (None su
+  tutte le 40 righe) → card "--" ONESTO, comparirà quando RFI assegna.
+- **Destinazione abbreviata**: il board live Padova usa forme piene ("ROMA TERMINI",
+  "MILANO CENTRALE", "TORINO PORTA NUOVA") + "VENEZIA S.LUCIA" (che già matcha via
+  S→SANTA). La forma più spinta "VENEZIA S.L." **matcha via `boardAliases`** (test),
+  senza rompere il caso Mestre → nessun limite noto residuo per il board attuale.
+
+### Test
+- Nuovi (deterministici, catalogo in-memory, nessuna rete): decode con providerCodes
+  null/alias assenti tollerati; catalogo bundlato carica; search "roma" ranking; lookup
+  canonico + bare "Roma" non risolve; Cerca salva displayName canonico (case-insensitive);
+  bare "Roma" bloccato finché non si sceglie l'entità; alias matcha "VENEZIA S.L."
+  mantenendo ≥2-token (Mestre no); resolver B4 con catalogo aggancia la forma abbreviata
+  (e SENZA catalogo no → documenta il limite stringa); Home spotlight alias-aware col
+  catalogo. Riscritto `cercaViewModelFilters` (entità, niente routes/trains mock).
+- **Suite: 114 test, 107 pass / 7 fail.** I 7 sono i **pre-esistenti** (StubURLProtocol +
+  rfiMapper), NON toccati dal diff. Home/B4/save-Cerca esistenti verdi.
+
+### Build
+- Debug (app) OK; build-for-testing OK; Release OK (guardrail `.mock` intatto; catalogo
+  bundlato anche in Release; in Release il board è mock Bologna → tratte Padova non
+  servite → stato onesto B4).
+
+### Risks / next
+- `providerCodes` reali oltre Padova restano non verificati (null nel catalogo) — non
+  usati dal fetch board oggi; attivazione stazioni live = lavoro futuro (registry).
+- Station-mode è informativa (entità mostrate) perché il board live è solo Padova;
+  selezione per-stazione utile con board multi-stazione (B3).
+- I 7 test rossi pre-esistenti restano da sistemare in un task dedicato (fuori B1).
+
 ## 2026-07-15 — Ticket B4: prossimo treno REALE nelle tratte salvate (Viaggi)
 
 Stato: completata (logica + UI + test). Nessun dato inventato: dato reale o stato

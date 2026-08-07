@@ -85,7 +85,11 @@ enum AppEnvironment {
             fetcher: URLSessionBackendBoardFetcher(config: cfg),
             fallback: makeBackendFixtureService(),
             stampSourceKind: .backendLive,
-            debugLogTag: "BackendLive")
+            debugLogTag: "BackendLive",
+            // The bundled fallback fixture is PADOVA: it may only stand in for Padova.
+            // Any other station failing (e.g. 404 unknown_station) surfaces
+            // BoardUnavailableError → honest state, never another station's board.
+            fallbackStationID: Station.padova.id)
     }
     #endif
 
@@ -93,22 +97,58 @@ enum AppEnvironment {
         switch sourceMode {
         case .mock:
             return .bolognaCentrale
+        case .backendLivePadova:
+            // Prefer the CATALOG entry (same id/slug the backend registry uses, plus
+            // its live-served flag) so header, fetch slug and picker stay consistent.
+            return DefaultStationCatalog.shared.station(named: Station.padova.displayName) ?? .padova
         case .scheduledPadova, .remoteWithMockFallback, .rfiLivePadova,
-             .backendFixturePadova, .backendLivePadova:
+             .backendFixturePadova:
             return .padova
         }
     }
 
     /// Whether the header `Cambia` action may switch stations. A single fixed
-    /// station source (Padova scheduled demo or RFI live spike) MUST stay locked,
-    /// otherwise the station title could disagree with the board rows.
+    /// station source (Padova scheduled demo, RFI live spike, local fixture) MUST stay
+    /// locked, otherwise the station title could disagree with the board rows.
+    /// `.backendLivePadova` (B3-lite) allows changing station, but ONLY across the
+    /// stations the live backend actually serves (`selectableStations`).
     /// `.remoteWithMockFallback` is reserved for a future multi-station remote.
     static var allowsStationChange: Bool {
         switch sourceMode {
         case .mock, .remoteWithMockFallback:
             return true
-        case .scheduledPadova, .rfiLivePadova, .backendFixturePadova, .backendLivePadova:
+        case .backendLivePadova:
+            return selectableStations.count > 1
+        case .scheduledPadova, .rfiLivePadova, .backendFixturePadova:
             return false
+        }
+    }
+
+    /// Stations the header `Cambia` action may cycle through.
+    ///  • live backend → the stations the backend registry actually SERVES, derived
+    ///    from the catalog's `servedByLiveBoard` flag (never a hand-duplicated list);
+    ///  • mock → the demo carousel;
+    ///  • single-station sources → just that station.
+    static var selectableStations: [Station] {
+        switch sourceMode {
+        case .mock, .remoteWithMockFallback:
+            return Station.demoStations
+        case .backendLivePadova:
+            let served = DefaultStationCatalog.shared.liveServed
+            return served.isEmpty ? [initialStation] : served
+        case .scheduledPadova, .rfiLivePadova, .backendFixturePadova:
+            return [initialStation]
+        }
+    }
+
+    /// Ids of the stations the LIVE board serves. Nil when the source isn't the live
+    /// backend (no station restriction applies — e.g. the mock carousel).
+    static var liveServedStationIDs: Set<String>? {
+        switch sourceMode {
+        case .backendLivePadova:
+            return Set(DefaultStationCatalog.shared.liveServed.map(\.id))
+        case .mock, .remoteWithMockFallback, .scheduledPadova, .rfiLivePadova, .backendFixturePadova:
+            return nil
         }
     }
 }

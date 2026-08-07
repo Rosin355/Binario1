@@ -311,6 +311,7 @@
       }
     },
     "action.saveJourney" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -437,6 +438,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provenienza non disponibile"
+          }
+        }
+      }
+    },
+    "board.unavailableForStation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live board unavailable for this station"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabellone non disponibile per questa stazione"
           }
         }
       }
@@ -1079,7 +1096,24 @@
         }
       }
     },
+    "search.route.pickStations" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick departure and destination from the catalog so your saved route matches the live board."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli partenza e destinazione dal catalogo, così la tratta salvata combacia col tabellone."
+          }
+        }
+      }
+    },
     "search.routes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1096,6 +1130,7 @@
       }
     },
     "search.save" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1112,6 +1147,7 @@
       }
     },
     "search.saved" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1240,6 +1276,7 @@
       }
     },
     "search.trains" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

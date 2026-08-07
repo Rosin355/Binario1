@@ -18,6 +18,27 @@ struct Station: Identifiable, Codable, Equatable, Hashable {
     let countryCode: String
     let timezone: String
     let providerCodes: ProviderCodes?
+    /// Optional abbreviated forms a live RFI board may use for THIS station's name
+    /// (e.g. "Venezia S.L.", "Torino P.N.") that `StationNameMatcher.canonical` can't
+    /// derive on its own. Used to line up a saved journey with an abbreviated board
+    /// row WITHOUT weakening the ≥2-token rule. Optional → decodes as nil when absent;
+    /// never fabricated (only well-known display abbreviations).
+    var boardAliases: [String]? = nil
+    /// True when this station is SERVED by the live board backend, i.e. its `id` is a
+    /// slug present in the backend registry (`supabase/functions/board/registry.ts`)
+    /// with a VERIFIED rfiLivePlaceId. The app derives the live station picker from
+    /// this flag instead of duplicating the list in code. Absent/false → the station
+    /// exists in the catalog for search/naming, but a live fetch must NOT be attempted
+    /// (honest "board unavailable" state instead).
+    ///
+    /// FOOTGUN: `id` MUST equal the backend registry slug exactly ("padova",
+    /// "roma-termini") — a mismatch yields 404 unknown_station.
+    var servedByLiveBoard: Bool? = nil
+}
+
+extension Station {
+    /// Whether the live board backend serves this station (see `servedByLiveBoard`).
+    var isServedByLiveBoard: Bool { servedByLiveBoard == true }
 }
 
 extension Station {

@@ -148,13 +148,17 @@ struct Binario1Tests {
 
     @Test func sourceModeMatchesBuildConfiguration() {
         #if DEBUG
-        // DEBUG = live Padova backend adapter; single fixed station, selection locked.
+        // DEBUG = live backend adapter. B3-lite: station change is allowed but ONLY
+        // across the stations the backend serves (Padova, Roma Termini).
         #expect(AppEnvironment.sourceMode == .backendLivePadova)
-        #expect(AppEnvironment.allowsStationChange == false)
+        #expect(AppEnvironment.allowsStationChange == (AppEnvironment.selectableStations.count > 1))
+        #expect(AppEnvironment.selectableStations.allSatisfy { $0.isServedByLiveBoard })
+        #expect(AppEnvironment.liveServedStationIDs?.contains("padova") == true)
         #elseif TESTFLIGHT
-        // TESTFLIGHT archive = live Padova backend adapter (token baked in); locked.
+        // TESTFLIGHT archive = same live source (token baked in).
         #expect(AppEnvironment.sourceMode == .backendLivePadova)
-        #expect(AppEnvironment.allowsStationChange == false)
+        #expect(AppEnvironment.allowsStationChange == (AppEnvironment.selectableStations.count > 1))
+        #expect(AppEnvironment.liveServedStationIDs?.contains("padova") == true)
         #else
         // Plain RELEASE (App Store) = bundled mock board; station carousel enabled.
         #expect(AppEnvironment.sourceMode == .mock)
@@ -453,34 +457,302 @@ struct Binario1Tests {
     // MARK: - Cerca (Search)
 
     @MainActor
-    @Test func cercaViewModelFilters() {
-        let vm = CercaViewModel()
-        // Idle: not searching, everything shown.
+    @Test func cercaCatalogSearchReturnsStationEntities() {
+        let vm = CercaViewModel(catalog: Self.testCatalog(),
+                                savedStore: freshStore("binario1.tests.cerca-search"))
+        // Idle: not searching, all catalog stations shown as entities.
         #expect(vm.isSearching == false)
         #expect(vm.hasResults)
-        #expect(vm.stations.contains("Padova"))
+        #expect(vm.stations.contains { $0.displayName == "Padova" })
 
-        // Case-insensitive query narrows across sections.
-        vm.query = "venezia"
+        // "roma" proposes the real Roma stations as selectable entities.
+        vm.query = "roma"
         #expect(vm.isSearching)
-        #expect(vm.stations.contains("Venezia Santa Lucia"))
-        #expect(vm.routes.contains("Padova → Venezia Santa Lucia"))
-        #expect(vm.trains.isEmpty)
+        #expect(vm.stations.contains { $0.displayName == "Roma Termini" })
+        #expect(vm.stations.contains { $0.displayName == "Roma Tiburtina" })
 
-        // Train number query matches only trains.
-        vm.query = "1722"
-        #expect(vm.trains.contains("REG 1722"))
+        // Case/diacritic-insensitive.
+        vm.query = "VENEZIA santa"
+        #expect(vm.stations.contains { $0.displayName == "Venezia Santa Lucia" })
+
+        // Nonsense query → no results.
+        vm.query = "zzzzzz"
         #expect(vm.stations.isEmpty)
-        #expect(vm.routes.isEmpty)
+        #expect(vm.hasResults == false)
 
-        // No match → no results.
-        vm.query = "zzzz"
-        #expect(!vm.hasResults)
-
-        // Whitespace-only query is treated as idle.
+        // Whitespace-only query is treated as idle (all stations shown).
         vm.query = "   "
         #expect(vm.isSearching == false)
         #expect(vm.hasResults)
+    }
+
+    // MARK: - B1 · Real station catalog + canonical route naming
+
+    /// Deterministic in-memory catalog (no bundle dependency) for B1 tests.
+    private static func testCatalog() -> DefaultStationCatalog {
+        func s(_ id: String, _ name: String, _ city: String,
+               provider: ProviderCodes? = nil, aliases: [String]? = nil) -> Station {
+            Station(id: id, name: name, city: city, displayName: name, countryCode: "IT",
+                    timezone: "Europe/Rome", providerCodes: provider, boardAliases: aliases)
+        }
+        return DefaultStationCatalog(stations: [
+            s("padova", "Padova", "Padova", provider: ProviderCodes(rfi: "1861", viaggiatreno: "S02430")),
+            s("roma-termini", "Roma Termini", "Roma"),
+            s("roma-tiburtina", "Roma Tiburtina", "Roma"),
+            s("venezia-sl", "Venezia Santa Lucia", "Venezia", aliases: ["Venezia S.L."]),
+            s("venezia-mestre", "Venezia Mestre", "Venezia"),
+            s("bologna-c", "Bologna Centrale", "Bologna"),
+        ])
+    }
+
+    @Test func stationDecodesWithOptionalProviderCodesAndAliases() throws {
+        let json = """
+        [{"id":"a","name":"A A","city":"A","displayName":"A A","countryCode":"IT","timezone":"Europe/Rome","providerCodes":null},
+         {"id":"b","name":"B B","city":"B","displayName":"B B","countryCode":"IT","timezone":"Europe/Rome","providerCodes":{"rfi":"X","viaggiatreno":"Y"},"boardAliases":["B."]}]
+        """
+        let stations = try JSONDecoder().decode([Station].self, from: Data(json.utf8))
+        #expect(stations.count == 2)
+        #expect(stations[0].providerCodes == nil)      // null tolerated
+        #expect(stations[0].boardAliases == nil)       // absent tolerated
+        #expect(stations[1].providerCodes?.rfi == "X")
+        #expect(stations[1].boardAliases == ["B."])
+    }
+
+    @Test func bundledStationCatalogLoads() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else {
+            print("[Test] stations.json not loaded from bundle — skipping")
+            return
+        }
+        #expect(catalog.station(named: "Roma Termini")?.displayName == "Roma Termini")
+        #expect(catalog.station(named: "Padova")?.providerCodes?.rfi == "1861")
+        #expect(catalog.station(named: "Roma Termini")?.providerCodes == nil)   // not fabricated
+    }
+
+    @Test func catalogSearchRanksAndCanonicalLookupDisambiguates() {
+        let catalog = Self.testCatalog()
+        // "roma" → both Roma stations (not Padova).
+        let roma = catalog.search("roma", limit: 10).map(\.displayName)
+        #expect(roma.contains("Roma Termini"))
+        #expect(roma.contains("Roma Tiburtina"))
+        #expect(!roma.contains("Padova"))
+        // Canonical lookup resolves known names (case-insensitive) + alias.
+        #expect(catalog.station(named: "padova")?.displayName == "Padova")
+        #expect(catalog.station(named: "venezia s.l.")?.displayName == "Venezia Santa Lucia")
+        // A bare "Roma" is NOT a station → the footgun is blocked until disambiguated.
+        #expect(catalog.station(named: "Roma") == nil)
+    }
+
+    @MainActor
+    @Test func cercaSavesCanonicalDisplayNameForMatching() {
+        let store = freshStore("binario1.tests.b1-canon")
+        let vm = CercaViewModel(catalog: Self.testCatalog(), savedStore: store)
+        vm.departureField = "padova"          // lowercase typed
+        vm.destinationField = "roma termini"
+        #expect(vm.canSaveCurrentRoute == true)
+        #expect(vm.saveCurrentRoute() == .saved)
+        let saved = store.load()
+        #expect(saved.count == 1)
+        #expect(saved[0].origin == "Padova")            // canonical, not "padova"
+        #expect(saved[0].destination == "Roma Termini") // canonical, not "roma termini"
+        // The stored canonical name matches the live board row.
+        #expect(StationNameMatcher.matches(saved[0].destination, "ROMA TERMINI"))
+    }
+
+    @MainActor
+    @Test func cercaBareRomaBlockedUntilEntityPicked() {
+        let vm = CercaViewModel(catalog: Self.testCatalog(),
+                                savedStore: freshStore("binario1.tests.b1-roma"))
+        vm.destinationField = "Roma"
+        #expect(vm.destinationStation == nil)           // bare "Roma" isn't a station
+        #expect(vm.canSaveCurrentRoute == false)
+        let names = vm.destinationSuggestions().map(\.displayName)
+        #expect(names.contains("Roma Termini"))
+        #expect(names.contains("Roma Tiburtina"))
+        vm.selectDestination(vm.destinationSuggestions().first { $0.displayName == "Roma Termini" }!)
+        #expect(vm.destinationStation?.displayName == "Roma Termini")
+    }
+
+    @Test func matcherAliasHandlesAbbreviatedBoardNameKeepingTwoTokenRule() {
+        let catalog = Self.testCatalog()
+        let venezia = catalog.station(named: "Venezia Santa Lucia")!
+        let mestre = catalog.station(named: "Venezia Mestre")!
+        // Alias: abbreviated board forms match Venezia Santa Lucia.
+        #expect(StationNameMatcher.matches(station: venezia, boardName: "VENEZIA S.L."))
+        #expect(StationNameMatcher.matches(station: venezia, boardName: "VENEZIA S.LUCIA"))
+        #expect(StationNameMatcher.matches(station: venezia, boardName: "Venezia Santa Lucia"))
+        // ≥2-token rule preserved: Mestre never matches Santa Lucia (either direction).
+        #expect(!StationNameMatcher.matches(station: venezia, boardName: "Venezia Mestre"))
+        #expect(!StationNameMatcher.matches(station: mestre, boardName: "VENEZIA S.L."))
+    }
+
+    @MainActor
+    @Test func resolverWithCatalogMatchesAbbreviatedBoardDestination() async {
+        let catalog = Self.testCatalog()
+        let rows = [Self.boardRow("r1", "VENEZIA S.L.", 18, 10)]   // abbreviated board form
+        let resolver = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                         catalog: catalog, now: { Self.romeDate(2026, 6, 17, 17, 0) })
+        let journey = Self.savedTo("Venezia Santa Lucia")   // origin Padova (served), canonical dest
+        let map = await resolver.resolve([journey])
+        guard case .resolved(let r)? = map[journey.id] else { Issue.record("expected resolved"); return }
+        #expect(r.destination == "Venezia Santa Lucia")
+        #expect(r.trainNumber == "r1")
+        // Without a catalog the abbreviated form does NOT match (documents the limit).
+        let noCat = NextTrainResolver(service: FixedBoardService(rows: rows), boardStation: .padova,
+                                      now: { Self.romeDate(2026, 6, 17, 17, 0) })
+        #expect(await noCat.resolve([journey])[journey.id] == .unavailable)
+    }
+
+    @MainActor
+    @Test func homeSpotlightIsAliasAwareWithCatalog() async {
+        let catalog = Self.testCatalog()
+        let rows = [
+            Self.boardRow("v", "VENEZIA S.L.", 18, 10),           // abbreviated
+            Self.boardRow("b", "Bologna Centrale", 18, 20),
+        ]
+        let vm = StationBoardViewModel(service: FixedBoardService(rows: rows), station: .padova,
+                                       allowsStationChange: false, now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       savedJourneys: [Self.savedTo("Venezia Santa Lucia")], catalog: catalog)
+        await vm.refresh()
+        #expect(vm.usesPersonalizedFeatured == true)
+        #expect(vm.featuredRows.map(\.id) == ["v"])   // abbreviated board row matched via alias
+    }
+
+    // MARK: - B3-lite · Live station switching (Padova ↔ Roma Termini)
+
+    /// Records the station ids the view model asks for, and serves per-station rows.
+    private final class RecordingBoardService: TrainBoardService, @unchecked Sendable {
+        private(set) var requestedStationIDs: [String] = []
+        let rowsByStation: [String: [TrainBoardRow]]
+        init(rowsByStation: [String: [TrainBoardRow]]) { self.rowsByStation = rowsByStation }
+
+        func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
+            requestedStationIDs.append(stationId)
+            guard let rows = rowsByStation[stationId] else {
+                throw BoardUnavailableError.stationNotServed(stationID: stationId)
+            }
+            let station = Station(id: stationId, name: stationId, city: nil, displayName: stationId,
+                                  countryCode: "IT", timezone: "Europe/Rome", providerCodes: nil)
+            return StationBoardResponse(station: station, boardType: type, locale: nil, supportedLocales: [],
+                                        rows: rows, generatedAt: Binario1Tests.romeDate(2026, 6, 17, 17, 0),
+                                        sourceUpdatedAt: nil, isStale: false, warningMessageKey: nil)
+        }
+    }
+
+    private struct ThrowingBackendFetcher: BackendBoardFetching {
+        let error: Error
+        func fetchBoardJSON(stationSlug: String, type: BoardType, locale: String) async throws -> Data {
+            throw error
+        }
+    }
+
+    private static func servedStation(_ id: String, _ name: String) -> Station {
+        Station(id: id, name: name, city: nil, displayName: name, countryCode: "IT",
+                timezone: "Europe/Rome", providerCodes: nil, boardAliases: nil, servedByLiveBoard: true)
+    }
+
+    @Test func catalogDerivesLiveServedStationsMatchingRegistrySlugs() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else {
+            print("[Test] stations.json not loaded from bundle — skipping")
+            return
+        }
+        let servedIDs = Set(catalog.liveServed.map(\.id))
+        // These ids MUST equal the backend registry slugs (registry.ts) — a mismatch
+        // would make the backend answer 404 unknown_station.
+        #expect(servedIDs == ["padova", "roma-termini"])
+        #expect(catalog.servesLiveBoard(stationID: "roma-termini"))
+        #expect(!catalog.servesLiveBoard(stationID: "firenze-smn"))   // in catalog, not live-served
+        #expect(catalog.station(named: "Roma Termini")?.isServedByLiveBoard == true)
+    }
+
+    @MainActor
+    @Test func changeStationCyclesServedStationsAndRefetchesWithItsSlug() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let roma = Self.servedStation("roma-termini", "Roma Termini")
+        let service = RecordingBoardService(rowsByStation: [
+            "padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)],
+            "roma-termini": [Self.boardRow("rm1", "Milano Centrale", 18, 5),
+                             Self.boardRow("rm2", "Napoli Centrale", 18, 25)],
+        ])
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova, roma],
+                                       liveServedStationIDs: ["padova", "roma-termini"])
+        await vm.refresh()
+        #expect(service.requestedStationIDs == ["padova"])          // sends the Padova slug
+        #expect(vm.rows.map(\.id) == ["pd1"])
+
+        await vm.changeStation()
+        #expect(vm.station.id == "roma-termini")
+        #expect(service.requestedStationIDs == ["padova", "roma-termini"])   // sends Roma's slug
+        #expect(vm.rows.map(\.id) == ["rm1", "rm2"])                // Roma's own rows
+        #expect(!vm.rows.contains { $0.id == "pd1" })               // never the previous station's
+        #expect(vm.isBoardUnavailableForStation == false)
+
+        await vm.changeStation()                                    // wraps back to Padova
+        #expect(vm.station.id == "padova")
+        #expect(service.requestedStationIDs.last == "padova")
+        #expect(vm.rows.map(\.id) == ["pd1"])
+    }
+
+    @MainActor
+    @Test func unservedStationShowsHonestStateWithoutFetching() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let firenze = Station(id: "firenze-smn", name: "Firenze Santa Maria Novella", city: "Firenze",
+                              displayName: "Firenze Santa Maria Novella", countryCode: "IT",
+                              timezone: "Europe/Rome", providerCodes: nil)
+        let service = RecordingBoardService(rowsByStation: ["padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)]])
+        let vm = StationBoardViewModel(service: service, station: firenze, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova],
+                                       liveServedStationIDs: ["padova", "roma-termini"])
+        await vm.refresh()
+        #expect(vm.isBoardUnavailableForStation == true)   // honest state
+        #expect(vm.rows.isEmpty)                           // never another station's board
+        #expect(vm.errorMessageKey == nil)                 // not a raw error
+        #expect(service.requestedStationIDs.isEmpty)       // no live fetch attempted
+    }
+
+    @MainActor
+    @Test func unknownStationErrorSurfacesHonestStateNotRawError() async {
+        // The service throws BoardUnavailableError (what a 404 unknown_station maps to).
+        let roma = Self.servedStation("roma-termini", "Roma Termini")
+        let service = RecordingBoardService(rowsByStation: [:])   // no rows for any station → throws
+        let vm = StationBoardViewModel(service: service, station: roma, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [roma],
+                                       liveServedStationIDs: ["roma-termini"])
+        await vm.refresh()
+        #expect(vm.isBoardUnavailableForStation == true)
+        #expect(vm.errorMessageKey == nil)                 // honest state, not "error.dataUnavailable"
+        #expect(vm.rows.isEmpty)
+    }
+
+    @Test func backendServiceNeverServesAnotherStationsFallback() async throws {
+        // The bundled fallback fixture is PADOVA; it may only stand in for Padova.
+        let failing = ThrowingBackendFetcher(error: BackendFetchError.httpStatus(404))
+        let service = BackendBoardService(fetcher: failing,
+                                          fallback: MockTrainBoardService(resourceName: "does-not-exist"),
+                                          stampSourceKind: .backendLive,
+                                          fallbackStationID: "padova")
+        // Roma → no station-specific fallback → honest unavailable error (not Padova's board).
+        await #expect(throws: BoardUnavailableError.stationNotServed(stationID: "roma-termini")) {
+            try await service.fetchBoard(stationId: "roma-termini", type: .departures)
+        }
+        // Padova → the fallback legitimately represents this station, so it is used.
+        let padovaBoard = try await service.fetchBoard(stationId: "padova", type: .departures)
+        #expect(!padovaBoard.rows.isEmpty)
+    }
+
+    @Test func backendURLCarriesTheSelectedStationSlug() {
+        let base = URL(string: "https://example.functions.supabase.co")!
+        let roma = URLSessionBackendBoardFetcher.makeURL(base: base, stationSlug: "roma-termini",
+                                                         type: .departures, locale: "it")
+        #expect(roma?.absoluteString == "https://example.functions.supabase.co/board?stationSlug=roma-termini&type=departures&locale=it")
+        let padova = URLSessionBackendBoardFetcher.makeURL(base: base, stationSlug: "padova",
+                                                           type: .departures, locale: "it")
+        #expect(padova?.absoluteString.contains("stationSlug=padova") == true)
     }
 
     // MARK: - Numeric text polish

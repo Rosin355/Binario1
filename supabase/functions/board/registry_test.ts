@@ -4,7 +4,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { parseBoardType, resolveStation, rfiMonitorURL, STATIONS } from "./registry.ts";
 
-Deno.test("registry resolves Padova (only verified station) and rejects others", () => {
+Deno.test("registry resolves the VERIFIED stations and rejects others", () => {
   const padova = resolveStation("padova");
   assert(padova);
   assertEquals(padova!.slug, "padova");
@@ -12,9 +12,29 @@ Deno.test("registry resolves Padova (only verified station) and rejects others",
   assertEquals(padova!.rfiLivePlaceId, "2000");
   assertEquals(padova!.prmScheduledId, "1861");        // distinct id system, kept separate
   assertEquals(resolveStation("PADOVA "), padova);     // case/space-insensitive
+
+  // Roma Termini: rfiLivePlaceId VERIFIED (2416); prmScheduledId intentionally absent
+  // (never guessed) — the live board path does not use it.
+  const roma = resolveStation("roma-termini");
+  assert(roma);
+  assertEquals(roma!.slug, "roma-termini");
+  assertEquals(roma!.displayName, "Roma Termini");
+  assertEquals(roma!.rfiLivePlaceId, "2416");
+  assertEquals(roma!.prmScheduledId, undefined);
+  assertEquals(resolveStation("ROMA-TERMINI "), roma); // case/space-insensitive
+
+  // A bare "roma" is NOT a station slug → handler returns 404 unknown_station.
   assertEquals(resolveStation("roma"), undefined);
   assertEquals(resolveStation(null), undefined);
-  assertEquals(Object.keys(STATIONS).length, 1);       // no unverified stations activated
+  assertEquals(Object.keys(STATIONS).length, 2);       // no unverified stations activated
+});
+
+Deno.test("every registry entry carries a verified live placeId", () => {
+  for (const [key, entry] of Object.entries(STATIONS)) {
+    assertEquals(entry.slug, key);                     // key ↔ slug stay aligned (iOS sends the slug)
+    assert(entry.rfiLivePlaceId.length > 0);
+    assert(entry.displayName.length > 0);
+  }
 });
 
 Deno.test("parseBoardType accepts departures/arrivals, defaults, rejects junk", () => {

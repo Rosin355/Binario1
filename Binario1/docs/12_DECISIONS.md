@@ -175,6 +175,46 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   nessuna fixture. Conferma che le env var Xcode non bastano per l'app installata e
   che il token build-time (gitignored) è la soluzione. Nessun secret committato.
 
+## Cambio-stazione live (B3-lite)
+
+- **Il live serve più stazioni, ma solo quelle VERIFICATE nel registry** (oggi Padova
+  2000 e Roma Termini 2416, entrambe confermate sul monitor RFI). `allowsStationChange`
+  in live è vero solo se c'è più di una stazione servita; il picker cicla SOLO quelle.
+- **`prmScheduledId` è opzionale nel registry**: il path live non lo usa mai (solo
+  `rfiLivePlaceId`). Una stazione può essere live-attiva senza; una feature
+  scheduled/PRM NON va attivata per stazioni che non lo hanno verificato.
+- **Lo slug è il contratto tra app e backend**: `Station.id` (catalogo iOS) DEVE essere
+  identico alla chiave del registry ("padova", "roma-termini"), altrimenti 404
+  silenzioso. Un test asserisce l'insieme atteso così il drift esplode nei test.
+- **L'elenco delle stazioni servite è derivato** dal flag `servedByLiveBoard` del
+  catalogo, non duplicato in codice.
+- **Mai la board di una stazione sotto il nome di un'altra**: il fallback fixture è
+  vincolato alla stazione che rappresenta (`fallbackStationID`); per le altre si lancia
+  `BoardUnavailableError` e la UI mostra lo **stato onesto** "Tabellone non disponibile
+  per questa stazione". Cambio stazione e stato onesto **azzerano le righe** precedenti.
+- **404 `unknown_station` è un caso previsto**, non un errore da mostrare grezzo.
+
+## Catalogo stazioni & naming canonico (B1)
+
+- **Le stazioni sono un catalogo reale** (`Resources/stations.json`, schema `Station`),
+  non più liste mock. Cerca restituisce ENTITÀ `Station`; il form tratta risolve i campi
+  a stazioni del catalogo e **salva il displayName CANONICO** (es. "Roma Termini"), così
+  il resolver B4 / spotlight Home agganciano la riga board in modo affidabile. Un bare
+  "Roma" NON è salvabile finché non si sceglie l'entità (footgun bloccato).
+- **`providerCodes` non si fabbricano**: presenti solo dove già verificati nel codice
+  (Padova rfi 1861, ecc.), `null` altrove. I nomi sono fatti pubblici; i codici no.
+  Non usati dal fetch board oggi (solo metadati per un futuro registry live).
+- **`boardAliases` opzionali** sulle stazioni per le forme abbreviate RFI ("Venezia
+  S.L.", "Torino P.N."). `StationNameMatcher.matches(station:boardName:)` li considera
+  RIUSANDO `matches(_:_:)` → la regola ≥2-token NON si indebolisce (Venezia Mestre ≠
+  Venezia Santa Lucia). Gli alias possono solo AGGIUNGERE veri match.
+- **Un solo catalogo condiviso**: iniettato (opzionale, default nil = match stringa) nel
+  `SavedJourneyMatcher` usato SIA da Home SIA dal resolver B4 → restano coerenti e
+  alias-aware insieme; i test/preview senza catalogo mantengono il comportamento stringa.
+- **Ricerca senza espansione abbreviazioni**: il fold di ricerca è solo maiuscole +
+  diacritici + punteggiatura (niente "s"→SANTA), a differenza di `StationNameMatcher.
+  canonical` (che espande) usato per il match col board.
+
 ## Viaggi — prossimo treno reale (B4)
 
 - **Dato reale o stato onesto, mai segnaposto**: le tratte salvate mostrano il prossimo
