@@ -68,7 +68,10 @@ enum AppEnvironment {
     private static func makeBackendFixtureService() -> TrainBoardService {
         BackendBoardService(fetcher: FixtureBackendBoardFetcher(),
                             fallback: MockTrainBoardService(),
-                            stampSourceKind: .backendFixture)
+                            stampSourceKind: .backendFixture,
+                            // The fixture (and its mock fallback) only stand for Padova:
+                            // any other station gets the honest unavailable state.
+                            fallbackStationID: Station.padova.id)
     }
 
     /// Deployed backend adapter. When the endpoint URL is configured, calls the

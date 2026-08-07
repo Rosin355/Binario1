@@ -36,7 +36,16 @@ final class StationBoardViewModel {
     private let staleThreshold: TimeInterval = 3 * 60
 
     private let service: TrainBoardService
-    private var isRefreshing = false
+    /// Number of fetches currently in flight. Several can overlap: a forced fetch
+    /// (station change / pull-to-refresh) starts IMMEDIATELY instead of queuing behind
+    /// a slow one, and any superseded result is discarded on arrival.
+    private var inFlightFetches = 0
+    private var isRefreshing: Bool { inFlightFetches > 0 }
+    /// Bumped whenever the selection changes (station switch). A fetch captures the
+    /// generation it started in; if it no longer matches when the response lands, that
+    /// response is STALE and must never touch the board — this is what stops a slow
+    /// Padova response from painting rows under the Roma Termini header.
+    private var fetchGeneration = 0
     private var lastFetchAt: Date?
     private var lastFetchKey: String?
     /// Minimum gap between automatic (non-forced) fetches of the SAME board, to
@@ -105,6 +114,17 @@ final class StationBoardViewModel {
     private func isServed(_ station: Station) -> Bool {
         guard let liveServedStationIDs else { return true }
         return liveServedStationIDs.contains(station.id)
+    }
+
+    /// Whether a response's station identity must match the selected station.
+    /// Enabled for the LIVE board only: the mock demo carousel deliberately serves the
+    /// same bundled dataset under different station names, and must keep working.
+    private var validatesStationIdentity: Bool { liveServedStationIDs != nil }
+
+    /// Station ids compare case/whitespace-insensitively (backend lowercases slugs).
+    private static func sameStation(_ a: String, _ b: String) -> Bool {
+        a.trimmingCharacters(in: .whitespaces).lowercased()
+        == b.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
     // MARK: - Derived data
@@ -190,7 +210,10 @@ final class StationBoardViewModel {
     /// non-forced calls for the SAME board within `minAutoRefreshInterval` are
     /// skipped so accidental duplicate triggers never double-fetch.
     func refresh(force: Bool = false) async {
-        guard !isRefreshing else { return }                 // never overlap requests
+        // A forced refresh (station change / pull-to-refresh) must START NOW, in
+        // parallel with any slow in-flight fetch — queuing behind it is what left the
+        // new station with no request of its own. Non-forced calls still collapse.
+        guard force || !isRefreshing else { return }
         // A station the live board doesn't serve must never trigger a fetch (its
         // fallback would belong to another station). Honest state, no rows.
         guard isServed(station) else {
@@ -208,15 +231,41 @@ final class StationBoardViewModel {
         // Re-read persisted saved journeys so Home reflects Viaggi add/delete on the
         // next refresh/load (no-op when no provider was injected).
         if let savedJourneysProvider { savedJourneys = savedJourneysProvider() }
-        isRefreshing = true
-        isLoading = rows.isEmpty
+        // Identity of THIS request: if either changes before the response lands, the
+        // response belongs to a selection the user has already left.
+        let requestedStationID = station.id
+        let generation = fetchGeneration
+        inFlightFetches += 1
+        if rows.isEmpty { isLoading = true }
         defer {
-            isLoading = false
-            isRefreshing = false
+            inFlightFetches -= 1
+            // Keep the spinner up while another (newer) fetch is still running.
+            if inFlightFetches == 0 { isLoading = false }
         }
 
         do {
-            let response = try await service.fetchBoard(stationId: station.id, type: boardType)
+            let response = try await service.fetchBoard(stationId: requestedStationID, type: boardType)
+            // Superseded while in flight (station switched) → drop it silently. Never
+            // paint one station's rows under another station's header.
+            guard generation == fetchGeneration,
+                  Self.sameStation(requestedStationID, station.id) else {
+                #if DEBUG
+                print("[Board] discarded stale response for \(requestedStationID) (now \(station.id))")
+                #endif
+                return
+            }
+            // The response must also SAY it is this station (live only — the mock demo
+            // carousel intentionally reuses one dataset across stations).
+            if validatesStationIdentity,
+               !Self.sameStation(response.station.id, requestedStationID) {
+                #if DEBUG
+                print("[Board] identity mismatch · requested=\(requestedStationID) · responded=\(response.station.id) → honest state")
+                #endif
+                markBoardUnavailable()
+                lastFetchKey = key
+                lastFetchAt = now()
+                return
+            }
             rows = response.rows.sorted { $0.scheduledTime < $1.scheduledTime }
             lastUpdated = response.generatedAt
             sourceIsStale = response.isStale
@@ -231,6 +280,7 @@ final class StationBoardViewModel {
             lastFetchAt = now()
         } catch is BoardUnavailableError {
             if Task.isCancelled { return }
+            guard isCurrent(generation, requestedStationID) else { return }   // stale failure
             // Expected: this station has no board (unknown_station / no station-specific
             // fallback). Honest state — never another station's rows, never raw error.
             markBoardUnavailable()
@@ -238,12 +288,19 @@ final class StationBoardViewModel {
             lastFetchAt = now()
         } catch {
             if Task.isCancelled { return }                  // superseded by a newer refresh
+            guard isCurrent(generation, requestedStationID) else { return }   // stale failure
             errorMessageKey = "error.dataUnavailable"
             isBoardUnavailableForStation = false
             sourceIsStale = true
             lastFetchKey = key
             lastFetchAt = now()
         }
+    }
+
+    /// Whether a fetch that started in `generation` for `stationID` still describes the
+    /// current selection (otherwise its result/failure must be ignored).
+    private func isCurrent(_ generation: Int, _ stationID: String) -> Bool {
+        generation == fetchGeneration && Self.sameStation(stationID, station.id)
     }
 
     /// Enter the honest "no board for this station" state: drop any rows (they belong
@@ -279,6 +336,9 @@ final class StationBoardViewModel {
         // silently fail to advance.
         let next = (all.firstIndex { $0.id == station.id }.map { $0 + 1 } ?? 0) % all.count
         station = all[next]
+        // Invalidate any in-flight fetch for the PREVIOUS station: when its response
+        // lands it will no longer match this generation and is dropped.
+        fetchGeneration += 1
         // Drop the previous station's rows immediately: they must never be visible
         // under the new station's name while the new board loads.
         rows = []

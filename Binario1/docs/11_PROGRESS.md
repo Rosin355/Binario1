@@ -2,6 +2,62 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-15 — BUG CRITICO risolto: righe di una stazione sotto l'header di un'altra
+
+Stato: risolto, con test di regressione committati insieme al fix. Bug segnalato su
+device: header "ROMA TERMINI · Backend · RFI online" ma righe di PADOVA.
+
+### Causa (dimostrata con test di riproduzione, non ipotizzata)
+Mancava l'invariante **"le righe mostrate provengono dalla stazione selezionata"**.
+`refresh()` applicava qualunque risposta arrivasse. Due difetti sommati:
+- **(a) Nessuna validazione d'identità**: `rows = response.rows` senza confrontare
+  `response.station.id` con `station.id`.
+- **(b) La risposta vecchia sopravviveva al cambio stazione**: `guard !isRefreshing`
+  faceva **uscire subito** il `refresh(force:)` di `changeStation` se un auto-refresh
+  (30s) di Padova era in volo → nessun fetch per Roma; poi la risposta Padova atterrava
+  e riempiva `rows` sotto l'header Roma.
+Escluse per evidenza: lo **slug inviato era corretto** (il backend rispondeva bene, e
+l'header diceva "Backend", non "Backend fixture"); **nessuna cache** non chiavata
+(`lastFetchKey` include `station.id`, cache backend `slug:type:locale`, URLCache per URL).
+
+### Fix
+- **Token di generazione** (`fetchGeneration`): incrementato da `changeStation`; una
+  risposta che atterra con generazione o stazione diverse viene **scartata**.
+- **`force` avvia davvero il fetch in parallelo**: `guard force || !isRefreshing` →
+  la nuova stazione non si accoda più dietro una richiesta lenta. `isRefreshing` è ora
+  un contatore di fetch in volo (`inFlightFetches`) e lo spinner resta finché almeno
+  uno è attivo.
+- **Validazione d'identità LIVE-ONLY**: se `response.station.id != station.id` →
+  stato onesto, righe scartate. Attiva solo quando `liveServedStationIDs != nil`, così
+  il **carosello demo mock** (che serve di proposito lo stesso dataset sotto stazioni
+  diverse) continua a funzionare — verificato dai test esistenti.
+- **Anche i `catch` ignorano gli esiti superati** (una failure vecchia non deve
+  sporcare la nuova stazione).
+- **Difesa in profondità**: `FixtureBackendBoardFetcher` ora **rifiuta slug diversi da
+  `padova`** (prima ignorava lo slug) e il fixture service interno ha
+  `fallbackStationID: padova` — chiude anche il path "URL non configurato → fixture per
+  qualsiasi stazione".
+
+### Test (committati col fix)
+- `rowsFromAnotherStationAreNeverShown` — risposta con `station.id` estraneo → righe
+  scartate + stato onesto. **Falliva prima del fix.**
+- `inFlightFetchForPreviousStationCannotPaintNewStation` — fetch lento di Padova messo
+  in pausa con un gate deterministico (actor), cambio a Roma, poi rilascio: la risposta
+  vecchia **non** dipinge la nuova stazione. **Falliva prima del fix.**
+- `fixtureFetcherRefusesForeignStationSlug` — la fixture Padova rifiuta altri slug.
+- Carosello mock/demo verde: `unlockedStationCanChange`, `lockedStationStaysFixed`,
+  `mockServiceLoadsBolognaDepartures`, `mockHighlightUnaffectedByWindowLogic`,
+  `boardRefreshDedupesRapidDuplicatesButAllowsForceAndBoardChange`.
+
+### Build / suite
+- **123 test, 116 pass / 7 fail** — i 7 sono i **pre-esistenti** (StubURLProtocol +
+  rfiMapper), non toccati. Debug/build-for-testing/Release/TestFlight OK.
+
+### Nota
+Il bug era osservabile perché Roma è ora selezionabile; con una sola stazione servita
+non poteva manifestarsi. La classe di bug (risposta asincrona applicata a uno stato
+cambiato) resta coperta dai due test di regressione.
+
 ## 2026-07-15 — Ticket B3-lite: cambio-stazione live Padova ↔ Roma Termini
 
 Stato: completata lato codice (backend registry + iOS). **Richiede il redeploy della

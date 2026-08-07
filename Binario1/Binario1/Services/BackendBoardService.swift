@@ -20,12 +20,22 @@ protocol BackendBoardFetching: Sendable {
 
 /// Local fixture fetcher: loads the bundled normalized DEPARTURES fixture JSON. No
 /// network. There is no arrivals fixture, so arrivals throw → the service falls back.
+///
+/// The bundled fixture describes ONE station (Padova). It therefore refuses any other
+/// slug instead of silently returning Padova's board for it — defense in depth against
+/// showing one station's rows under another station's name.
 struct FixtureBackendBoardFetcher: BackendBoardFetching {
     var resourceName: String = "backend-padova-departures.sample"
     var bundle: Bundle = .main
+    /// The station this fixture actually represents.
+    var stationSlug: String = "padova"
 
     func fetchBoardJSON(stationSlug: String, type: BoardType, locale: String) async throws -> Data {
         guard type == .departures else { throw TrainBoardServiceError.resourceMissing }  // departures-only fixture
+        guard stationSlug.trimmingCharacters(in: .whitespaces).lowercased()
+                == self.stationSlug.lowercased() else {
+            throw BoardUnavailableError.stationNotServed(stationID: stationSlug)         // not this fixture's station
+        }
         guard let url = bundle.url(forResource: resourceName, withExtension: "json"),
               let data = try? Data(contentsOf: url) else {
             throw TrainBoardServiceError.resourceMissing

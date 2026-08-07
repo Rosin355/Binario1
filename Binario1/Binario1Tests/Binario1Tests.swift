@@ -745,6 +745,118 @@ struct Binario1Tests {
         #expect(!padovaBoard.rows.isEmpty)
     }
 
+    // MARK: - Regression · rows must always belong to the station in the header
+
+    /// Returns a board whose `station.id` is FIXED, whatever station was asked for —
+    /// simulates a response arriving for a different station than the selected one.
+    private struct MislabeledBoardService: TrainBoardService {
+        let respondingStationID: String
+        let rows: [TrainBoardRow]
+        func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
+            let station = Station(id: respondingStationID, name: respondingStationID, city: nil,
+                                  displayName: respondingStationID, countryCode: "IT",
+                                  timezone: "Europe/Rome", providerCodes: nil)
+            return StationBoardResponse(station: station, boardType: type, locale: nil, supportedLocales: [],
+                                        rows: rows, generatedAt: Binario1Tests.romeDate(2026, 6, 17, 17, 0),
+                                        sourceUpdatedAt: nil, isStale: false, warningMessageKey: nil)
+        }
+    }
+
+    /// Board service that parks the fetch for one station until `release()` is called,
+    /// so a slow in-flight request can be made to finish AFTER a station switch.
+    private actor GatedBoardService: TrainBoardService {
+        private let rowsByStation: [String: [TrainBoardRow]]
+        private let gatedStationID: String
+        private var continuation: CheckedContinuation<Void, Never>?
+        private(set) var isParked = false
+        private(set) var requestedStationIDs: [String] = []
+
+        init(rowsByStation: [String: [TrainBoardRow]], gatedStationID: String) {
+            self.rowsByStation = rowsByStation
+            self.gatedStationID = gatedStationID
+        }
+
+        func release() {
+            continuation?.resume()
+            continuation = nil
+            isParked = false
+        }
+
+        func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
+            requestedStationIDs.append(stationId)
+            if stationId == gatedStationID {
+                isParked = true
+                await withCheckedContinuation { self.continuation = $0 }
+            }
+            let station = Station(id: stationId, name: stationId, city: nil, displayName: stationId,
+                                  countryCode: "IT", timezone: "Europe/Rome", providerCodes: nil)
+            return StationBoardResponse(station: station, boardType: type, locale: nil, supportedLocales: [],
+                                        rows: rowsByStation[stationId] ?? [],
+                                        generatedAt: Binario1Tests.romeDate(2026, 6, 17, 17, 0),
+                                        sourceUpdatedAt: nil, isStale: false, warningMessageKey: nil)
+        }
+    }
+
+    /// REGRESSION: a response whose `station.id` differs from the selected station must
+    /// NEVER be rendered — that is "another station's board under this station's name".
+    @MainActor
+    @Test func rowsFromAnotherStationAreNeverShown() async {
+        let roma = Self.servedStation("roma-termini", "Roma Termini")
+        // The service answers with PADOVA's identity + rows even though Roma was asked.
+        let service = MislabeledBoardService(respondingStationID: "padova",
+                                             rows: [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)])
+        let vm = StationBoardViewModel(service: service, station: roma, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [roma],
+                                       liveServedStationIDs: ["roma-termini", "padova"])
+        await vm.refresh()
+        #expect(vm.station.id == "roma-termini")          // header says Roma…
+        #expect(vm.rows.isEmpty)                          // …so Padova's rows must NOT show
+        #expect(vm.isBoardUnavailableForStation == true)  // honest state instead
+    }
+
+    /// REGRESSION: a slow fetch for the PREVIOUS station that lands after the user
+    /// switched stations must not paint its rows under the new station's header.
+    @MainActor
+    @Test func inFlightFetchForPreviousStationCannotPaintNewStation() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let roma = Self.servedStation("roma-termini", "Roma Termini")
+        let service = GatedBoardService(
+            rowsByStation: [
+                "padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)],
+                "roma-termini": [Self.boardRow("rm1", "Milano Centrale", 18, 5)],
+            ],
+            gatedStationID: "padova")                      // Padova's fetch parks mid-flight
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova, roma],
+                                       liveServedStationIDs: ["padova", "roma-termini"])
+
+        // 1. Auto-refresh for Padova starts and parks inside the service.
+        let inFlight = Task { await vm.refresh() }
+        while await !service.isParked { await Task.yield() }
+
+        // 2. Meanwhile the user switches to Roma Termini.
+        await vm.changeStation()
+        #expect(vm.station.id == "roma-termini")
+
+        // 3. The old Padova response finally lands.
+        await service.release()
+        await inFlight.value
+
+        // The header says Roma Termini → the rows must be Roma's (or none), never Padova's.
+        #expect(!vm.rows.contains { $0.id == "pd1" })
+    }
+
+    /// Defense in depth: the bundled fixture describes Padova, so it must refuse any
+    /// other slug rather than returning Padova's board for it.
+    @Test func fixtureFetcherRefusesForeignStationSlug() async {
+        let fetcher = FixtureBackendBoardFetcher()
+        await #expect(throws: BoardUnavailableError.stationNotServed(stationID: "roma-termini")) {
+            _ = try await fetcher.fetchBoardJSON(stationSlug: "roma-termini", type: .departures, locale: "it")
+        }
+    }
+
     @Test func backendURLCarriesTheSelectedStationSlug() {
         let base = URL(string: "https://example.functions.supabase.co")!
         let roma = URLSessionBackendBoardFetcher.makeURL(base: base, stationSlug: "roma-termini",
