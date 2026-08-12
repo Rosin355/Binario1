@@ -2,6 +2,46 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-07-15 — Suite VERDE: risolti i 7 test rossi storici (2 bug distinti)
+
+Stato: completata. **123/123 test passano** — prima volta senza rossi. I 7 fallimenti
+"pre-esistenti" trascinati da mesi erano **due bug diversi**, uno nei test e uno nel
+codice di produzione.
+
+### Bug 1 — 6 test `StubURLProtocol` (difetto NEI TEST, non nel prodotto)
+- `startLoading` ricavava lo scenario da `host.dropFirst("stub-".count)`, ottenendo
+  `"502.example"` invece di `"502"` (il TLD restava attaccato). Nessun `case` matchava
+  → **tutti gli scenari cadevano nel `default` 200 + fixture**: il 502/401/empty non
+  lanciavano mai, e l'echo del token restituiva la fixture invece dell'header.
+  I due test che "passavano" (`…ReturnsDataOn200`, `…MapsRemoteJSONStampedLive`) lo
+  facevano **per caso**, perché il default era proprio il 200 che si aspettavano.
+- Fix: lo scenario è il **primo label dell'host** dopo `stub-`
+  (`host.dropFirst(5).split(separator: ".").first`). Il codice di produzione
+  (`URLSessionBackendBoardFetcher`) era ed è corretto: gestiva già 401/502/empty.
+
+### Bug 2 — `rfiMapperBuildsValidRows` (bug REALE nel parser)
+- `RFIStationMonitorParser.rows` estraeva le righe con `"<tr[^>]*>(.*?)</tr>"`, il cui
+  gruppo catturato è **solo il contenuto interno**: l'attributo `class` del `<tr>` non
+  ne faceva parte. Ma RFI marca il treno in partenza con una **classe CSS lampeggiante
+  sul `<tr>` stesso** → `isDeparting = row.contains("lampeggi")` era **codice morto**,
+  sempre falso. Ogni riga ricadeva su `onTime`/`delayed`; l'unico `departing` possibile
+  arrivava dall'info testuale "in stazione".
+- Fix: catturare l'elemento intero `"(<tr[^>]*>.*?</tr>)"` (tag di apertura incluso).
+  La guardia header (`<th`) e l'estrazione delle `<td>` restano invariate.
+- **Il test aveva ragione da sempre**: la fixture contiene `<tr class="riga lampeggia">`
+  per il treno 9902 e si aspettava `.departing`.
+
+### ⚠️ Bug gemello nel BACKEND (segnalato, NON ancora corretto)
+`supabase/functions/board/rfi.ts` è un port dello stesso parser e ha **lo stesso
+difetto** (riga ~211 `/<tr[^>]*>(.*?)<\/tr>/gis` + `/lampeggi/i.test(row)`): in
+**produzione** nessuna riga viene mai marcata `departing` per via della classe
+lampeggiante. Non corretto qui perché tocca il path di parsing live e un push su
+`supabase/**` fa **deploy automatico** via CI → richiede decisione esplicita.
+
+### Test / build
+- **123/123 verdi** (nessun test rosso residuo). Debug · build-for-testing · Release ·
+  TestFlight tutte OK. Nessuna modifica ai guardrail: Release resta `.mock`.
+
 ## 2026-07-15 — BUG CRITICO risolto: righe di una stazione sotto l'header di un'altra
 
 Stato: risolto, con test di regressione committati insieme al fix. Bug segnalato su
@@ -60,9 +100,12 @@ cambiato) resta coperta dai due test di regressione.
 
 ## 2026-07-15 — Ticket B3-lite: cambio-stazione live Padova ↔ Roma Termini
 
-Stato: completata lato codice (backend registry + iOS). **Richiede il redeploy della
-Edge Function** perché Roma diventi live end-to-end (vedi checkpoint). Release `.mock`;
-guardrail A3 intatti; A1/B1/B4 non regrediti.
+Stato: **COMPLETATA E VERIFICATA END-TO-END (chiusa).** Deploy CI verde (workflow
+`Deploy board function`, `deno test` inclusi). Verifiche dell'utente: `roma-termini`
+→ **HTTP 200 con righe reali** (IC 511 → Salerno, `sourcePlaceId 2416`), `padova`
+invariata, **401 senza token**; **su device** il cambio stazione mostra il tabellone
+corretto per ciascuna stazione dopo il fix della race (vedi voce successiva).
+Release `.mock`; guardrail A3 intatti; A1/B1/B4 non regrediti.
 
 ### Backend (`supabase/functions/board/registry.ts`)
 - Aggiunta **Roma Termini** `slug "roma-termini"`, `rfiLivePlaceId "2416"`.
@@ -100,12 +143,14 @@ guardrail A3 intatti; A1/B1/B4 non regrediti.
   la voce di catalogo porta metadati diversi dalla costante `Station.padova` → il
   cambio stazione sarebbe rimasto bloccato su Padova).
 
-### Checkpoint (verificato, non assunto)
-- **Backend deployato OGGI**: `padova` → HTTP 200, 40 righe; **`roma-termini` → HTTP 404
-  `unknown_station`** perché la function **non è ancora rideployata** con il nuovo
-  registry. Quindi, allo stato attuale, in app Roma mostra **correttamente lo stato
-  onesto** (non il tabellone di Padova). Dopo `supabase functions deploy board
-  --no-verify-jwt` Roma servirà il proprio tabellone.
+### Checkpoint — CHIUSO (verificato dopo il deploy CI)
+- **`roma-termini` → HTTP 200 con righe REALI** (es. IC 511 → Salerno,
+  `sourcePlaceId 2416`); **`padova` invariata**; **401 senza token**. Deploy eseguito
+  dalla CI (`workflow_dispatch`, verde, `deno test` inclusi).
+- **Su device**: cambiando stazione, Padova e Roma mostrano ciascuna il proprio
+  tabellone (righe e nomi coerenti) — dopo il fix della race documentato sotto.
+- *(Storico, prima del deploy: `roma-termini` rispondeva 404 `unknown_station` e l'app
+  mostrava correttamente lo stato onesto, mai il tabellone di Padova.)*
 - **Compatibilità parser per Roma verificata**: l'HTML di `placeId=2416` ha la stessa
   struttura di Padova (`<tbody>` con 40 `<tr>`) → il parser generico produrrà righe.
 - **Stazione non servita (es. Firenze)**: `firenze-smn` → 404 `unknown_station` lato
@@ -130,9 +175,8 @@ guardrail A3 intatti; A1/B1/B4 non regrediti.
   · **TestFlight OK** (guardrail A3 intatti).
 
 ### Risks / next
-- **Azione richiesta**: redeploy della Edge Function (`supabase functions deploy board
-  --no-verify-jwt`) + `deno test` — senza, Roma resta in stato onesto (comportamento
-  corretto ma non è ancora il valore atteso dal ticket).
+- ~~Redeploy della Edge Function richiesto~~ → **FATTO** via CI (workflow
+  `Deploy board function`, `deno test` eseguiti dalla pipeline). Roma è live.
 - `prmScheduledId` di Roma resta ignoto: nessuna feature scheduled va attivata per Roma.
 - Il catalogo iOS e il registry backend restano **due fonti da tenere allineate a mano**
   (il test asserisce gli id attesi; un vero single-source richiederebbe un endpoint

@@ -70,7 +70,11 @@ enum RFIStationMonitorParser {
 
     static func rows(in html: String) -> [RFIMonitorRow] {
         let scope = substring(html, between: "<tbody", and: "</tbody>") ?? html
-        return allGroups(in: scope, pattern: "<tr[^>]*>(.*?)</tr>").compactMap { row in
+        // Capture the WHOLE <tr …>…</tr> element, opening tag included: RFI marks a
+        // boarding train with a blinking CSS class on the <tr> itself, so a pattern
+        // that captured only the inner cells could never see it (`isDeparting` from
+        // "lampeggi" was dead code — every row fell back to onTime/delayed).
+        return allGroups(in: scope, pattern: "(<tr[^>]*>.*?</tr>)").compactMap { row in
             guard !row.localizedCaseInsensitiveContains("<th") else { return nil }  // header row
             let isDeparting = row.localizedCaseInsensitiveContains("lampeggi")
             let cells = allGroups(in: row, pattern: "<td[^>]*>(.*?)</td>")

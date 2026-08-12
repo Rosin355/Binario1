@@ -2105,7 +2105,13 @@ final class StubURLProtocol: URLProtocol {
     override func stopLoading() {}
     override func startLoading() {
         guard let url = request.url else { client?.urlProtocolDidFinishLoading(self); return }
-        let suffix = (url.host ?? "").hasPrefix("stub-") ? String((url.host ?? "").dropFirst("stub-".count)) : ""
+        // The scenario is the FIRST host label after "stub-", e.g. "stub-502.example"
+        // → "502". Keeping the domain in the suffix made every scenario fall through to
+        // the 200 default, so the error/echo cases were never actually exercised.
+        let host = url.host ?? ""
+        let suffix = host.hasPrefix("stub-")
+            ? String(host.dropFirst("stub-".count).split(separator: ".").first ?? "")
+            : ""
         let (status, body): (Int, Data)
         switch suffix {
         case "empty":
