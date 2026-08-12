@@ -31,12 +31,16 @@ codice di produzione.
 - **Il test aveva ragione da sempre**: la fixture contiene `<tr class="riga lampeggia">`
   per il treno 9902 e si aspettava `.departing`.
 
-### ⚠️ Bug gemello nel BACKEND (segnalato, NON ancora corretto)
-`supabase/functions/board/rfi.ts` è un port dello stesso parser e ha **lo stesso
-difetto** (riga ~211 `/<tr[^>]*>(.*?)<\/tr>/gis` + `/lampeggi/i.test(row)`): in
-**produzione** nessuna riga viene mai marcata `departing` per via della classe
-lampeggiante. Non corretto qui perché tocca il path di parsing live e un push su
-`supabase/**` fa **deploy automatico** via CI → richiede decisione esplicita.
+### Bug gemello nel BACKEND — CORRETTO (commit separato, innesca il deploy CI)
+`supabase/functions/board/rfi.ts` è un port dello stesso parser e aveva **lo stesso
+difetto** (`/<tr[^>]*>(.*?)<\/tr>/gis` + `/lampeggi/i.test(row)`): in **produzione**
+nessuna riga veniva mai marcata `departing` per via della classe lampeggiante (l'unico
+`departing` arrivava dall'info testuale "in stazione"). Stesso fix (cattura dell'intero
+`<tr>`), in un **commit separato** perché un push su `supabase/**` fa deploy automatico.
+- Nuovo test deno `blinking row class marks the train as departing`: fixture con
+  `<tr class="riga lampeggia">` e **info vuota**, così la classe è l'unico segnale.
+  **Verificato rosso→verde**: prima del fix 20 pass / 1 fail (AssertionError), dopo
+  **21 pass / 0 fail**; `deno check` pulito. (Deno installato in locale per la verifica.)
 
 ### Test / build
 - **123/123 verdi** (nessun test rosso residuo). Debug · build-for-testing · Release ·

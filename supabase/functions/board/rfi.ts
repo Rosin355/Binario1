@@ -208,7 +208,10 @@ function parseUpdatedAt(html: string): string | null {
 
 function parseRows(html: string): ParsedRow[] {
   const scope = tbodyScope(html);
-  const rows = allGroups(scope, /<tr[^>]*>(.*?)<\/tr>/gis);
+  // Capture the WHOLE <tr …>…</tr> element, opening tag included: RFI marks a boarding
+  // train with a blinking CSS class on the <tr> itself, so capturing only the inner
+  // cells made `isDeparting` from "lampeggi" dead code (always false).
+  const rows = allGroups(scope, /(<tr[^>]*>.*?<\/tr>)/gis);
   const out: ParsedRow[] = [];
   for (const row of rows) {
     if (/<th/i.test(row)) continue; // header row

@@ -43,6 +43,33 @@ const FIXTURE = `
   </tr>
 </tbody></table></body></html>`;
 
+// A boarding train whose ONLY marker is the blinking CSS class on the <tr> itself
+// (no "In stazione" info text). Guards the row-capture regex: if it captures just the
+// inner cells, the class is invisible and `isDeparting` silently stays false.
+const BLINKING_FIXTURE = `
+<html><head><title>Monitor Partenze - PADOVA</title></head><body>
+<table><thead><tr><th>Treno</th></tr></thead>
+<tbody>
+  <tr class="riga lampeggia">
+    <td><img alt="Italo"></td>
+    <td><img alt="Categoria Italo"></td>
+    <td>9902</td><td>Milano Centrale</td><td>17:34</td><td>0</td><td></td><td></td>
+  </tr>
+</tbody></table></body></html>`;
+
+Deno.test("blinking row class marks the train as departing", () => {
+  const board = parseRFIMonitorHTML(BLINKING_FIXTURE);
+  assertEquals(board.rows.length, 1);
+  const row = board.rows[0];
+  assertEquals(row.trainNumber, "9902");
+  assertEquals(row.info, null); // no "In stazione" text — the class is the only signal
+  assert(row.isDeparting, "blinking <tr> class must set isDeparting");
+  assertEquals(
+    normalizeStatus({ delayMinutes: null, isCancelled: false, isDeparting: row.isDeparting }),
+    "departing",
+  );
+});
+
 Deno.test("parses station name and updated time", () => {
   const board = parseRFIMonitorHTML(FIXTURE);
   assertEquals(board.stationName, "PADOVA");
