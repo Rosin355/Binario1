@@ -23,10 +23,26 @@ Deno.test("registry resolves the VERIFIED stations and rejects others", () => {
   assertEquals(roma!.prmScheduledId, undefined);
   assertEquals(resolveStation("ROMA-TERMINI "), roma); // case/space-insensitive
 
+  // Terme Euganee-Abano-Montegrotto: rfiLivePlaceId VERIFIED (2829 → "Stazione di
+  // TERME EUGANEE-ABANO-MONTEGROTTO"); prmScheduledId intentionally absent.
+  // The slug MUST equal the iOS catalog id (Resources/stations.json) exactly.
+  const terme = resolveStation("terme-euganee-abano-montegrotto");
+  assert(terme);
+  assertEquals(terme!.slug, "terme-euganee-abano-montegrotto");
+  assertEquals(terme!.displayName, "Terme Euganee-Abano-Montegrotto");   // official RFI name
+  assertEquals(terme!.rfiLivePlaceId, "2829");
+  assertEquals(terme!.prmScheduledId, undefined);
+  assertEquals(resolveStation("TERME-EUGANEE-ABANO-MONTEGROTTO "), terme);
+
+  // The old, non-official slug must NOT resolve: one id only, no duplicate entity.
+  assertEquals(resolveStation("montegrotto-terme"), undefined);
+  // ABANO TERME (placeId 364) is a SEPARATE RFI station, deliberately NOT registered.
+  assertEquals(resolveStation("abano-terme"), undefined);
+
   // A bare "roma" is NOT a station slug → handler returns 404 unknown_station.
   assertEquals(resolveStation("roma"), undefined);
   assertEquals(resolveStation(null), undefined);
-  assertEquals(Object.keys(STATIONS).length, 2);       // no unverified stations activated
+  assertEquals(Object.keys(STATIONS).length, 3);       // no unverified stations activated
 });
 
 Deno.test("every registry entry carries a verified live placeId", () => {
