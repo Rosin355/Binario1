@@ -5,6 +5,8 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   cleanText,
   decodeHtmlEntities,
+  detailsNote,
+  isBoardingCell,
   isCancelledRow,
   normalizeCategory,
   normalizeDelay,
@@ -13,68 +15,139 @@ import {
   parseRFIMonitorHTML,
   type ParsedRow,
 } from "./rfi.ts";
+import { PADOVA_DEPARTURES_HTML, ROMA_TERMINI_DEPARTURES_HTML } from "./rfi_fixtures.ts";
 
-// Representative RFI-monitor-shaped fixture (positional <td> cells), with a verbose
-// category + numeric entity, a delayed row, and a cancelled row with no platform.
-const FIXTURE = `
-<html><head><title>Monitor Partenze - PADOVA</title></head><body>
-<div id="aggiornamento">Aggiornato alle 10:49</div>
-<table><thead><tr><th>Treno</th></tr></thead>
-<tbody>
-  <tr>
-    <td><img alt="Trenitalia"></td>
-    <td><img alt="Categoria Alta Velocita&#39;"></td>
-    <td>9805</td><td>Napoli Centrale</td><td>10:58</td><td>0</td><td>1</td><td></td>
-  </tr>
-  <tr>
-    <td><img alt="Trenitalia"></td>
-    <td><img alt="Categoria Regionale Veloce"></td>
-    <td>2774</td><td>Venezia Santa Lucia</td><td>10:52</td><td>10</td><td>2</td><td></td>
-  </tr>
-  <tr class="lampeggio">
-    <td><img alt="Trenitalia"></td>
-    <td><img alt="INTERCITY"></td>
-    <td>603</td><td>Roma Termini</td><td>11:20</td><td></td><td>3</td><td>In stazione</td>
-  </tr>
-  <tr>
-    <td><img alt="Trenitalia"></td>
-    <td><img alt="Categoria Regionale"></td>
-    <td>5932</td><td>Castelfranco Veneto</td><td>11:30</td><td>Cancellato</td><td></td><td>Treno cancellato</td>
-  </tr>
-</tbody></table></body></html>`;
+// Fixtures are REAL RFI HTML (see rfi_fixtures.ts). The previous hand-written ones
+// marked a boarding train with `<tr class="riga lampeggia">` — a shape the live page
+// does not have — which is exactly why the departing test passed while the parser was
+// wrong. Row-level expectations below were counted on the real download.
 
-// A boarding train whose ONLY marker is the blinking CSS class on the <tr> itself
-// (no "In stazione" info text). Guards the row-capture regex: if it captures just the
-// inner cells, the class is invisible and `isDeparting` silently stays false.
-const BLINKING_FIXTURE = `
-<html><head><title>Monitor Partenze - PADOVA</title></head><body>
-<table><thead><tr><th>Treno</th></tr></thead>
-<tbody>
-  <tr class="riga lampeggia">
-    <td><img alt="Italo"></td>
-    <td><img alt="Categoria Italo"></td>
-    <td>9902</td><td>Milano Centrale</td><td>17:34</td><td>0</td><td></td><td></td>
-  </tr>
-</tbody></table></body></html>`;
+function rowOf(html: string, trainNumber: string) {
+  const row = parseRFIMonitorHTML(html).rows.find((r) => r.trainNumber === trainNumber);
+  assert(row, `row ${trainNumber} missing from fixture`);
+  return row!;
+}
 
-Deno.test("blinking row class marks the train as departing", () => {
-  const board = parseRFIMonitorHTML(BLINKING_FIXTURE);
-  assertEquals(board.rows.length, 1);
-  const row = board.rows[0];
-  assertEquals(row.trainNumber, "9902");
-  assertEquals(row.info, null); // no "In stazione" text — the class is the only signal
-  assert(row.isDeparting, "blinking <tr> class must set isDeparting");
+Deno.test("REAL HTML: departing comes only from the boarding column", () => {
+  const board = parseRFIMonitorHTML(PADOVA_DEPARTURES_HTML);
+  assertEquals(board.rows.length, 4);
+  // 8906 and 8929 carry <img class="exlampeggio"> in the RExLampeggio cell.
+  assertEquals(board.rows.filter((r) => r.isDeparting).map((r) => r.trainNumber), ["8906", "8929"]);
+  // 3513 and 17087 have aria-label="No" and an empty cell — even though BOTH rows
+  // contain the substring "lampeggi" (cell id RExLampeggio / class ExLampeggio_classtd).
+  assert(PADOVA_DEPARTURES_HTML.includes("RExLampeggio"));
+  assert(!rowOf(PADOVA_DEPARTURES_HTML, "3513").isDeparting);
+  assert(!rowOf(PADOVA_DEPARTURES_HTML, "17087").isDeparting);
+});
+
+Deno.test("REAL HTML: an on-time train is not reported as departing", () => {
+  // The regression this guards: with the substring test every row matched, so every
+  // row without a delay became "departing" (32 of 40 rows on the live board).
+  const row = rowOf(PADOVA_DEPARTURES_HTML, "17087");
+  assertEquals(row.delay, null);
+  assertEquals(
+    normalizeStatus({ delayMinutes: null, isCancelled: false, isDeparting: row.isDeparting }),
+    "onTime",
+  );
+});
+
+Deno.test("REAL HTML: boarding train with no delay maps to departing", () => {
+  const row = rowOf(PADOVA_DEPARTURES_HTML, "8929");
+  assertEquals(row.delay, null);
+  assert(row.isDeparting);
   assertEquals(
     normalizeStatus({ delayMinutes: null, isCancelled: false, isDeparting: row.isDeparting }),
     "departing",
   );
+  // A delay still wins over boarding (8906 is boarding AND 5 minutes late).
+  const late = rowOf(PADOVA_DEPARTURES_HTML, "8906");
+  assert(late.isDeparting);
+  assertEquals(
+    normalizeStatus({ delayMinutes: normalizeDelay(late.delay), isCancelled: false, isDeparting: true }),
+    "delayed",
+  );
 });
 
-Deno.test("parses station name and updated time", () => {
-  const board = parseRFIMonitorHTML(FIXTURE);
+Deno.test("REAL HTML: info is the Informazioni note, not the boarding cell or the stop list", () => {
+  assertEquals(rowOf(PADOVA_DEPARTURES_HTML, "3513").info, "CARROZZA 1 IN TESTA AL TRENO");
+  // 17087 has a popup with "Fermate successive" but no "Informazioni" block.
+  assertEquals(rowOf(PADOVA_DEPARTURES_HTML, "17087").info, null);
+  assertEquals(rowOf(ROMA_TERMINI_DEPARTURES_HTML, "4622").info, "NO-STOP");
+  // The itinerary must never leak into the board note.
+  for (const html of [PADOVA_DEPARTURES_HTML, ROMA_TERMINI_DEPARTURES_HTML]) {
+    for (const r of parseRFIMonitorHTML(html).rows) {
+      if (r.info == null) continue;
+      assert(!r.info.includes("FERMA A:"), `info leaked the stop list: ${r.info}`);
+      assert(!r.info.includes("Fermate successive"), `info leaked the popup title: ${r.info}`);
+    }
+  }
+});
+
+Deno.test("REAL HTML: row fields at Padova", () => {
+  const row = rowOf(PADOVA_DEPARTURES_HTML, "3513");
+  assertEquals(row.operatorName, "TRENITALIA");
+  assertEquals(row.destination, "VENEZIA S.LUCIA");
+  assertEquals(row.time, "12:22");
+  assertEquals(row.delay, "20");
+  assertEquals(row.platform, "5");
+  assertEquals(normalizeCategory(row.category), "RV");
+  assertEquals(normalizeCategory(rowOf(PADOVA_DEPARTURES_HTML, "8906").category), "AV");
+});
+
+Deno.test("REAL HTML: Roma Termini — missing platform is never invented", () => {
+  const board = parseRFIMonitorHTML(ROMA_TERMINI_DEPARTURES_HTML);
+  assertEquals(board.stationName, "ROMA TERMINI");
+  assertEquals(board.rows.length, 5);
+  // RFI leaves the platform blank at Roma until it is confirmed.
+  const noStop = rowOf(ROMA_TERMINI_DEPARTURES_HTML, "4622");
+  assertEquals(noStop.platform, null);
+  assertEquals(normalizePlatform(noStop.platform), "--");
+  assertEquals(normalizeCategory(noStop.category), "RV"); // "Categoria REGIONALE VELOCE"
+  // A published platform still comes through.
+  assertEquals(rowOf(ROMA_TERMINI_DEPARTURES_HTML, "12657").platform, "17");
+  // Alphanumeric train numbers exist on the real board.
+  assertEquals(rowOf(ROMA_TERMINI_DEPARTURES_HTML, "CB706").trainNumber, "CB706");
+});
+
+Deno.test("REAL HTML: Roma Termini — departing and on-time rows are distinguished", () => {
+  const boarding = rowOf(ROMA_TERMINI_DEPARTURES_HTML, "12657");
+  assert(boarding.isDeparting);
+  const quiet = rowOf(ROMA_TERMINI_DEPARTURES_HTML, "12522");
+  assert(!quiet.isDeparting);
+  assertEquals(
+    normalizeStatus({ delayMinutes: null, isCancelled: false, isDeparting: quiet.isDeparting }),
+    "onTime",
+  );
+});
+
+Deno.test("isBoardingCell / detailsNote work on the raw cell HTML", () => {
+  assert(isBoardingCell('<img class="exlampeggio" alt="Si" src="/x/LampeggioGrey.png" />'));
+  assert(isBoardingCell('<img class="exlampeggio" alt="Si" src="/x/LampeggioGold.png" />'));
+  assert(!isBoardingCell("   \n  ")); // aria-label="No" renders an empty cell
+  assert(!isBoardingCell(null));
+  assertEquals(detailsNote(null), null);
+  assertEquals(detailsNote("<div>no popup here</div>"), null);
+  assertEquals(
+    detailsNote(
+      '<div class="titoloInfoAggiuntive">Fermate successive</div><div class="testoinfoaggiuntive">FERMA A:X (1:00)</div>' +
+        '<div class="titoloInfoAggiuntive">Informazioni</div><div class="testoinfoaggiuntive"> TRENO PARZIALE </div>',
+    ),
+    "TRENO PARZIALE",
+  );
+});
+
+Deno.test("REAL HTML: updatedAt is NOT captured by the current pattern (known gap)", () => {
+  // The live page renders "aggiornato il 18/08/2026 alle ore 12:34:29" across several
+  // <span>s; the updated-at pattern finds no HH:mm and returns null, so the backend
+  // falls back to its own fetchedAt. Honest, but the source timestamp is lost.
+  // Asserted so the gap is visible instead of silently assumed to work.
+  assertEquals(parseRFIMonitorHTML(PADOVA_DEPARTURES_HTML).updatedAt, null);
+});
+
+Deno.test("REAL HTML: parses the station name and skips the header row", () => {
+  const board = parseRFIMonitorHTML(PADOVA_DEPARTURES_HTML);
   assertEquals(board.stationName, "PADOVA");
-  assertEquals(board.updatedAt, "10:49");
-  assertEquals(board.rows.length, 4); // header <th> row skipped
+  assertEquals(board.rows.length, 4); // the <thead> <th> row is skipped
 });
 
 Deno.test("normalizeCategory maps verbose labels + decodes entities, never leaks", () => {
@@ -135,16 +208,19 @@ Deno.test("isCancelledRow detects cancellato/soppresso", () => {
   assert(!isCancelledRow({ ...base, delay: "10" }));
 });
 
-Deno.test("end-to-end: parsed rows normalize without leaking source strings", () => {
-  const board = parseRFIMonitorHTML(FIXTURE);
-  for (const r of board.rows) {
-    const category = normalizeCategory(r.category);
-    assert(!category.includes("Categoria"));
-    assert(!category.includes("&#"));
-    assert(category.length <= 5); // compact code or UNK
+Deno.test("end-to-end: REAL rows normalize without leaking source strings", () => {
+  // NOTE: no cancelled train appeared in either real download, so cancellation stays
+  // covered only by the pure isCancelledRow test above. See 17_VIAGGIATRENO_SPIKE.md.
+  for (const html of [PADOVA_DEPARTURES_HTML, ROMA_TERMINI_DEPARTURES_HTML]) {
+    const board = parseRFIMonitorHTML(html);
+    assert(board.rows.length > 0);
+    for (const r of board.rows) {
+      const category = normalizeCategory(r.category);
+      assert(!category.includes("Categoria"));
+      assert(!category.includes("&#"));
+      assert(category.length <= 5); // compact code or UNK
+      assert(!(r.platform ?? "").includes("<"));
+      assertEquals(normalizePlatform(r.platform), r.platform ?? "--");
+    }
   }
-  // The cancelled row maps to cancelled + no platform.
-  const cancelled = board.rows.find((r) => isCancelledRow(r));
-  assert(cancelled);
-  assertEquals(normalizePlatform(cancelled!.platform), "--");
 });

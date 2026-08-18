@@ -206,20 +206,55 @@ function parseUpdatedAt(html: string): string | null {
   return time ? time.replace(".", ":") : null;
 }
 
+// Positional cell indexes of the RFI monitor table, verified against the live page
+// (ids in the real markup, in order):
+//   0 RVettore · 1 RCategoria · 2 RTreno · 3 RStazione · 4 ROrario
+//   5 RRitardo · 6 RBinario · 7 RExLampeggio · 8 RDettagli
+const CELL_BOARDING = 7;
+const CELL_DETAILS = 8;
+
+/**
+ * True when the "In partenza"/"In arrivo" cell carries the boarding icon.
+ *
+ * The signal is an <img class="exlampeggio" alt="Si"> INSIDE the RExLampeggio cell;
+ * when the train is not boarding the cell is empty and the <td> carries
+ * aria-label="No". Testing the row for the substring "lampeggi" is WRONG: every row
+ * contains it as part of the cell's own id/class (RExLampeggio / ExLampeggio_classtd),
+ * and the <tr> class is only zebra striping ("row yellowRow" / "row greyRow").
+ * Verified on the live monitor 2026-08-18: 2 of 40 rows at Padova, 2 of 40 at Roma
+ * Termini, 0 of 40 on the arrivals board.
+ */
+export function isBoardingCell(cellHTML: string | null | undefined): boolean {
+  return cellHTML != null && /<img[^>]/i.test(cellHTML);
+}
+
+/**
+ * The free-text note from the details cell — the block under the "Informazioni"
+ * heading of the popup, never the "Fermate successive" stop list (which is a long
+ * itinerary, not a board note). Real values seen: "CARROZZA 1 IN TESTA AL TRENO",
+ * "VIA MONTEBELLUNA", "NO-STOP", "VIAGGIATORI DA … CON BUS SOSTITUTIVO ALLE ORE …".
+ * Returns null when the row has no Informazioni block (29 of 40 rows had one).
+ */
+export function detailsNote(cellHTML: string | null | undefined): string | null {
+  if (!cellHTML) return null;
+  const m = cellHTML.match(
+    /titoloInfoAggiuntive[^>]*>\s*Informazioni\s*<\/div>\s*<div[^>]*testoinfoaggiuntive[^>]*>(.*?)<\/div>/is,
+  );
+  return m ? cleanOrNull(m[1]) : null;
+}
+
 function parseRows(html: string): ParsedRow[] {
   const scope = tbodyScope(html);
-  // Capture the WHOLE <tr …>…</tr> element, opening tag included: RFI marks a boarding
-  // train with a blinking CSS class on the <tr> itself, so capturing only the inner
-  // cells made `isDeparting` from "lampeggi" dead code (always false).
+  // Capture the WHOLE <tr …>…</tr> element, opening tag included, so the header guard
+  // and any future row-level attribute stay visible. NOTE: the row's own class carries
+  // NO board information — see isBoardingCell.
   const rows = allGroups(scope, /(<tr[^>]*>.*?<\/tr>)/gis);
   const out: ParsedRow[] = [];
   for (const row of rows) {
     if (/<th/i.test(row)) continue; // header row
-    const isDeparting = /lampeggi/i.test(row);
     const cells = allGroups(row, /<td[^>]*>(.*?)<\/td>/gis);
     if (cells.length < 5) continue;
     const text = (i: number) => (i < cells.length ? cleanOrNull(cells[i]) : null);
-    const info = text(7);
     out.push({
       operatorName: imgAltOrText(cells[0] ?? ""),
       category: imgAltOrText(cells[1] ?? ""),
@@ -228,8 +263,11 @@ function parseRows(html: string): ParsedRow[] {
       time: text(4),
       delay: text(5),
       platform: text(6),
-      info,
-      isDeparting: isDeparting || (info?.toLowerCase().includes("stazione") ?? false),
+      info: detailsNote(cells[CELL_DETAILS]),
+      // ONLY the boarding column. The old "info contains 'stazione'" fallback is gone:
+      // it read the wrong cell, and on the real page "IN STAZIONE" appears only in the
+      // page-level notice banner, outside the table.
+      isDeparting: isBoardingCell(cells[CELL_BOARDING]),
     });
   }
   return out;
