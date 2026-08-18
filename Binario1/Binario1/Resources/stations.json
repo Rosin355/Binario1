@@ -157,12 +157,16 @@
     "boardAliases": ["Bari C.le"]
   },
   {
-    "id": "montegrotto-terme",
-    "name": "Montegrotto Terme",
+    "_note": "Official RFI name (live monitor placeId 2829, verified). DISAMBIGUATION DEBT: RFI also has a SEPARATE station 'ABANO TERME' (placeId 364), one stop away, not in this catalog. While it is absent the 'Abano' / 'Abano Terme' searchAliases deliberately lead here. If 364 is ever added, REMOVE those two aliases from this entry FIRST — otherwise two stations answer the same query and the user cannot tell them apart. Keys starting with '_' are ignored by the decoder (JSON has no comments).",
+    "id": "terme-euganee-abano-montegrotto",
+    "name": "Terme Euganee-Abano-Montegrotto",
     "city": "Montegrotto Terme",
-    "displayName": "Montegrotto Terme",
+    "displayName": "Terme Euganee-Abano-Montegrotto",
     "countryCode": "IT",
     "timezone": "Europe/Rome",
-    "providerCodes": null
+    "providerCodes": null,
+    "boardAliases": ["Terme Euganee"],
+    "searchAliases": ["Montegrotto", "Montegrotto Terme", "Abano", "Abano Terme", "Terme Euganee"],
+    "servedByLiveBoard": true
   }
 ]

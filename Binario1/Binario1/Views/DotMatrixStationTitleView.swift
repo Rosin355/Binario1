@@ -15,6 +15,13 @@
 //  changes (entering the Partenze tab) or the station name changes — without an
 //  `.id` remount or per-character tasks. Reduce Motion shows the full title at once.
 //
+//  The title shows the station's FULL name. It used to be squeezed into fixed
+//  9/12-character slots, which silently CUT longer names ("MONTEGROTTO TERME" →
+//  "MONTEGROT / TERME", no ellipsis). Sizing is now `StationTitleLayout`: wrap onto
+//  more lines at full size first, then one shared scale down to 60%, and only past
+//  that could a glyph be lost. Base sizes follow Dynamic Type (`@ScaledMetric`), and
+//  each glyph keeps a `minimumScaleFactor` as the accessibility-size safety net.
+//
 
 import SwiftUI
 
@@ -24,33 +31,40 @@ struct DotMatrixStationTitleView: View {
     var animationToken: Int = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Base sizes follow Dynamic Type; `StationTitleLayout` then wraps/scales to fit.
+    @ScaledMetric(relativeTo: .largeTitle) private var primaryBase: CGFloat = 34
+    @ScaledMetric(relativeTo: .title2) private var secondaryBase: CGFloat = 22
     @State private var revealed = 0
+    /// Set once the reveal has finished. Kept separate from `revealed` so a later
+    /// relayout (rotation, Dynamic Type) that changes the glyph count can never leave
+    /// a trailing glyph dark.
+    @State private var isRevealComplete = false
+    /// Width the header actually gives the title. 0 until the first geometry pass.
+    @State private var availableWidth: CGFloat = 0
 
-    // Fixed slot counts give a stable width; unused slots hold a blank space.
-    private let primarySlots = 9
-    private let secondarySlots = 12
-
-    private var title: (primary: String, secondary: String) {
-        StationNameFormatter.boardTitle(for: stationName)
+    private var layout: StationTitleLayout.Layout {
+        StationTitleLayout.layout(fullName: stationName, available: availableWidth,
+                                  primaryBase: primaryBase, secondaryBase: secondaryBase)
     }
-    private var primaryRealCount: Int { min(title.primary.count, primarySlots) }
-    private var secondaryRealCount: Int {
-        title.secondary.isEmpty ? 0 : min(title.secondary.count, secondarySlots)
-    }
-    private var totalReal: Int { primaryRealCount + secondaryRealCount }
 
-    /// Restart the reveal when the tab-entry token OR the station name changes.
-    private var revealKey: String { "\(animationToken)|\(title.primary)|\(title.secondary)" }
+    /// Restart the reveal when the tab-entry token OR the station changes — NOT when
+    /// the layout rescales, otherwise every geometry pass would replay the animation.
+    private var revealKey: String { "\(animationToken)|\(stationName)" }
 
     var body: some View {
+        let l = layout
         VStack(alignment: .leading, spacing: -2) {
-            line(slotted(title.primary, primarySlots), realCount: primaryRealCount,
-                 globalOffset: 0, fontSize: 34, color: BoardColors.ledPrimary, glow: 0.55)
-            if !title.secondary.isEmpty {
-                line(slotted(title.secondary, secondarySlots), realCount: secondaryRealCount,
-                     globalOffset: primaryRealCount, fontSize: 22, color: BoardColors.ledSecondary, glow: 0.40)
+            line(l.primary, globalOffset: 0, fontSize: primaryBase * l.scale,
+                 color: BoardColors.ledPrimary, glow: 0.55)
+            ForEach(Array(l.secondary.enumerated()), id: \.offset) { idx, text in
+                line(text, globalOffset: l.primary.count + l.secondary.prefix(idx).reduce(0) { $0 + $1.count },
+                     fontSize: secondaryBase * l.scale, color: BoardColors.ledSecondary, glow: 0.40)
             }
         }
+        // Claim the header's remaining width so the measurement below is the width
+        // AVAILABLE to the title, not the width its own content happens to want.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
         .accessibilityElement()
         .accessibilityLabel(Text(stationName))
         .task(id: revealKey) { await runReveal() }
@@ -58,34 +72,28 @@ struct DotMatrixStationTitleView: View {
 
     @MainActor
     private func runReveal() async {
-        let total = totalReal
-        guard total > 0 else { revealed = 0; return }
-        if reduceMotion { revealed = total; return }   // no motion → full title at once
+        let total = layout.totalGlyphs
+        guard total > 0 else { revealed = 0; isRevealComplete = true; return }
+        if reduceMotion { isRevealComplete = true; return }   // no motion → full title at once
+        isRevealComplete = false
         revealed = 0
         for i in 1...total {
             try? await Task.sleep(for: .milliseconds(70))
-            if Task.isCancelled { revealed = total; return }   // never leave it partial
+            if Task.isCancelled { isRevealComplete = true; return }   // never leave it partial
             withAnimation(.snappy(duration: 0.22)) { revealed = i }
         }
-        revealed = total                                       // guaranteed final state
+        isRevealComplete = true                                       // guaranteed final state
     }
 
     @ViewBuilder
-    private func line(_ chars: [Character], realCount: Int, globalOffset: Int,
+    private func line(_ text: String, globalOffset: Int,
                       fontSize: CGFloat, color: Color, glow: Double) -> some View {
-        HStack(spacing: 1) {
-            ForEach(Array(chars.enumerated()), id: \.offset) { idx, ch in
-                // Padding slots (spaces) are always "on" (invisible anyway); real
-                // glyphs turn on as the reveal count advances past their index.
-                let on = idx >= realCount || (globalOffset + idx < revealed)
-                LEDGlyph(char: ch, fontSize: fontSize, color: color, glow: glow, on: on)
+        HStack(spacing: StationTitleLayout.glyphSpacing) {
+            ForEach(Array(text.enumerated()), id: \.offset) { idx, ch in
+                LEDGlyph(char: ch, fontSize: fontSize, color: color, glow: glow,
+                         on: isRevealComplete || globalOffset + idx < revealed)
             }
         }
-    }
-
-    private func slotted(_ text: String, _ slots: Int) -> [Character] {
-        let arr = Array(text.uppercased())
-        return (0..<slots).map { $0 < arr.count ? arr[$0] : " " }
     }
 }
 
@@ -103,6 +111,10 @@ private struct LEDGlyph: View {
     var body: some View {
         Text(String(char))
             .font(font)
+            .lineLimit(1)
+            // Last resort at accessibility text sizes, where the scaled base can still
+            // exceed the header: glyphs shrink rather than overflow or get cut.
+            .minimumScaleFactor(StationTitleLayout.minScale)
             .foregroundStyle(color)
             .shadow(color: color.opacity(glow), radius: 3)
             .shadow(color: color.opacity(glow * 0.4), radius: 7)
@@ -145,4 +157,18 @@ private struct LEDGlyph: View {
     DotMatrixStationTitleView(stationName: "Bologna Centrale")
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
         .background(BoardColors.background)
+}
+
+/// The names that used to be cut: the longest first word and the longest qualifiers
+/// in the bundled catalog.
+#Preview("Nomi lunghi") {
+    VStack(alignment: .leading, spacing: 18) {
+        ForEach(["Terme Euganee-Abano-Montegrotto", "Reggio Emilia AV Mediopadana",
+                 "Firenze Santa Maria Novella", "Milano Porta Garibaldi",
+                 "Genova Piazza Principe"], id: \.self) { name in
+            DotMatrixStationTitleView(stationName: name)
+        }
+    }
+    .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+    .background(BoardColors.background)
 }

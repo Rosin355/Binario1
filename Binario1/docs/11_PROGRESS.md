@@ -2,6 +2,406 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-08-18 — Ticket C2: promozione RFI 2829 "Terme Euganee-Abano-Montegrotto"
+
+Stato: **codice completo e verde — FERMO PRIMA DEL DEPLOY, come concordato.**
+iOS **142/142**, backend **deno test 29/29**. Nessun commit, nessun push, nessun deploy.
+Chiusura passo 1 (spezzatura titolo, opzione B) inclusa; **manca solo lo smoke test
+post-deploy**, che parte quando la CI è verde.
+
+### Il deploy non è stato eseguito (decisione presa insieme)
+Il punto 3 chiedeva deploy + smoke test post-deploy, ma il deploy passa dalla CI
+(`.github/workflows/deploy-board.yml`: push su `main` che tocca `supabase/functions/**`,
+oppure `workflow_dispatch` — che comunque deploya ciò che sta sul remoto), mentre la
+sezione WORKFLOW vieta commit e push. Contraddizione segnalata e risolta scegliendo di
+**fermarsi prima del deploy**: il diff è pronto per la revisione, la CI eseguirà
+`deno test` e il deploy quando deciderai di pushare. **Lo smoke test post-deploy sulle 3
+stazioni resta da fare** ed è l'unica verifica del ticket ancora aperta.
+
+**Baseline PRE-deploy misurata** (endpoint attuale, sola lettura, 2026-08-18):
+
+| slug | esito |
+|---|---|
+| `padova` | 200, 40 righe |
+| `roma-termini` | 200, 40 righe |
+| `terme-euganee-abano-montegrotto` | **404 `unknown_station`** (atteso: non ancora deployato) |
+| `montegrotto-terme` | 404 `unknown_station` |
+| `padova` senza token | **401** |
+
+Dopo il deploy il terzo slug deve passare a 200 con righe riferite a TERME EUGANEE, e
+gli altri quattro esiti devono restare identici.
+
+Smoke test **diretto su RFI** (già fatto nel C1-B, ripetuto qui): `placeId=2829` → 200,
+`<title>Stazione di TERME EUGANEE-ABANO-MONTEGROTTO</title>`, 17 righe reali:
+
+```
+17084 | VENEZIA S.LUCIA  | 16:05 | rit. 10 | bin. 1
+3981  | BOLOGNA CENTRALE | 16:18 |         | bin. 1
+3982  | VENEZIA S.LUCIA  | 16:35 |         | bin. 1
+```
+
+### Verifica sull'id: rinomina SICURA (era la domanda del punto 1)
+Cercata ogni traccia di station id in persistenza:
+- **nessun `@AppStorage`** in tutto il target;
+- l'unica persistenza è `UserDefaultsSavedJourneyStore` (`binario1.savedJourneys.v1`), e
+  `SavedJourney` memorizza `origin`/`destination` come **nomi**, con `id` = `saved-home-work`
+  (seed) o `cerca:CANON(o)>CANON(d)` — **nessuno station id viene mai persistito**;
+- gli id vivono solo in `stations.json`, negli slug del registry e nell'URL di fetch.
+
+→ `montegrotto-terme` **rinominato** in `terme-euganee-abano-montegrotto`, id unico,
+uguale allo slug del registry. Un test asserisce che il vecchio id non esiste più
+(niente doppioni) e che il registry lo rifiuta.
+
+### Il vero nodo di migrazione era il displayName, non l'id
+`MockTripsService.sample` semina "Montegrotto Terme" (↔ Padova) su **ogni installazione**:
+il nome vecchio è già nel `UserDefaults` di chiunque abbia aperto l'app. Verificato cosa
+regge e cosa no:
+- `journeyDeparts(from: "Terme Euganee-Abano-Montegrotto", origin: "Montegrotto Terme")`
+  → i token {MONTEGROTTO, TERME} sono sottoinsieme di {TERME, EUGANEE, ABANO,
+  MONTEGROTTO} → **true** per la regola ≥2 token già esistente. `SavedJourneyMatcher`
+  **non toccato**.
+- `catalog.station(named: "Montegrotto Terme")` → era **nil** (confrontava solo
+  displayName e `boardAliases`), il che avrebbe orfanato le tratte salvate e la
+  risoluzione dei campi in Cerca. **Unica modifica alla lookup**: `station(named:)` ora
+  consulta **anche** `searchAliases`. Additiva — un alias può solo aggiungere match, mai
+  dirottare un nome esatto (asserito).
+- Seed aggiornato al nome ufficiale, così le installazioni nuove non nascono col nome
+  non ufficiale; le vecchie continuano a risolvere via alias.
+
+### Catalogo
+`displayName` / `name` = **"Terme Euganee-Abano-Montegrotto"** (ufficiale RFI),
+`servedByLiveBoard: true`, `boardAliases: ["Terme Euganee"]`,
+`searchAliases: ["Montegrotto", "Montegrotto Terme", "Abano", "Abano Terme", "Terme Euganee"]`.
+`city` resta "Montegrotto Terme" (il comune) e compare sotto il nome nella riga di Cerca.
+
+`searchAliases` è un campo **nuovo e opzionale** su `Station` (decodifica nil se assente,
+come `boardAliases`). Nel ranking di `DefaultStationCatalog` un match su alias entra col
+**rango del nome**: vince il rango migliore fra nome ufficiale e alias. Nessuna
+espansione di abbreviazioni — la decisione B1 resta.
+
+JSON non ammette commenti: l'avviso di disambiguazione sta in una chiave `_note`
+(ignorata dal decoder di Swift, che scarta le chiavi sconosciute).
+
+### ⚠️ Collisione trovata scrivendo i test — e NON risolta di proposito
+Avevo scritto il test dando per scontato che "Abano Terme" **non** agganciasse la nuova
+stazione. È fallito: i token {ABANO, TERME} sono un **sottoinsieme** di {TERME, EUGANEE,
+ABANO, MONTEGROTTO}, quindi la regola ≥2 token di `StationNameMatcher` li fa combaciare.
+
+Il problema è quindi **più profondo degli alias di ricerca**: è nel nome ufficiale
+stesso. Oggi è innocuo (la RFI 364 "ABANO TERME" non è in catalogo, l'unica stazione che
+risponde ad "Abano" è questa), ma **diventa un falso positivo reale il giorno in cui la
+364 entra** — e la correzione starebbe nel matcher, che questo ticket non deve toccare.
+Comportamento **fissato in un test** (`abanoTermeCollidesWithTheOfficialNameUntilRFI364IsAdded`)
+perché non regredisca in sordina, e annotato nel `_note` del catalogo. Verificato che non
+è una collisione generica su "Terme": "Battaglia Terme" **non** aggancia (BATTAGLIA non è
+un token del nome).
+
+### ⚠️ Il test sul device che hai in mente probabilmente non si accenderà
+Il tuo passo finale è "tratta di ritorno verso Padova agganciata dal matcher". Sui dati
+reali della 2829 **nessun treno ha Padova come capolinea**: i 17 capolinea sono Venezia
+S.Lucia (8), Bologna Centrale (4), Rovigo (2), Ferrara (2), Mantova (1). Padova è una
+fermata **intermedia**, e `SavedJourneyMatcher` confronta solo `row.destination`, cioè il
+capolinea; le fermate intermedie stanno nel testo "Fermate successive" che il parser
+volutamente non cattura (fix `313b982`). Quindi la tratta "Terme Euganee → Padova" non
+verrà evidenziata — **limite preesistente del matcher, non una regressione di questo
+ticket**, e fuori dai file che potevo toccare. La direzione opposta (da Padova) ha lo
+stesso limite. Se vuoi il match sulle fermate intermedie serve un ticket dedicato:
+tocca parser (catturare l'itinerario) e matcher.
+
+### Layout del titolo — opzione B applicata (decisione tua, chiusura C2)
+"TERME EUGANEE-ABANO-MONTEGROTTO" è il nome più lungo mai gestito. La policy C1-A
+reggeva già (nessun glifo perso, scala 0.72), ma spezzava `TERME` / `EUGANEE-ABANO-…`,
+tagliando a metà il composto. **Applicata l'opzione B**: "TERME EUGANEE" è ora una città
+composta in `StationTitleLayout`.
+
+```
+TERME EUGANEE
+ABANO-MONTEGROTTO        scala 0.94, nessun glifo perso
+```
+
+**Il solo inserimento nella lista non bastava.** Il controllo di prefisso pretendeva uno
+spazio dopo la città composta (`upper.hasPrefix(city + " ")`), ma qui dopo "TERME EUGANEE"
+c'è un **trattino**: il match falliva in silenzio e la spezzatura sarebbe rimasta quella
+vecchia. Aggiunto `compoundPrefix(of:)`, che accetta come confine di parte la fine del
+nome, uno spazio **o un trattino**, e mai un confine a metà parola ("Reggio Emiliano" non
+attiva "Reggio Emilia"). La lista è ordinata dalla più lunga alla più corta, così un
+composto lungo vince su uno che lo prefissa. "Reggio Emilia AV Mediopadana" e tutti gli
+altri nomi del catalogo restano identici a prima.
+
+Conseguenza sulle asserzioni: il layout **consuma il separatore su cui spezza** — spazio
+o trattino — quindi "nessun glifo perso" non può più essere `lines.joined(" ") ==
+displayName`. I test ora confrontano la sequenza di **lettere e cifre**, che è
+l'invariante vera (niente è stato tagliato), e continuano a verificare l'assenza di
+ellissi. `#Preview("Nomi lunghi")` conteneva già questo nome (aggiornata nel C2).
+
+### Cleanup (chip del C1)
+`StationNameFormatter` rimosso interamente (`boardTitle` + `compoundCities` +
+`abbreviateQualifier` + `cap`, 51 righe): dopo il C1-A non aveva più call site
+applicativi. Rimosso anche il suo unico test (`stationTitleResolvesToFullName`, che lo
+chiamava due volte). `BoardDestinationFormatter` **resta** — è quello che le righe del
+tabellone usano davvero.
+
+### File
+- iOS: `Models/Station.swift` (+`searchAliases`), `Services/StationCatalog.swift`
+  (ranking alias + lookup canonica), `Resources/stations.json` (entry promossa),
+  `Services/TripsService.swift` (seed), `Localization/BoardTextFitting.swift` (cleanup),
+  `Views/DotMatrixStationTitleView.swift` (preview), `Binario1Tests.swift`.
+- Backend: `supabase/functions/board/registry.ts`, `registry_test.ts`.
+- Docs: `12_DECISIONS.md` (policy di naming), `13_BACKEND_ADAPTER.md` (TODO obsoleti).
+- **Non toccati**: guardrail Release/`.mock`, logica di `SavedJourneyMatcher`, fix race,
+  parser, `StationBoardViewModel`.
+
+### Test (136 → 142: −1 rimosso col cleanup, +7 nuovi)
+`searchAliasesFindTheStationByItsCommonNames` ("monte"/"abano"/"terme euganee" la
+trovano, e "montegrotto" la mette **prima**) · `preRenameNameStillResolvesToTheSameEntity`
+· `boardAliasMatchesTheShortFormRFIPrints` (riga "TERME EUGANEE" agganciata sia dal nome
+nuovo che dal vecchio) · `savedJourneyFromTheOldNameStillDepartsFromThisBoard` ·
+`longestStationTitleFitsWithoutLosingGlyphs` · `abanoTermeCollidesWithTheOfficialNameUntilRFI364IsAdded`
+· `compoundCitySplitOnlyMatchesOnAPartBoundary` (confine su spazio E trattino, mai a metà
+parola, composto più lungo vincente).
+Aggiornati: allineamento catalogo↔registry (3 stazioni servite, vecchio id assente) e
+l'asserzione sul seed. `deno test`: registry a 3 voci, slug vecchio e `abano-terme`
+respinti.
+
+## 2026-08-18 — Ticket C1-A: titolo stazione troncato (MONTEGROTTO)
+
+Stato: **completata, suite verde 136/136** (erano 130, +6 nuovi test). Nessun push.
+
+### La causa (non era l'abbreviazione)
+`DotMatrixStationTitleView` impaginava il titolo in **slot fissi: 9 caratteri sulla
+riga primaria, 12 sulla secondaria**, e `slotted()` tagliava senza ellissi tutto ciò
+che eccedeva. `StationNameFormatter.boardTitle` lasciava passare "MONTEGROTTO" (11 ≤ 12,
+nessun cap), poi lo slot a 9 lo tagliava: **"MONTEGROT / TERME"**. Il difetto era il
+troncamento a larghezza fissa, non l'abbreviatore.
+
+### Cosa fa ora — `StationTitleLayout` (in `Localization/BoardTextFitting.swift`)
+Policy pura e testabile, applicata **in quest'ordine**:
+1. **wrap su più righe a font pieno** — un qualificatore lungo prende una riga in più
+   invece di rimpicciolire tutto il titolo;
+2. **una sola scala condivisa** per l'intero titolo, mai sotto **0.6**;
+3. solo oltre quel punto un glifo potrebbe perdersi — e per **tutte le 17 stazioni del
+   catalogo** alle larghezze reali dell'header non ci si arriva mai (asserito nei test).
+
+Scala **condivisa e non per riga**: a 34 vs 22 pt, scalando indipendentemente la riga
+primaria potrebbe finire *più piccola* della secondaria.
+
+- **Nessuna abbreviazione nell'header** (decisione già in `12_DECISIONS.md`): il titolo
+  mostra il nome completo. `StationNameFormatter` / `BoardDestinationFormatter` restano
+  per il display compatto delle **righe** del tabellone. La conoscenza delle città
+  composte è riusata **solo per decidere dove spezzare**, non per accorciare: quindi
+  `REGGIO EMILIA / AV MEDIOPADANA`, non `REGGIO / EMILIA AV MEDIOPADANA` né `REGGIO E.`.
+- **Dynamic Type**: le basi 34/22 passano da `@ScaledMetric` (`.largeTitle` / `.title2`),
+  quindi a taglie accessibility il titolo cresce, va su più righe e poi scala. Ogni
+  glifo tiene inoltre un `minimumScaleFactor(0.6)` come rete di sicurezza: alle taglie
+  AX estreme i caratteri si rimpiccioliscono invece di uscire dall'header o essere
+  tagliati a metà parola.
+- **Larghezza misurata, non indovinata**: il titolo reclama la larghezza residua
+  dell'header (`frame(maxWidth: .infinity)`, niente più `Spacer`) e la legge con
+  `onGeometryChange`. `glyphAdvanceRatio` è **misurato** da `UIFont.monospacedSystemFont`,
+  non hardcoded.
+- **Reveal invariato**: `revealKey` dipende da token + nome stazione, **non** dal layout,
+  quindi un ricalcolo di geometria non ri-innesca l'animazione. Aggiunto
+  `isRevealComplete` così un relayout che cambia il numero di glifi non può lasciare
+  spento l'ultimo carattere.
+
+### Errore commesso e corretto in corsa
+La prima versione derivava la scala come `available / width(text, base)`. Sbagliato: lo
+**spacing fra glifi è costante e non scala col font**, quindi la scala risultava
+ottimista e "REGGIO EMILIA" sforava ancora di ~0.7 pt (test rosso, 135/136). Ora
+`fittingSize` inverte esattamente `available = n·size·ratio + (n-1)·spacing`.
+
+### Verifica
+- **Automatica** (6 test): la prima parola lunga resta intera; nessuna abbreviazione né
+  ellissi; wrap prima dello scaling; **ogni stazione del catalogo** entra senza mai
+  raggiungere il punto di taglio; taglie accessibility (base ~2x) vanno a capo invece di
+  tagliare; il rapporto di avanzamento misurato resta in un intervallo sano.
+- **Nomi verificati** (i più lunghi di `stations.json`): `Montegrotto Terme` (prima
+  parola più lunga, 11), `Reggio Emilia AV Mediopadana` (28, l'unico che scala — 0.94),
+  `Firenze Santa Maria Novella` (27, va a 3 righe a piena grandezza),
+  `Milano Porta Garibaldi`, `Genova Piazza Principe`, `Venezia Santa Lucia`.
+- **EN**: i nomi stazione sono nomi propri, identici in IT/EN — il layout non dipende
+  dalla lingua. Le stringhe localizzate attorno al titolo non sono state toccate.
+- **NON verificato visivamente**: l'integrazione simulatore continua a rispondere
+  "Xcode is installed but not selected" benché `xcode-select -p` sia corretto. La prova
+  su schermo resta da fare; è stata aggiunta la preview `#Preview("Nomi lunghi")` con i
+  5 nomi critici per il controllo in Xcode.
+
+### File
+- `Localization/BoardTextFitting.swift` (nuovo `StationTitleLayout`),
+  `Views/DotMatrixStationTitleView.swift` (rinnovato il sizing, rimossi gli slot fissi),
+  `Views/StationBoardHeaderView.swift` (2 righe: via lo `Spacer`), `Binario1Tests.swift`.
+- **Non toccati**: guardrail Release/`.mock`, `SavedJourneyMatcher`, logica di
+  `StationBoardViewModel`, parser.
+
+### Debito lasciato in chiaro
+`StationNameFormatter.boardTitle` non è più chiamato da codice applicativo (solo dai suoi
+2 test): l'header non lo usa più e le righe board usano `BoardDestinationFormatter`.
+Non rimosso in questo ticket (fuori mandato) — va valutato in un cleanup dedicato.
+
+## 2026-08-18 — Ticket C1-B: smoke test RFI Montegrotto Terme (solo esplorazione)
+
+Stato: **place id trovato e verificato, MA con una discrepanza di nome che va decisa
+prima di promuovere la stazione.** Nessuna modifica a `registry.ts` né a `stations.json`,
+come da mandato. Nessun deploy.
+
+### Metodo (lo stesso di Roma Termini in B3-lite)
+Il monitor RFI pubblico espone la **lista completa delle stazioni** nel `<select
+name="PlaceId">` della pagina `https://iechub.rfi.it/ArriviPartenze/` — **2.434 voci**.
+È la fonte autorevole: nessun id indovinato, nessuna scansione a forza bruta. Ancore di
+controllo nella stessa lista: `2000 → PADOVA`, `2416 → ROMA TERMINI` (coincidono col
+registry attuale).
+
+### Esito: "Montegrotto Terme" NON esiste come stazione RFI
+Nella lista non c'è nessuna voce chiamata "MONTEGROTTO TERME". L'**unica** voce che
+contiene "MONTEGROTTO" è:
+
+```
+placeId = 2829   →   TERME EUGANEE-ABANO-MONTEGROTTO
+```
+
+Smoke test (2026-08-18 16:07 CEST), stesso pattern di B3-lite:
+
+```bash
+curl -s "https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?arrivals=False&placeId=2829"
+```
+
+→ **HTTP 200**, 154.814 byte, `<title>Stazione di TERME EUGANEE-ABANO-MONTEGROTTO</title>`,
+**17 righe reali** di partenze. Estratto:
+
+```
+17084 | VENEZIA S.LUCIA   | 16:05 | rit. 10 | bin. 1
+3981  | BOLOGNA CENTRALE  | 16:18 |         | bin. 1
+3982  | VENEZIA S.LUCIA   | 16:35 |         | bin. 1
+17019 | ROVIGO            | 16:54 |         | bin. 3
+```
+
+### Perché 2829 è davvero la stazione di Montegrotto, e non un match approssimativo
+Il nome contiene "MONTEGROTTO", ma il nome da solo non basta. La conferma viene dai
+**dati incrociati** con `placeId=364 (ABANO TERME)`, che è una stazione **diversa**:
+
+- il treno **17084** parte da **2829 alle 16:05** e la sua lista fermate successive
+  inizia con "ABANO TERME (16:10) - PADOVA (16:19)" → da 2829, Abano è una fermata
+  *successiva*, quindi 2829 ≠ Abano Terme;
+- lo **stesso treno 17084** parte da **364 (Abano) alle 16:11**, fermate successive
+  "PADOVA (16:19)" — coerente coi 5 minuti di percorrenza;
+- il treno **17019** parte da 364 alle 16:49 con fermate successive "TERME EUGANEE
+  (16:53) - BATTAGLIA T. (16:58)" e dalla 2829 alle **16:54** con "BATTAGLIA TERME
+  (16:58)" → "TERME EUGANEE" è la forma breve di 2829.
+
+Quindi 2829 è la stazione fra Abano Terme e Battaglia Terme sulla Padova–Monselice–
+Bologna, cioè esattamente dove si trova Montegrotto Terme. Evidenza posizionale, non
+somiglianza di stringa.
+
+### Compatibilità parser: verificata
+L'HTML di 2829 ha la stessa struttura di Padova, incluse le celle su cui poggia il fix
+`isDeparting` di `313b982`: un solo `<tbody>`, e per **tutte e 17 le righe** sono
+presenti `RExLampeggio` (colonna "In partenza"), `RDettagli` e `testoinfoaggiuntive`.
+Il parser generico produrrà righe valide senza modifiche.
+
+### Nodo da sciogliere PRIMA della promozione (serve una tua decisione)
+`stations.json` ha già `montegrotto-terme` con `displayName: "Montegrotto Terme"` e
+`providerCodes: null`, mentre RFI la chiama **"TERME EUGANEE-ABANO-MONTEGROTTO"**
+(forma breve nelle righe: **"TERME EUGANEE"**). Promuoverla senza decidere il naming
+significherebbe header e righe che si contraddicono, e `StationNameMatcher` che non
+aggancia la destinazione. Le opzioni sono almeno tre — displayName ufficiale RFI,
+displayName attuale + `boardAliases`, oppure un nome misto — ma **non le ho valutate né
+implementate**: è materia del ticket di promozione, dopo tua conferma.
+
+### Non fatto, di proposito
+Nessuna aggiunta a `supabase/functions/board/registry.ts`, nessuna modifica a
+`stations.json`, nessun `servedByLiveBoard`, nessun deploy. Solo esplorazione, come da
+punto 3 del ticket.
+
+## 2026-08-18 — Cerca: il risultato stazione apre il tabellone
+
+Stato: **completata, suite verde 130/130** (erano 125, +5 nuovi test). Nessun push.
+
+### Il difetto
+`CercaView.stationRow` era una `HStack` senza azione: nessun `Button`, nessun `onPick`.
+Il tap sul risultato non faceva **nulla**. In modalità `.route` le stazioni erano invece
+già cliccabili (`selectDeparture`/`selectDestination`) — solo la modalità `.station` era
+un vicolo cieco.
+
+### Cosa fa ora
+- La riga è un `NavigationLink(value: Station)`; lo `NavigationStack` di Cerca ha un
+  `.navigationDestination(for: Station.self)` che apre **`StationBoardView`** — la
+  stessa schermata della tab Partenze, non una copia.
+- Il view model è costruito dal composition root: `AppEnvironment.makeStationBoardViewModel(for:)`
+  riusa service / catalogo / saved journeys della Home. Due differenze volute:
+  `allowsStationChange: false` (l'utente ha cercato *quella* stazione, l'header non può
+  ciclare via) e `selectableStations: [station]`.
+
+### Punto critico — stazioni servite (nessuna logica nuova)
+Il guardrail esisteva già in `StationBoardViewModel`: `guard isServed(station) else
+{ markBoardUnavailable(); return }` blocca il fetch **prima della rete**, e
+`validatesStationIdentity` scarta una risposta che dichiara un'altra stazione. È stato
+**armato, non riscritto**, passando `liveServedStationIDs: AppEnvironment.boardStationIDs`.
+
+Nuovo in `AppEnvironment`:
+
+```swift
+static var boardStationIDs: Set<String> { liveServedStationIDs ?? [initialStation.id] }
+```
+
+- **live backend** (DEBUG/TESTFLIGHT) → `liveServedStationIDs`, cioè esattamente
+  `DefaultStationCatalog.shared.liveServed` = `{padova, roma-termini}`, derivato dal
+  flag `servedByLiveBoard` di `stations.json`. Nessuna lista duplicata.
+- **fallback quando non c'è restrizione live** (`.mock` in RELEASE, `.scheduledPadova`,
+  `.backendFixturePadova`): **non** si lascia `nil`. Quei service **ignorano
+  `stationId`** — `MockTrainBoardService` restituisce sempre il dataset Bologna, gli
+  altri sempre Padova. Lasciando `nil`, aprire una stazione qualsiasi del catalogo da
+  Cerca avrebbe dipinto quell'unico dataset sotto **il nome di un'altra stazione**:
+  esattamente il fallimento che il vincolo vieta, per la via mock invece che live.
+  Collassando a `[initialStation.id]` il comportamento è onesto in **ogni** build.
+- Il carosello demo di Partenze è **intatto**: continua a usare `selectableStations` /
+  `liveServedStationIDs` come prima.
+
+Esito: tap su Padova/Roma Termini → tabellone di *quella* stazione, fetch con il suo
+slug. Tap su Firenze → stato onesto già esistente (`board.unavailableForStation`),
+**zero richieste di rete**, zero righe di un'altra stazione.
+
+### Chip LIVE + lista iniziale
+- Le stazioni con tabellone mostrano un chip ambra **`LIVE`** e il chevron (vocabolario
+  coerente con `label.liveData` = "DATI LIVE" dell'header); le altre restano senza, così
+  non si tocca a vuoto. Tutte comunque tappabili → chi tocca una non servita vede lo
+  stato onesto, non un tap morto.
+- Campo vuoto → `stationResults` mette in testa le stazioni con tabellone, poi il resto
+  del catalogo. L'empty state ("Nessun risultato") è ora riservato a `showsNoResults`,
+  cioè **solo** a una query digitata che non ha davvero trovato nulla.
+- `search.station.note` diceva "disponibile per **Padova**": hardcoded e ormai falso
+  (c'è anche Roma Termini). Sostituita con un testo generico che rimanda al chip.
+
+### Localizzazione (IT/EN in sync)
+Nuove: `search.station.liveBadge` (LIVE / LIVE),
+`accessibility.station.liveBoard` ("Tabellone in tempo reale disponibile" /
+"Real-time board available"). Riscritta: `search.station.note`.
+
+### File
+- Modificati: `Binario1App.swift` (`boardStationIDs`, `makeStationBoardViewModel(for:)`),
+  `ViewModel/CercaViewModel.swift` (`hasLiveBoard`, `stationResults`, `showsNoResults`,
+  `boardStationIDs` iniettabile), `Views/CercaView.swift` (NavigationLink +
+  navigationDestination + chip LIVE), `Localizable.xcstrings`, `Binario1Tests.swift`.
+- **Non toccati**: guardrail Release/`.mock`, A1/A3, B1, B4, B3-lite, il fix race
+  (generation token), i parser, `StationBoardViewModel`, `StationBoardView`, `RootTabView`.
+
+### Test (125 → 130, 0 falliti)
+- `cercaStationTapOpensTheBoardOfThatStation` — Roma Termini: header, slug e righe sono
+  i suoi; mai quelle di Padova; stazione bloccata.
+- `cercaUnservedStationTapShowsHonestStateWithoutFetching` — Firenze: stato onesto,
+  `rows` vuote, `errorMessageKey == nil`, **`requestedStationIDs.isEmpty`**.
+- `cercaIdleStationListLeadsWithLiveBoardStations` — campo vuoto: lista completa con le
+  servite in testa, `showsNoResults == false`.
+- `cercaNoResultsOnlyForAQueryThatMatchedNothing` — "zzzzzz" → sì; spazi → no; una query
+  reale non altera il ranking del catalogo.
+- `boardStationIDsNeverOpensTheWholeCatalog` — la derivazione non degenera mai in
+  "tutte le stazioni", in nessuna configurazione di build.
+
+### Non verificato
+Nessuna prova visiva in simulatore: l'integrazione nativa risponde "Xcode is installed
+but not selected" nonostante `xcode-select -p` sia già
+`/Applications/Xcode.app/Contents/Developer`. `xcodebuild` funziona (build+test verdi),
+quindi la verifica è solo a livello di unit test / compilazione, non di rendering.
+
 ## 2026-08-18 — FIX: `isDeparting` del parser RFI (Swift + backend), fixture rifatte da HTML reale
 
 Stato: **corretto e verificato su entrambi i lati.** Chiude la regressione registrata

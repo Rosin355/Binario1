@@ -378,7 +378,7 @@ struct Binario1Tests {
         #expect(data.suggested != nil)
         #expect(data.recent.count == 3)
         #expect(data.saved.first?.direction == .homeToWork)
-        #expect(data.saved.first?.origin == "Montegrotto Terme")
+        #expect(data.saved.first?.origin == "Terme Euganee-Abano-Montegrotto")   // official RFI name
         #expect(data.saved.first?.status == .onTime)
         #expect(data.saved.last?.status == .delayed(minutes: 12))
         #expect(data.suggested?.destination == "Venezia Santa Lucia")
@@ -573,6 +573,126 @@ struct Binario1Tests {
         #expect(vm.destinationStation?.displayName == "Roma Termini")
     }
 
+    // MARK: - Cerca → station board (tap a result, get THAT station's board)
+
+    /// Catalog for the Cerca→board tests. Stored order deliberately puts the UNSERVED
+    /// stations first, so "live-board stations lead the idle list" is a real assertion
+    /// and not an accident of the input order. Firenze is the ticket's example of a
+    /// catalog station with no live board.
+    private static func cercaBoardCatalog() -> DefaultStationCatalog {
+        func s(_ id: String, _ name: String, _ city: String, served: Bool = false) -> Station {
+            Station(id: id, name: name, city: city, displayName: name, countryCode: "IT",
+                    timezone: "Europe/Rome", providerCodes: nil, boardAliases: nil,
+                    servedByLiveBoard: served ? true : nil)
+        }
+        return DefaultStationCatalog(stations: [
+            s("bologna-centrale", "Bologna Centrale", "Bologna"),
+            s("firenze-smn", "Firenze Santa Maria Novella", "Firenze"),
+            s("padova", "Padova", "Padova", served: true),
+            s("roma-termini", "Roma Termini", "Roma", served: true),
+            s("venezia-santa-lucia", "Venezia Santa Lucia", "Venezia"),
+        ])
+    }
+
+    @MainActor
+    @Test func cercaStationTapOpensTheBoardOfThatStation() async {
+        let cerca = CercaViewModel(catalog: Self.cercaBoardCatalog(),
+                                   savedStore: freshStore("binario1.tests.cerca-board-served"),
+                                   boardStationIDs: ["padova", "roma-termini"])
+        cerca.query = "roma"
+        let roma = cerca.stationResults.first { $0.id == "roma-termini" }!
+        #expect(cerca.hasLiveBoard(roma))                     // advertised with the LIVE chip
+
+        // The board built for the tapped station (same wiring as AppEnvironment's
+        // factory: locked station, live-served restriction on).
+        let service = RecordingBoardService(rowsByStation: [
+            "padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)],
+            "roma-termini": [Self.boardRow("rm1", "Milano Centrale", 18, 5)],
+        ])
+        let board = StationBoardViewModel(service: service, station: roma, allowsStationChange: false,
+                                          now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                          selectableStations: [roma],
+                                          liveServedStationIDs: ["padova", "roma-termini"])
+        await board.refresh()
+        #expect(board.station.displayName == "Roma Termini")  // header names the tapped station
+        #expect(service.requestedStationIDs == ["roma-termini"])   // fetched with ITS slug
+        #expect(board.rows.map(\.id) == ["rm1"])              // ITS rows
+        #expect(!board.rows.contains { $0.id == "pd1" })       // never another station's
+        #expect(board.isBoardUnavailableForStation == false)
+        #expect(board.allowsStationChange == false)            // can't cycle away from it
+    }
+
+    @MainActor
+    @Test func cercaUnservedStationTapShowsHonestStateWithoutFetching() async {
+        let cerca = CercaViewModel(catalog: Self.cercaBoardCatalog(),
+                                   savedStore: freshStore("binario1.tests.cerca-board-unserved"),
+                                   boardStationIDs: ["padova", "roma-termini"])
+        cerca.query = "firenze"
+        let firenze = cerca.stationResults.first { $0.id == "firenze-smn" }!
+        #expect(cerca.hasLiveBoard(firenze) == false)          // no LIVE chip → no false promise
+
+        let service = RecordingBoardService(rowsByStation: [
+            "padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)],
+        ])
+        let board = StationBoardViewModel(service: service, station: firenze, allowsStationChange: false,
+                                          now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                          selectableStations: [firenze],
+                                          liveServedStationIDs: ["padova", "roma-termini"])
+        await board.refresh()
+        #expect(board.isBoardUnavailableForStation == true)    // honest state
+        #expect(board.rows.isEmpty)                            // never another station's rows
+        #expect(board.errorMessageKey == nil)                  // not raw error text
+        #expect(service.requestedStationIDs.isEmpty)           // NO live fetch attempted
+        #expect(board.station.displayName == "Firenze Santa Maria Novella")   // header still honest
+    }
+
+    @MainActor
+    @Test func cercaIdleStationListLeadsWithLiveBoardStations() {
+        let cerca = CercaViewModel(catalog: Self.cercaBoardCatalog(),
+                                   savedStore: freshStore("binario1.tests.cerca-idle-list"),
+                                   boardStationIDs: ["padova", "roma-termini"])
+        // Empty field → a useful INITIAL list, never an empty state that looks broken.
+        #expect(cerca.isSearching == false)
+        #expect(cerca.showsNoResults == false)
+        let ids = cerca.stationResults.map(\.id)
+        #expect(ids.count == 5)                                // the whole catalog, reordered
+        #expect(Set(ids.prefix(2)) == ["padova", "roma-termini"])   // live-board stations lead
+        #expect(ids.contains("firenze-smn"))                   // the others are still reachable
+    }
+
+    @MainActor
+    @Test func cercaNoResultsOnlyForAQueryThatMatchedNothing() {
+        let cerca = CercaViewModel(catalog: Self.cercaBoardCatalog(),
+                                   savedStore: freshStore("binario1.tests.cerca-no-results"),
+                                   boardStationIDs: ["padova"])
+        cerca.query = "zzzzzz"
+        #expect(cerca.stationResults.isEmpty)
+        #expect(cerca.showsNoResults == true)                  // honest "no results"
+        cerca.query = "   "                                    // whitespace = idle
+        #expect(cerca.showsNoResults == false)
+        #expect(!cerca.stationResults.isEmpty)
+        // A typed query keeps the catalog ranking untouched (no reordering by board).
+        cerca.query = "bologna"
+        #expect(cerca.stationResults.map(\.id) == ["bologna-centrale"])
+    }
+
+    @Test func boardStationIDsNeverOpensTheWholeCatalog() {
+        let ids = AppEnvironment.boardStationIDs
+        #expect(!ids.isEmpty)
+        if let live = AppEnvironment.liveServedStationIDs {
+            // Live backend → exactly the registry slugs, derived from the catalog flag.
+            #expect(ids == live)
+            #expect(ids == Set(DefaultStationCatalog.shared.liveServed.map(\.id)))
+        } else {
+            // No live restriction: the service ignores stationId (mock always answers
+            // Bologna, scheduled/fixture always Padova), so exactly ONE station may be
+            // opened — otherwise Cerca would paint one dataset under another name.
+            #expect(ids == [AppEnvironment.initialStation.id])
+        }
+        // Never "every catalog station", in any configuration.
+        #expect(ids.count < DefaultStationCatalog.shared.all.count)
+    }
+
     @Test func matcherAliasHandlesAbbreviatedBoardNameKeepingTwoTokenRule() {
         let catalog = Self.testCatalog()
         let venezia = catalog.station(named: "Venezia Santa Lucia")!
@@ -660,10 +780,13 @@ struct Binario1Tests {
         let servedIDs = Set(catalog.liveServed.map(\.id))
         // These ids MUST equal the backend registry slugs (registry.ts) — a mismatch
         // would make the backend answer 404 unknown_station.
-        #expect(servedIDs == ["padova", "roma-termini"])
+        #expect(servedIDs == ["padova", "roma-termini", "terme-euganee-abano-montegrotto"])
         #expect(catalog.servesLiveBoard(stationID: "roma-termini"))
+        #expect(catalog.servesLiveBoard(stationID: "terme-euganee-abano-montegrotto"))
         #expect(!catalog.servesLiveBoard(stationID: "firenze-smn"))   // in catalog, not live-served
         #expect(catalog.station(named: "Roma Termini")?.isServedByLiveBoard == true)
+        // One id only — the pre-promotion slug must not survive as a second entity.
+        #expect(!catalog.all.contains { $0.id == "montegrotto-terme" })
     }
 
     @MainActor
@@ -912,20 +1035,258 @@ struct Binario1Tests {
         #expect(useful.durationText == "28 min")
     }
 
-    // MARK: - Station title (reveal target = full name)
+    // MARK: - Station title layout (C1-A: full name, wrap → scale, never cut)
 
-    /// The animated title reveal completes to `totalReal` characters, which equals
-    /// the full station title. Guards the "stuck on first character" regression by
-    /// pinning the title the reveal must reach.
-    @Test func stationTitleResolvesToFullName() {
-        let padova = StationNameFormatter.boardTitle(for: "Padova")
-        #expect(padova.primary == "PADOVA")
-        #expect(padova.secondary == "")
-        #expect(padova.primary.count == 6)        // reveal must reach 6 → full "PADOVA", not "P"
+    /// Width the title actually gets on a 393pt-wide iPhone header: 18pt padding each
+    /// side, minus the `Cambia` control (~86pt) and the 10pt gap.
+    private static let headerTitleWidth: CGFloat = 393 - 36 - 86 - 10
+    private static let titlePrimaryBase: CGFloat = 34
+    private static let titleSecondaryBase: CGFloat = 22
 
-        let bologna = StationNameFormatter.boardTitle(for: "Bologna Centrale")
-        #expect(bologna.primary == "BOLOGNA")
-        #expect(bologna.secondary == "CENTRALE")
+    private static func titleLayout(_ name: String,
+                                    width: CGFloat = headerTitleWidth) -> StationTitleLayout.Layout {
+        StationTitleLayout.layout(fullName: name, available: width,
+                                  primaryBase: titlePrimaryBase, secondaryBase: titleSecondaryBase)
+    }
+
+    /// Letters and digits only. The layout drops the separator it breaks on — a space,
+    /// or the hyphen in "TERME EUGANEE-ABANO-MONTEGROTTO" — so "nothing was cut" is an
+    /// assertion about the GLYPHS, not about where the line break landed.
+    private static func glyphs(_ s: String) -> String {
+        s.uppercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// The reported regression: "MONTEGROTTO TERME" rendered as "MONTEGROT / TERME".
+    /// The old title squeezed the primary line into 9 fixed slots and dropped the rest
+    /// with no ellipsis. The full first word must now survive.
+    @Test func stationTitleKeepsLongFirstWordWhole() {
+        let l = Self.titleLayout("Montegrotto Terme")
+        #expect(l.primary == "MONTEGROTTO")          // was "MONTEGROT"
+        #expect(l.secondary == ["TERME"])
+        #expect(l.scale == 1)                        // fits at full size, no shrinking
+        #expect(!StationTitleLayout.overflowsAtMinScale(
+            fullName: "Montegrotto Terme", available: Self.headerTitleWidth,
+            primaryBase: Self.titlePrimaryBase, secondaryBase: Self.titleSecondaryBase))
+    }
+
+    /// No abbreviation in the header (docs/12_DECISIONS.md): the compact forms belong
+    /// to the board ROWS. The compound city stays whole on the primary line, so the
+    /// split never reads "REGGIO / EMILIA AV MEDIOPADANA".
+    @Test func stationTitleNeverAbbreviatesOrEllipsizes() {
+        let reggio = Self.titleLayout("Reggio Emilia AV Mediopadana")
+        #expect(reggio.primary == "REGGIO EMILIA")           // not "REGGIO E."
+        #expect(reggio.secondary.joined(separator: " ") == "AV MEDIOPADANA")   // not "AV MEDIOP."
+
+        let firenze = Self.titleLayout("Firenze Santa Maria Novella")
+        #expect(firenze.primary == "FIRENZE")
+        #expect(firenze.secondary.joined(separator: " ") == "SANTA MARIA NOVELLA")  // not "S.M.N."
+
+        // Nothing in the header is ever ellipsized or cut mid-word.
+        for name in ["Montegrotto Terme", "Reggio Emilia AV Mediopadana",
+                     "Firenze Santa Maria Novella", "Milano Porta Garibaldi"] {
+            let l = Self.titleLayout(name)
+            #expect(!l.lines.contains { $0.contains("…") })
+            #expect(l.lines.joined(separator: " ") == name.uppercased())   // every word intact
+        }
+    }
+
+    /// Fitting ORDER: wrap onto more lines at full size first, scale only when even the
+    /// wrapped lines don't fit — and never below `minScale`.
+    @Test func stationTitleWrapsBeforeItScales() {
+        // Wide header → a long qualifier fits on one line at full size.
+        let wide = Self.titleLayout("Firenze Santa Maria Novella", width: 400)
+        #expect(wide.secondary == ["SANTA MARIA NOVELLA"])
+        #expect(wide.scale == 1)
+
+        // Narrow header → the qualifier takes an extra line BEFORE anything shrinks.
+        let narrow = Self.titleLayout("Firenze Santa Maria Novella", width: 150)
+        #expect(narrow.secondary.count > 1)
+        #expect(narrow.secondary.joined(separator: " ") == "SANTA MARIA NOVELLA")
+
+        // Absurdly narrow → scaling kicks in but stops at the floor, never at 0.
+        let squeezed = Self.titleLayout("Reggio Emilia AV Mediopadana", width: 40)
+        #expect(squeezed.scale == StationTitleLayout.minScale)
+        #expect(squeezed.scale >= 0.6)
+    }
+
+    /// Every station in the BUNDLED catalog fits the real header width without ever
+    /// reaching the point where a glyph would be cut — in IT and EN alike (station
+    /// names are proper nouns, identical in both locales).
+    @Test func everyCatalogStationTitleFitsWithoutTruncation() {
+        let catalog = DefaultStationCatalog.shared
+        for station in catalog.all {
+            let l = Self.titleLayout(station.displayName)
+            #expect(l.scale >= StationTitleLayout.minScale)
+            #expect(Self.glyphs(l.lines.joined()) == Self.glyphs(station.displayName),
+                    "\(station.displayName) lost a glyph")
+            #expect(!StationTitleLayout.overflowsAtMinScale(
+                fullName: station.displayName, available: Self.headerTitleWidth,
+                primaryBase: Self.titlePrimaryBase, secondaryBase: Self.titleSecondaryBase),
+                    "\(station.displayName) would be cut")
+        }
+    }
+
+    /// Dynamic Type: at accessibility sizes the base grows, so the title takes MORE
+    /// lines and scales down — it must still keep every word whole.
+    @Test func stationTitleAtAccessibilitySizesWrapsInsteadOfCutting() {
+        // ~2x base, the ballpark of the largest accessibility text sizes.
+        let l = StationTitleLayout.layout(fullName: "Reggio Emilia AV Mediopadana",
+                                          available: Self.headerTitleWidth,
+                                          primaryBase: 68, secondaryBase: 44)
+        #expect(l.primary == "REGGIO EMILIA")
+        #expect(l.secondary.count >= 2)                       // wrapped, not cut
+        #expect(l.lines.joined(separator: " ") == "REGGIO EMILIA AV MEDIOPADANA")
+        #expect(l.scale >= StationTitleLayout.minScale)
+    }
+
+    /// The measured monospaced advance must stay in a sane range — a bogus value would
+    /// silently make every fit calculation wrong.
+    @Test func titleGlyphAdvanceRatioIsMeasuredAndSane() {
+        #expect(StationTitleLayout.glyphAdvanceRatio > 0.4)
+        #expect(StationTitleLayout.glyphAdvanceRatio < 0.9)
+        // Width grows linearly with the glyph count (uniform advance).
+        let one = StationTitleLayout.width("M", size: 34)
+        let two = StationTitleLayout.width("MM", size: 34)
+        #expect(two > one)
+        #expect(abs(two - (2 * one + StationTitleLayout.glyphSpacing)) < 0.001)
+    }
+
+    // MARK: - C2: Terme Euganee-Abano-Montegrotto (RFI 2829) promoted to live-served
+
+    /// The catalog carries the OFFICIAL RFI name, and the common/historical names the
+    /// user actually types are `searchAliases` — a "monte" query must find it.
+    @MainActor
+    @Test func searchAliasesFindTheStationByItsCommonNames() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else {
+            print("[Test] stations.json not loaded from bundle — skipping")
+            return
+        }
+        let vm = CercaViewModel(savedStore: freshStore("binario1.tests.c2-aliases"),
+                                boardStationIDs: ["terme-euganee-abano-montegrotto"])
+        for query in ["monte", "montegrotto", "Montegrotto Terme", "abano", "terme euganee"] {
+            vm.query = query
+            #expect(vm.stationResults.contains { $0.id == "terme-euganee-abano-montegrotto" },
+                    "query \"\(query)\" did not find the station")
+        }
+        // An alias hit ranks like a name hit: "montegrotto" puts it FIRST, not buried.
+        vm.query = "montegrotto"
+        #expect(vm.stationResults.first?.id == "terme-euganee-abano-montegrotto")
+        // The alias never leaks into what is displayed/saved — that stays official.
+        #expect(vm.stationResults.first?.displayName == "Terme Euganee-Abano-Montegrotto")
+    }
+
+    /// Names persisted BEFORE the rename (the seed shipped "Montegrotto Terme" to every
+    /// install) must still resolve to the entity, or old saved journeys would orphan.
+    @Test func preRenameNameStillResolvesToTheSameEntity() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let byOldName = catalog.station(named: "Montegrotto Terme")
+        #expect(byOldName?.id == "terme-euganee-abano-montegrotto")
+        #expect(byOldName?.displayName == "Terme Euganee-Abano-Montegrotto")
+        // The official name and the RFI short form resolve to the very same entity.
+        #expect(catalog.station(named: "Terme Euganee-Abano-Montegrotto")?.id == byOldName?.id)
+        #expect(catalog.station(named: "Terme Euganee")?.id == byOldName?.id)
+        // An alias only ADDS matches: it never hijacks another station's exact name.
+        #expect(catalog.station(named: "Padova")?.id == "padova")
+        #expect(catalog.station(named: "Venezia Mestre")?.id == "venezia-mestre")
+    }
+
+    /// The board prints the SHORT form "TERME EUGANEE" in the destination column; a
+    /// saved journey heading there must still be matched — under the official name AND
+    /// under the pre-rename one.
+    @Test func boardAliasMatchesTheShortFormRFIPrints() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let station = catalog.station(named: "Terme Euganee-Abano-Montegrotto")!
+        #expect(StationNameMatcher.matches(station: station, boardName: "TERME EUGANEE"))
+        #expect(StationNameMatcher.matches(station: station, boardName: "TERME EUGANEE-ABANO-MONTEGROTTO"))
+
+        let row = Self.boardRow("t1", "TERME EUGANEE", 18, 10)
+        for savedName in ["Terme Euganee-Abano-Montegrotto", "Montegrotto Terme"] {
+            let journey = SavedJourney(id: "j-\(savedName)", direction: .homeToWork,
+                                       origin: "Padova", destination: savedName,
+                                       departure: Self.romeDate(2026, 6, 17, 18, 0), platform: nil,
+                                       durationMinutes: 0, status: .onTime)
+            #expect(SavedJourneyMatcher.row(row, matchesDestinationOf: journey, catalog: catalog),
+                    "saved \"\(savedName)\" did not match the board row")
+        }
+        // Still no false positive: Abano Terme is a DIFFERENT RFI station (placeId 364).
+        #expect(!StationNameMatcher.matches(station: station, boardName: "VENEZIA MESTRE"))
+    }
+
+    /// The board header names the station the user opened, and the pre-rename origin
+    /// persisted in old installs still counts as "departing from here".
+    @Test func savedJourneyFromTheOldNameStillDepartsFromThisBoard() {
+        #expect(SavedJourneyMatcher.journeyDeparts(
+            from: "Terme Euganee-Abano-Montegrotto",
+            journey: SavedJourney(id: "old", direction: .homeToWork,
+                                  origin: "Montegrotto Terme", destination: "Padova",
+                                  departure: Self.romeDate(2026, 6, 17, 7, 18), platform: nil,
+                                  durationMinutes: 0, status: .onTime)))
+        // The ≥2-token rule still protects genuinely different stations: BATTAGLIA is
+        // not a token of the official name, so the neighbouring station does not match.
+        #expect(!SavedJourneyMatcher.journeyDeparts(
+            from: "Terme Euganee-Abano-Montegrotto",
+            journey: SavedJourney(id: "other", direction: .homeToWork,
+                                  origin: "Battaglia Terme", destination: "Padova",
+                                  departure: Self.romeDate(2026, 6, 17, 7, 18), platform: nil,
+                                  durationMinutes: 0, status: .onTime)))
+    }
+
+    /// KNOWN COLLISION, pinned so it cannot regress silently into a surprise.
+    ///
+    /// "Abano Terme" is a SEPARATE RFI station (placeId 364), not in the catalog. Its
+    /// canonical tokens {ABANO, TERME} are a SUBSET of the official name's
+    /// {TERME, EUGANEE, ABANO, MONTEGROTTO}, so `StationNameMatcher`'s ≥2-token rule
+    /// matches them TODAY. Harmless while 364 is absent — the only station answering
+    /// to "Abano" is this one. It becomes a real false positive the day 364 is added,
+    /// and the fix belongs to the matcher, which this ticket must not touch.
+    /// See the `_note` on the catalog entry and docs/11_PROGRESS.md.
+    @Test func abanoTermeCollidesWithTheOfficialNameUntilRFI364IsAdded() {
+        #expect(StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Abano Terme"))
+        // Not a blanket "Terme" collision: the shared generic token alone is not enough.
+        #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Battaglia Terme"))
+        #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Venezia Mestre"))
+    }
+
+    /// Crash test for the C1-A title policy: the longest name the app has ever shown.
+    /// It must lose no glyph and never drop below the minimum scale. The SPLIT it
+    /// produces is deliberately only observed here, not asserted as desirable — see
+    /// the line-break options raised in docs/11_PROGRESS.md.
+    @Test func longestStationTitleFitsWithoutLosingGlyphs() {
+        let name = "Terme Euganee-Abano-Montegrotto"
+        let l = Self.titleLayout(name)
+        #expect(l.scale >= StationTitleLayout.minScale)
+        #expect(!StationTitleLayout.overflowsAtMinScale(
+            fullName: name, available: Self.headerTitleWidth,
+            primaryBase: Self.titlePrimaryBase, secondaryBase: Self.titleSecondaryBase))
+        // Every glyph survives (only the separator broken on is dropped).
+        #expect(Self.glyphs(l.lines.joined()) == Self.glyphs(name))
+        #expect(!l.lines.contains { $0.contains("…") })
+        // Option B: "TERME EUGANEE" is a compound city, so it stays whole on the first
+        // line instead of being cut after "TERME". The hyphen counts as a part
+        // boundary — a space-only check would miss it, since the name has no space there.
+        #expect(l.primary == "TERME EUGANEE")
+        #expect(l.secondary == ["ABANO-MONTEGROTTO"])
+        #expect(l.scale >= 0.9)          // barely needs shrinking at the real header width
+    }
+
+    /// A compound city may only match on a real part boundary, never mid-word, and the
+    /// longest compound wins. Guards the option-B change from over-reaching.
+    @Test func compoundCitySplitOnlyMatchesOnAPartBoundary() {
+        // Hyphen boundary (the C2 name) and space boundary (Reggio) both work.
+        #expect(Self.titleLayout("Terme Euganee-Abano-Montegrotto").primary == "TERME EUGANEE")
+        #expect(Self.titleLayout("Reggio Emilia AV Mediopadana").primary == "REGGIO EMILIA")
+        // The compound alone is the whole name → no qualifier line.
+        let bare = Self.titleLayout("Terme Euganee")
+        #expect(bare.primary == "TERME EUGANEE")
+        #expect(bare.secondary.isEmpty)
+        // Mid-word prefix must NOT trigger it: falls back to the plain first-word split.
+        #expect(Self.titleLayout("Reggio Emiliano Test").primary == "REGGIO")
+        // Untouched names keep the plain split.
+        #expect(Self.titleLayout("Bologna Centrale").primary == "BOLOGNA")
+        #expect(Self.titleLayout("Padova").primary == "PADOVA")
     }
 
     // MARK: - Delay color policy

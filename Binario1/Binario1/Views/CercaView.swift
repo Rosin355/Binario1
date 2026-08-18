@@ -29,6 +29,15 @@ struct CercaView: View {
             }
             .navigationTitle("tab.search")
             .searchable(text: $vm.query, prompt: Text("search.prompt"))
+            // Tapping a station opens the SAME board screen the Partenze tab shows,
+            // built by the composition root (no duplicated wiring). A station the
+            // build can't honestly serve renders the existing honest state there and
+            // never fetches — see `AppEnvironment.makeStationBoardViewModel(for:)`.
+            .navigationDestination(for: Station.self) { station in
+                StationBoardView(viewModel: AppEnvironment.makeStationBoardViewModel(for: station))
+                    .navigationTitle("")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
         }
         .preferredColorScheme(.dark)
         // Re-sync saved state on (re)appear so a deletion made in Viaggi clears the
@@ -118,13 +127,15 @@ struct CercaView: View {
         VStack(alignment: .leading, spacing: 10) {
             BoardSectionHeader(titleKey: "search.stations", systemImage: "tram.fill")
             panelList(stations) { station in
-                stationRow(station)
+                NavigationLink(value: station) { stationRow(station) }
+                    .buttonStyle(.plain)
             }
         }
     }
 
     private func stationRow(_ station: Station) -> some View {
-        HStack(spacing: 12) {
+        let hasBoard = viewModel.hasLiveBoard(station)
+        return HStack(spacing: 12) {
             Image(systemName: "mappin.and.ellipse")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(BoardColors.amber)
@@ -143,11 +154,37 @@ struct CercaView: View {
                 }
             }
             Spacer(minLength: 6)
+            // Only stations this build can honestly serve advertise a board, so the
+            // user doesn't tap into the unavailable state by accident.
+            if hasBoard {
+                liveBadge
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(BoardColors.amberDim)
+            }
         }
         .padding(.vertical, 11)
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(hasBoard ? Text("accessibility.station.liveBoard") : Text(verbatim: ""))
+    }
+
+    /// Compact amber chip marking a station with a real-time board — same vocabulary
+    /// as the board header's "DATI LIVE" label.
+    private var liveBadge: some View {
+        Text("search.station.liveBadge")
+            .font(BoardFont.text(9, .bold))
+            .tracking(1)
+            .foregroundStyle(BoardColors.amber)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(BoardColors.amber.opacity(0.55), lineWidth: 1)
+            )
+            .accessibilityHidden(true)
     }
 
     // MARK: - Idle categories
@@ -307,15 +344,18 @@ struct CercaView: View {
         }
     }
 
-    // MARK: - Station mode (informational: live board is Padova-only for now)
+    // MARK: - Station mode (tap a station → its board; LIVE chip marks the served ones)
 
     @ViewBuilder
     private var stationModeContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if viewModel.stations.isEmpty {
+            // An empty field shows the INITIAL list (live-board stations first), never
+            // an empty state that reads like a failure. "No results" is reserved for a
+            // typed query that genuinely matched nothing.
+            if viewModel.showsNoResults {
                 emptyState
             } else {
-                stationsSection(viewModel.stations)
+                stationsSection(viewModel.stationResults)
             }
             Text("search.station.note")
                 .font(BoardFont.text(12))

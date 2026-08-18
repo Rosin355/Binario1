@@ -2,6 +2,18 @@
 
 Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
 
+## Inquadramento di prodotto (vale per tutti i ticket)
+
+- **Binario1 è un "consulto del tabellone di stazione", NON un trip planner.** Il gesto
+  centrale è: l'utente cerca una stazione e ne consulta il tabellone. Ogni funzionalità
+  va letta in questa chiave — se una feature ha senso solo per pianificare un viaggio,
+  è fuori inquadramento.
+- **B2 (journey planner) è RIMOSSO dallo scope, non rimandato.** Non va riproposto come
+  "prossima milestone" né lasciato come TODO aperto nei documenti.
+- Conseguenze pratiche già visibili nel codice: `Cerca` porta al tabellone della
+  stazione scelta; `Viaggi` resta una dashboard di tratte salvate (scorciatoie verso il
+  tabellone), non un motore di ricerca itinerari.
+
 ## Home screen
 
 - **Brand `Binario1` rimosso dall'header**: si confondeva col numero di binario.
@@ -193,6 +205,30 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   `BoardUnavailableError` e la UI mostra lo **stato onesto** "Tabellone non disponibile
   per questa stazione". Cambio stazione e stato onesto **azzerano le righe** precedenti.
 - **404 `unknown_station` è un caso previsto**, non un errore da mostrare grezzo.
+
+## Policy di naming del catalogo stazioni (C2 — da applicare in blocco nel B3-full)
+
+- **Il nome ufficiale RFI è la fonte di verità** per `name` / `displayName`. Niente nomi
+  inventati, commerciali o d'uso comune nel catalogo. Il nome ufficiale è quello che
+  compare nella lista `PlaceId` del monitor RFI e nel `<title>Stazione di …</title>`.
+  Esempio C2: la stazione di Montegrotto si chiama **"Terme Euganee-Abano-Montegrotto"**;
+  "Montegrotto Terme" NON esiste come stazione RFI.
+- **`searchAliases`** = i nomi che l'UTENTE cerca (comuni, storici, colloquiali). Sono
+  solo per la ricerca e per la risoluzione canonica: un alias entra nel ranking **con lo
+  stesso rango del nome ufficiale**, e `station(named:)` li accetta, così un nome
+  persistito sotto una grafia precedente continua a risolvere all'entity. Non compaiono
+  mai in UI: ciò che si mostra e si salva resta il nome ufficiale.
+- **`boardAliases`** = le forme **brevi che RFI stampa nella colonna destinazione**
+  ("TERME EUGANEE", "VENEZIA S.L."). Servono al match della destinazione, non alla
+  ricerca. Non mescolare i due campi: hanno contratti diversi.
+- **Un solo id per stazione**, uguale allo slug del registry backend. Alla promozione di
+  una stazione si RINOMINA l'id esistente, non si aggiunge un doppione. Verificare prima
+  che nessuna persistenza contenga id di stazione (oggi: nessuna — le tratte salvate
+  memorizzano i *nomi*, non gli id).
+- **Debito di disambiguazione**: quando un alias porta a una stazione perché la stazione
+  "giusta" non è ancora in catalogo, va annotato nel JSON (`_note`, chiave ignorata dal
+  decoder) e rimosso prima di aggiungere la stazione concorrente. Caso vivo: `Abano` /
+  `Abano Terme` puntano oggi alla 2829 perché la RFI 364 "ABANO TERME" non è in catalogo.
 
 ## Catalogo stazioni & naming canonico (B1)
 

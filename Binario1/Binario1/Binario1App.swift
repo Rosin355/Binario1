@@ -144,6 +144,47 @@ enum AppEnvironment {
         }
     }
 
+    /// Stations for which THIS build can honestly show a station board (the Cerca
+    /// "apri il tabellone" destination).
+    ///
+    /// Live backend → exactly the registry slugs the backend serves (derived from the
+    /// catalog's `servedByLiveBoard` flag via `liveServedStationIDs`). Every other
+    /// source has NO live restriction (`liveServedStationIDs == nil`) *because its
+    /// service ignores `stationId`*: `MockTrainBoardService` always returns the bundled
+    /// Bologna dataset, the scheduled/fixture sources always return Padova. Left
+    /// unrestricted, opening an arbitrary catalog station from Cerca would paint that
+    /// one dataset under a DIFFERENT station's name. So those sources collapse to the
+    /// single station they actually stand for — honest in every configuration.
+    ///
+    /// Never empty, never "all stations". The Partenze demo carousel is unaffected:
+    /// it keeps using `selectableStations` / `liveServedStationIDs` as before.
+    static var boardStationIDs: Set<String> {
+        liveServedStationIDs ?? [initialStation.id]
+    }
+
+    /// Board view model for a station opened from Cerca. Same service / catalog /
+    /// saved-journey wiring as the Partenze tab, so it is the SAME experience — with
+    /// two deliberate differences:
+    ///  • the station is LOCKED (`allowsStationChange: false`): the user searched this
+    ///    station, the header must never cycle away from it;
+    ///  • `liveServedStationIDs` is always non-nil, so the existing guardrails stay
+    ///    armed — a station outside `boardStationIDs` short-circuits to the honest
+    ///    "board unavailable" state WITHOUT any fetch, and the response-identity check
+    ///    (`validatesStationIdentity`) rejects rows that claim another station.
+    @MainActor
+    static func makeStationBoardViewModel(for station: Station) -> StationBoardViewModel {
+        StationBoardViewModel(
+            service: makeTrainBoardService(),
+            station: station,
+            allowsStationChange: false,
+            savedJourneys: HomeSavedJourneys.current(),
+            savedJourneysProvider: { HomeSavedJourneys.current() },
+            catalog: DefaultStationCatalog.shared,
+            selectableStations: [station],
+            liveServedStationIDs: boardStationIDs
+        )
+    }
+
     /// Ids of the stations the LIVE board serves. Nil when the source isn't the live
     /// backend (no station restriction applies — e.g. the mock carousel).
     static var liveServedStationIDs: Set<String>? {

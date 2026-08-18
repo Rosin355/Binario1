@@ -247,7 +247,8 @@ GET /api/board?stationSlug=padova&type=departures&locale=it
   (PRM "Quadro Orario"). Never interchanged.
 - **Station expansion rule:** add a new station ONLY when its `rfiLivePlaceId` is
   VERIFIED against the live RFI monitor. Documented future candidates (NOT activated):
-  Bologna Centrale, Venezia Santa Lucia, Montegrotto Terme, Milano Centrale.
+  Bologna Centrale, Venezia Santa Lucia, Milano Centrale. *(Terme
+  Euganee-Abano-Montegrotto was activated in C2 — placeId 2829 verified.)*
 - **iOS:** `BackendBoardService` forwards the selected board type;
   `URLSessionBackendBoardFetcher` builds `…/board?…&type=departures|arrivals`. The
   personalized Home hero stays departures-only for now (arrivals personalization later).
@@ -297,7 +298,7 @@ Stations must be **centrally mapped** — the RFI **live** `placeId` and the PRM
 | `padova`            | Padova                 | `2000`         | `1861`         |
 
 Future (placeholders, ids TBD): Bologna Centrale, Venezia Santa Lucia,
-Montegrotto Terme, Milano Centrale.
+Milano Centrale. *(Terme Euganee-Abano-Montegrotto activated in C2, placeId 2829.)*
 
 Registry shape (future):
 

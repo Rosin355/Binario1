@@ -214,6 +214,22 @@
         }
       }
     },
+    "accessibility.station.liveBoard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Real-time board available"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabellone in tempo reale disponibile"
+          }
+        }
+      }
+    },
     "accessibility.stationLocked" : {
       "localizations" : {
         "en" : {
@@ -1195,18 +1211,34 @@
         }
       }
     },
-    "search.station.note" : {
+    "search.station.liveBadge" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Real-time board currently available for Padova."
+            "value" : "LIVE"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tabellone in tempo reale disponibile per Padova."
+            "value" : "LIVE"
+          }
+        }
+      }
+    },
+    "search.station.note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stations marked LIVE have a real-time board. Live data is not available yet for the others."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le stazioni con l\u2019indicatore LIVE hanno il tabellone in tempo reale. Per le altre i dati live non sono ancora disponibili."
           }
         }
       }

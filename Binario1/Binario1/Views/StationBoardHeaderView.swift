@@ -44,10 +44,11 @@ struct StationBoardHeaderView: View {
                 favoriteButton
             }
 
-            // Row 2 — static dot-matrix station title + change-station action
+            // Row 2 — static dot-matrix station title + change-station action.
+            // No Spacer: the title itself claims the remaining width (it measures it
+            // to decide wrapping/scale), the button keeps its natural width.
             HStack(alignment: .bottom, spacing: 10) {
                 DotMatrixStationTitleView(stationName: stationName, animationToken: animationToken)
-                Spacer(minLength: 8)
                 if onChangeStation != nil { changeButton.padding(.bottom, 4) }
             }
 

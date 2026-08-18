@@ -25,8 +25,8 @@ protocol StationCatalog: Sendable {
     /// Empty query → `all`. Diacritic/case-insensitive; no abbreviation expansion so
     /// a single letter doesn't expand (e.g. "s" ≠ "SANTA").
     func search(_ query: String, limit: Int) -> [Station]
-    /// Canonical lookup: the station whose displayName OR a board alias canonicalizes
-    /// equal to `name` (via StationNameMatcher). Nil when the name isn't a known
+    /// Canonical lookup: the station whose displayName OR a board/search alias
+    /// canonicalizes equal to `name` (via StationNameMatcher). Nil when the name isn't a known
     /// station (e.g. a bare "Roma" that must be disambiguated to "Roma Termini").
     func station(named name: String) -> Station?
 }
@@ -90,13 +90,25 @@ final class DefaultStationCatalog: StationCatalog, @unchecked Sendable {
     }
 
     private static func rank(_ s: Station, query q: String) -> Int? {
-        let name = fold(s.displayName)
+        // A `searchAliases` hit ranks exactly like a displayName hit — "monte" must
+        // find "Terme Euganee-Abano-Montegrotto" as readily as its official name.
+        // Best (lowest) rank across the official name and every alias wins.
+        var best = nameRank(fold(s.displayName), q)
+        for alias in s.searchAliases ?? [] {
+            if let r = nameRank(fold(alias), q) { best = min(best ?? r, r) }
+        }
+        if let best { return best }
         let city = s.city.map(fold) ?? ""
+        if !city.isEmpty, city.contains(q) { return 4 }
+        return nil
+    }
+
+    /// Rank of a query against ONE name form (official or alias). Nil = no match.
+    private static func nameRank(_ name: String, _ q: String) -> Int? {
         if name == q { return 0 }
         if name.hasPrefix(q) { return 1 }
         if name.split(separator: " ").contains(where: { $0.hasPrefix(q) }) { return 2 }
         if name.contains(q) { return 3 }
-        if !city.isEmpty, city.contains(q) { return 4 }
         return nil
     }
 
@@ -108,6 +120,10 @@ final class DefaultStationCatalog: StationCatalog, @unchecked Sendable {
         return all.first { station in
             StationNameMatcher.canonical(station.displayName) == target
             || (station.boardAliases ?? []).contains { StationNameMatcher.canonical($0) == target }
+            // `searchAliases` too: a name the user typed — or one WE persisted under an
+            // older official spelling ("Montegrotto Terme") — must still resolve to the
+            // entity. Aliases can only ADD matches, never redirect an exact name.
+            || (station.searchAliases ?? []).contains { StationNameMatcher.canonical($0) == target }
         }
     }
 

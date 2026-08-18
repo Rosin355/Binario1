@@ -44,10 +44,17 @@ final class CercaViewModel {
     var departureField: String = ""
     var destinationField: String = ""
 
+    /// Ids of the stations this build can honestly show a board for. Injected (rather
+    /// than read from `AppEnvironment` inline) so tests don't depend on the build
+    /// configuration. See `AppEnvironment.boardStationIDs`.
+    private let boardStationIDs: Set<String>
+
     init(catalog: StationCatalog = DefaultStationCatalog.shared,
-         savedStore: SavedJourneyStoring = UserDefaultsSavedJourneyStore()) {
+         savedStore: SavedJourneyStoring = UserDefaultsSavedJourneyStore(),
+         boardStationIDs: Set<String> = AppEnvironment.boardStationIDs) {
         self.catalog = catalog
         self.savedStore = savedStore
+        self.boardStationIDs = boardStationIDs
         self.savedRouteIDs = Set(savedStore.load().map(\.id))
     }
 
@@ -58,6 +65,30 @@ final class CercaViewModel {
     var stations: [Station] { catalog.search(trimmedQuery) }
 
     var hasResults: Bool { !stations.isEmpty }
+
+    // MARK: - Station mode: results + live-board availability
+
+    /// Whether tapping this station opens a REAL board. False → the board screen shows
+    /// the honest "unavailable for this station" state and performs no live fetch
+    /// (enforced in `StationBoardViewModel`, not here — this only drives the badge).
+    func hasLiveBoard(_ station: Station) -> Bool { boardStationIDs.contains(station.id) }
+
+    /// The list shown in `.station` mode.
+    ///
+    /// Empty query → a useful INITIAL list instead of an empty state that reads like a
+    /// bug: the stations with a live board first, then the rest of the catalog (stored
+    /// order). A typed query keeps the catalog's own ranking untouched.
+    var stationResults: [Station] {
+        guard !isSearching else { return stations }
+        let all = catalog.all
+        let withBoard = all.filter { hasLiveBoard($0) }
+        let rest = all.filter { !hasLiveBoard($0) }
+        return withBoard + rest
+    }
+
+    /// Show the "no results" state ONLY for a query that genuinely matched nothing.
+    /// An idle (empty) field always has the initial list, so it can never look broken.
+    var showsNoResults: Bool { isSearching && stationResults.isEmpty }
 
     // MARK: - Search mode + route form
 

@@ -34,16 +34,19 @@ final class MockTripsService: TripsService, @unchecked Sendable {
     static func sample(on now: Date) -> TripsData {
         func at(_ h: Int, _ m: Int) -> Date { time(h, m, on: now) }
 
+        // Station names here are the CATALOG's official names (naming policy in
+        // docs/12_DECISIONS.md). Installs seeded before the rename still hold
+        // "Montegrotto Terme"; that keeps resolving via the entry's `searchAliases`.
         let saved = [
             SavedJourney(
                 id: "saved-home-work", direction: .homeToWork,
-                origin: "Montegrotto Terme", destination: "Padova",
+                origin: "Terme Euganee-Abano-Montegrotto", destination: "Padova",
                 departure: at(7, 18), platform: "2", durationMinutes: 37,
                 status: .onTime, isFavorite: true
             ),
             SavedJourney(
                 id: "saved-work-home", direction: .workToHome,
-                origin: "Padova", destination: "Montegrotto Terme",
+                origin: "Padova", destination: "Terme Euganee-Abano-Montegrotto",
                 departure: at(17, 46), platform: "4", durationMinutes: 39,
                 status: .delayed(minutes: 12)
             ),

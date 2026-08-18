@@ -24,6 +24,14 @@ struct Station: Identifiable, Codable, Equatable, Hashable {
     /// row WITHOUT weakening the ≥2-token rule. Optional → decodes as nil when absent;
     /// never fabricated (only well-known display abbreviations).
     var boardAliases: [String]? = nil
+    /// Alternative names a USER may search for — common, historical or colloquial
+    /// forms that are NOT the official RFI name (e.g. "Montegrotto" for
+    /// "Terme Euganee-Abano-Montegrotto"). Search-only, and also accepted by the
+    /// catalog's canonical lookup so a name persisted under an older spelling still
+    /// resolves to this entity. Distinct from `boardAliases`, which are the SHORT
+    /// forms an RFI board prints in the destination column. Optional → decodes as nil
+    /// when absent; never fabricated.
+    var searchAliases: [String]? = nil
     /// True when this station is SERVED by the live board backend, i.e. its `id` is a
     /// slug present in the backend registry (`supabase/functions/board/registry.ts`)
     /// with a VERIFIED rfiLivePlaceId. The app derives the live station picker from
