@@ -2,6 +2,53 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-08-18 — Spike ViaggiaTreno come fonte SECONDARIA (fallback tabellone)
+
+Stato: **spike chiuso, nessun codice scritto.** Documento:
+[17_VIAGGIATRENO_SPIKE.md](17_VIAGGIATRENO_SPIKE.md). App iOS, registry e path primario
+RFI non toccati. 8 chiamate reali distanziate, confronto **appaiato** VT/RFI nello stesso
+istante (Padova e Roma Termini, 18/08/2026 ore 12:34–12:39).
+
+- **Raccomandazione: (b) piano B documentato, NON implementato.** VT risponde bene
+  (JSON, 0,10–0,33 s contro 1,41–1,76 s di RFI) ma **non è la stessa board**.
+- **Bloccanti**: VT **non contiene i treni Italo** (6 mancanti a Padova e 6 a Roma nella
+  stessa finestra oraria); il **binario è assente in 12 righe su 25** a Padova e dove
+  c'è **contraddice RFI 2 volte su 13** (è il *programmato*, non il confermato).
+- `autocompletaStazione` funziona (`PADOVA|S02581`, `ROMA TERMINI|S08409`) ma **non con i
+  nostri slug**: `roma-termini` → 200 con corpo vuoto. Utile come strumento **offline** di
+  verifica incrociata quando si aggiungono stazioni, mai come dipendenza runtime.
+- Casi limite: stazione inesistente → **200 + `[]`** (non 404: errore mascherato da board
+  vuoto); data malformata → 400 non-JSON; `soluzioniViaggioNew` → **404 confermato**
+  (B2 resta chiuso da questa strada); `circolante: false` **non** significa cancellato.
+- `cancelled` **non verificato**: nessun treno soppresso nelle 81 righe del campione.
+
+### Regressione trovata nel path primario RFI — NON corretta (fuori mandato)
+Il fix di `5d8a7c2` / `9e27f14` cattura l'intero `<tr>` e testa `/lampeggi/i`, ma
+nell'HTML RFI reale quella stringa è l'id di una **colonna presente in ogni riga**
+(`<td id="RExLampeggio">`), non una classe della riga: **40/40 righe** contengono
+`lampeggi`, **0/40** nel tag di apertura. `isDeparting` era sempre falso, ora è **sempre
+vero** → oggi **32 righe su 40** mostrerebbero "in partenza" invece di "in orario" (le
+reali sono **2**). Stesso difetto nei due port (`rfi.ts` e `RFIStationMonitorParser.swift`).
+Il test deno passa perché la **fixture** usa `<tr class="riga lampeggia">`, forma che
+l'HTML reale non ha. Inoltre `info` = `text(7)` legge la colonna `RExLampeggio`, non
+`RDettagli` (cella 8). Segnale corretto: `<img>` dentro `RExLampeggio` (`aria-label="No"`
+quando assente). **Da chiudere in un ticket dedicato PRIMA di pushare** i commit locali.
+
+## 2026-08-12 — Spike GTFS: fattibilità di B2 (ricerca tratta A→B)
+
+Stato: **spike chiuso, nessun codice scritto** (registrato a posteriori il 18/08/2026).
+Documento: [16_GTFS_SPIKE.md](16_GTFS_SPIKE.md). Nessuna dipendenza aggiunta, app non
+toccata, nessun dato GTFS committato.
+
+- **Esito: B2 NON è realizzabile con dati aperti.** Verifica empirica su feed scaricati:
+  Toscana (Padova assente) e Liguria (contiene AV, ma **0 trip** che tocchino sia Padova
+  sia Roma Termini). I GTFS ferroviari italiani sono **regionali e frammentati per
+  contratto di servizio**; nessun feed nazionale pubblico, nessun feed Veneto/Lazio.
+- **Raccomandazione accolta: (c) rinviare B2.** Restiamo sulle fonti attuali, niente
+  provider commerciale per ora. Da rifare (mezza giornata) al cambio orario di dicembre 2026.
+- Nota: anche con i feed, il GTFS **non contiene binari né ritardi** — resterebbe uno
+  strato orario con il live sopra.
+
 ## 2026-07-15 — Suite VERDE: risolti i 7 test rossi storici (2 bug distinti)
 
 Stato: completata. **123/123 test passano** — prima volta senza rossi. I 7 fallimenti
