@@ -418,3 +418,42 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   Le righe restano visibili come orario programmato, non come partenze imminenti.
 - **Niente inferenza automatica "domani"**: senza supporto service-date esplicito,
   le righe del mattino non vengono spostate al giorno successivo.
+
+## Fixture del parser RFI — solo HTML reale
+
+- **Le fixture del parser RFI DEVONO essere HTML reale scaricato dal monitor**,
+  non markup scritto a mano che "assomiglia" alla pagina. Motivo, non teorico: le
+  fixture inventate marcavano il treno in partenza con `<tr class="riga lampeggia">`,
+  una forma che la pagina vera **non ha**. Il test verificava quindi l'invenzione, non
+  RFI: è passato mentre il parser era sbagliato, prima come codice morto
+  (`isDeparting` sempre falso) e poi, dopo il "fix", sempre vero — 32 righe su 40
+  sarebbero apparse "in partenza". Vedi [17_VIAGGIATRENO_SPIKE.md](17_VIAGGIATRENO_SPIKE.md)
+  (Appendice A).
+- **Canoniche**: `Binario1Tests/Fixtures/rfi-*.sample.html`, estratti **verbatim** di
+  un download reale. Le uniche modifiche ammesse sono (1) righe scartate e (2) payload
+  base64 dei loghi accorciati — il parser non legge mai `src`. Ogni fixture dichiara
+  in testa data, `placeId` e cosa è stato tagliato.
+- **Il backend ne tiene una copia** in `supabase/functions/board/rfi_fixtures.ts`
+  (stringa TS, importata solo dai test, mai da `index.ts`): i due runtime non possono
+  condividere un file. Deve restare **identica** alla copia iOS; si rigenerano
+  entrambe da un download fresco, non si edita a mano.
+- **Corollario**: se un comportamento non compare in nessun download reale, **non si
+  inventa una fixture per coprirlo**. La cancellazione di un treno non è mai apparsa
+  nei download: resta coperta al livello del predicato (`isCancelled` /
+  `isCancelledRow` su una riga costruita in memoria), dichiarando che il campione
+  reale non la conteneva.
+- **Il segnale "in partenza" è una colonna, non una classe di riga**: è un `<img>`
+  dentro la cella `RExLampeggio` (`alt="Si"`, icona `LampeggioGrey`/`LampeggioGold`
+  — i due fotogrammi del lampeggio); quando il treno non è in partenza la cella è
+  vuota e il `<td>` porta `aria-label="No"`. La classe del `<tr>` è **solo zebratura**
+  (`row yellowRow` / `row greyRow`). Non cercare mai la sottostringa `lampeggi` nella
+  riga: è contenuta nell'id/classe di quella cella, quindi è presente in **tutte**.
+- **`info` è la nota "Informazioni"**, cioè il blocco `testoinfoaggiuntive` che segue
+  il titolo `Informazioni` dentro la cella `RDettagli` — mai l'intera cella (che
+  contiene anche l'itinerario "Fermate successive", ~2 KB) e mai la cella
+  `RExLampeggio`. Valori reali: `CARROZZA 1 IN TESTA AL TRENO`, `VIA MONTEBELLUNA`,
+  `NO-STOP`, `VIAGGIATORI DA … CON BUS SOSTITUTIVO ALLE ORE …`.
+- **Niente euristiche testuali per lo stato**: l'euristica "info contiene *stazione*"
+  è stata rimossa. Sulla pagina reale `IN STAZIONE` compare solo nel banner avvisi
+  di stazione, **fuori dalla tabella**: usarla come segnale di partenza significava
+  leggere un testo che non parla di quel treno.

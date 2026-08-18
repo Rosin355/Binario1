@@ -23,7 +23,8 @@ Raccomandazione: **(b) piano B documentato, non implementato**. Dettaglio in fon
 
 > **Fuori scope ma bloccante — leggere l'appendice.** Durante il confronto ho trovato una
 > **regressione reale nel path primario RFI**, introdotta dai commit locali non ancora
-> pushati. Non l'ho corretta (fuori mandato). Vedi [Appendice A](#appendice-a).
+> pushati. Vedi [Appendice A](#appendice-a). **AGGIORNAMENTO 2026-08-18: corretta** in un
+> ticket dedicato successivo a questo spike — vedi [11_PROGRESS.md](11_PROGRESS.md).
 
 ## Metodo
 
@@ -258,9 +259,15 @@ un fallback dichiaratamente parziale.
 
 ## Appendice A — Regressione trovata nel path primario RFI (fuori scope, non corretta)
 
-Emersa confrontando il tabellone RFI reale con VT. **Non l'ho corretta**: il mandato di
-questo spike esclude il path primario. La riporto perché è **nei commit locali non ancora
-pushati**, e uno di quelli tocca `supabase/**` → **al push fa deploy automatico**.
+Emersa confrontando il tabellone RFI reale con VT. Al momento della stesura **non era
+corretta**: il mandato di questo spike escludeva il path primario. La riporto perché era
+**nei commit locali non ancora pushati**, e uno di quelli tocca `supabase/**` → **al push
+fa deploy automatico**.
+
+> **STATO: CORRETTA (2026-08-18)**, in un ticket dedicato, su entrambi i port, con le
+> fixture rigenerate da HTML reale e verifica rosso→verde (backend 4 rossi → 29/29;
+> iOS 3 rossi → 125/125). Dettagli in [11_PROGRESS.md](11_PROGRESS.md) e policy fixture
+> in [12_DECISIONS.md](12_DECISIONS.md). L'analisi sotto resta come diagnosi.
 
 ### Cosa succede
 
@@ -319,8 +326,11 @@ il ramo `info.contains("stazione")` è a sua volta codice morto.
 `aria-label="No"`. Verificato: 2/40 righe, coerenti con i due treni in partenza al minuto
 della lettura.
 
-**Nessuna modifica applicata.** Va aperto un ticket a sé, con una fixture rigenerata
-dall'HTML reale, **prima** di pushare i commit locali.
+**Fatto nel ticket di correzione**: `isBoardingCell(cella 7)` = presenza di `<img>`
+(entrambe le icone `LampeggioGrey`/`LampeggioGold` portano `alt="Si"`), `detailsNote(cella
+8)` = solo il blocco `testoinfoaggiuntive` sotto il titolo *Informazioni*, euristica
+"info contiene *stazione*" rimossa. Le fixture inventate sono state sostituite da
+estratti verbatim dei download reali di Padova e Roma Termini.
 
 ## Riproducibilità
 

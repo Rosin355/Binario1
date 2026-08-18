@@ -1823,45 +1823,29 @@ struct Binario1Tests {
     }
 
 #if DEBUG
-    // MARK: - RFI live Padova spike (DEBUG-only)
-    // Mirrors Binario1Tests/Fixtures/rfi-padova-departures.sample.html so parser
-    // tests never need live network.
+    // MARK: - RFI live spike (DEBUG-only)
+    // Fixtures are REAL RFI monitor HTML downloaded on 2026-08-18 and kept verbatim in
+    // Binario1Tests/Fixtures. They replaced hand-written approximations that marked a
+    // boarding train with `<tr class="riga lampeggia">` — a shape the live page does not
+    // have — which is precisely why the departing test passed while the parser was
+    // wrong. See Binario1/docs/17_VIAGGIATRENO_SPIKE.md (Appendice A). Never hand-edit
+    // a fixture: re-download it.
 
-    private static let rfiPadovaFixtureHTML = """
-    <!DOCTYPE html>
-    <html lang="it">
-    <head><meta charset="utf-8" /><title>Monitor Partenze - PADOVA</title></head>
-    <body>
-      <div id="nomestazione">PADOVA</div>
-      <div id="aggiornamento">Aggiornato alle 17:12</div>
-      <table id="monitor">
-        <thead><tr><th>Vettore</th><th>Cat</th><th>Treno</th><th>Dest</th><th>Ora</th><th>Rit</th><th>Bin</th><th>Info</th></tr></thead>
-        <tbody>
-          <tr class="riga">
-            <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
-            <td><img src="/i/REG.png" alt="Categoria Regionale" /></td>
-            <td>5928</td><td>VENEZIA SANTA LUCIA</td><td>17:18</td><td>0</td><td>1</td><td></td>
-          </tr>
-          <tr class="riga">
-            <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
-            <td><img src="/i/AV.png" alt="Categoria Alta Velocita&#39;" /></td>
-            <td>9402</td><td>ROMA TERMINI</td><td>17:25</td><td>10</td><td>5</td><td>In stazione</td>
-          </tr>
-          <tr class="riga lampeggia">
-            <td><img src="/i/italo.png" alt="Italo" /></td>
-            <td><img src="/i/ITA.png" alt="Categoria Italo" /></td>
-            <td>9902</td><td>MILANO CENTRALE</td><td>17:34</td><td>0</td><td></td><td></td>
-          </tr>
-          <tr class="riga">
-            <td><img src="/i/trenitalia.png" alt="Trenitalia" /></td>
-            <td><img src="/i/RV.png" alt="Categoria Regionale Veloce" /></td>
-            <td>2774</td><td>BOLOGNA CENTRALE</td><td>17:41</td><td>Cancellato</td><td>3</td><td>Treno cancellato</td>
-          </tr>
-        </tbody>
-      </table>
-    </body>
-    </html>
-    """
+    private static func rfiFixtureHTML(_ name: String) -> String {
+        let bundle = Bundle(for: DiagBox.self)
+        guard let url = bundle.url(forResource: name, withExtension: "html"),
+              let html = try? String(contentsOf: url, encoding: .utf8), !html.isEmpty
+        else { fatalError("missing test fixture \(name).html in the test bundle") }
+        return html
+    }
+
+    /// Padova departures, placeId=2000 — 4 real rows: 3513 (RV, 20' late),
+    /// 8906 (AV, boarding AND 5' late), 8929 (AV, boarding, on time), 17087 (REG, quiet).
+    private static let rfiPadovaFixtureHTML = rfiFixtureHTML("rfi-padova-departures.sample")
+
+    /// Roma Termini departures, placeId=2416 — 5 real rows, several with NO platform
+    /// (RFI withholds it until confirmed) and an alphanumeric train number.
+    private static let rfiRomaFixtureHTML = rfiFixtureHTML("rfi-roma-termini-departures.sample")
 
     private struct StubMonitorFetcher: RFIMonitorFetching {
         var html: String? = nil
@@ -1895,20 +1879,65 @@ struct Binario1Tests {
     @Test func rfiParserExtractsStationUpdatedAndRows() {
         let board = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
         #expect(board.stationName == "PADOVA")
-        #expect(board.updatedAt == "17:12")
-        #expect(board.rows.count >= 3)
+        #expect(board.rows.count == 4)                  // the <thead> <th> row is skipped
+        // KNOWN GAP, asserted so it stays visible: the live page renders "aggiornato il
+        // 18/08/2026 alle ore 12:34:29" across several <span>s, so the updated-at pattern
+        // finds no HH:mm. Callers fall back to their own fetch time — honest, but the
+        // source timestamp is lost.
+        #expect(board.updatedAt == nil)
+        #expect(RFIStationMonitorParser.parse(Self.rfiRomaFixtureHTML).stationName == "ROMA TERMINI")
     }
 
     @Test func rfiParserExtractsRowFields() {
         let board = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
-        let venezia = board.rows.first { $0.trainNumber == "5928" }
-        #expect(venezia?.destination == "VENEZIA SANTA LUCIA")
-        #expect(venezia?.time == "17:18")
-        #expect(venezia?.platform == "1")
-        #expect(venezia?.category == "Categoria Regionale")   // parser keeps the raw (decoded) label
-        // Missing platform stays missing (not fabricated).
-        let italo = board.rows.first { $0.trainNumber == "9902" }
-        #expect(italo?.platform == nil)
+        let venezia = board.rows.first { $0.trainNumber == "3513" }
+        #expect(venezia?.operatorName == "TRENITALIA")
+        #expect(venezia?.destination == "VENEZIA S.LUCIA")
+        #expect(venezia?.time == "12:22")
+        #expect(venezia?.delay == "20")
+        #expect(venezia?.platform == "5")
+        #expect(venezia?.category == "Categoria RV")     // parser keeps the raw (decoded) label
+        // Missing platform stays missing (not fabricated). RFI withholds the platform at
+        // Roma Termini until it is confirmed, so the real Roma rows carry none.
+        let roma = RFIStationMonitorParser.parse(Self.rfiRomaFixtureHTML)
+        #expect(roma.rows.count == 5)
+        #expect(roma.rows.first { $0.trainNumber == "4622" }?.platform == nil)
+        #expect(roma.rows.first { $0.trainNumber == "12657" }?.platform == "17")
+        #expect(roma.rows.first { $0.trainNumber == "CB706" }?.trainNumber == "CB706")
+    }
+
+    /// THE REGRESSION GUARD. "In partenza" is an <img> inside the RExLampeggio cell —
+    /// not a class on the <tr>. Every row contains the substring "lampeggi" (it is that
+    /// cell's own id/class), so a row-level substring test marked EVERY row departing:
+    /// 32 of 40 rows on the live board would have read "in partenza" instead of "in orario".
+    @Test func rfiDepartingComesOnlyFromTheBoardingColumn() {
+        let board = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
+        #expect(Self.rfiPadovaFixtureHTML.contains("RExLampeggio"))   // present on every row
+        #expect(board.rows.filter { $0.isDeparting == true }.map(\.trainNumber) == ["8906", "8929"])
+        #expect(board.rows.first { $0.trainNumber == "17087" }?.isDeparting == false)
+        #expect(board.rows.first { $0.trainNumber == "3513" }?.isDeparting == false)
+
+        // The cell HTML itself, both icon variants of the blink.
+        #expect(RFIStationMonitorParser.isBoardingCell(#"<img class="exlampeggio" alt="Si" src="/x/LampeggioGrey.png" />"#))
+        #expect(RFIStationMonitorParser.isBoardingCell(#"<img class="exlampeggio" alt="Si" src="/x/LampeggioGold.png" />"#))
+        #expect(!RFIStationMonitorParser.isBoardingCell("   \n   "))  // aria-label="No" → empty cell
+        #expect(!RFIStationMonitorParser.isBoardingCell(nil))
+    }
+
+    /// `info` is the "Informazioni" note of the details cell — not the boarding cell
+    /// (which the parser used to read) and not the "Fermate successive" itinerary.
+    @Test func rfiInfoComesFromTheInformazioniNote() {
+        let padova = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
+        #expect(padova.rows.first { $0.trainNumber == "3513" }?.info == "CARROZZA 1 IN TESTA AL TRENO")
+        // 17087 has a "Fermate successive" popup but no Informazioni block.
+        #expect(padova.rows.first { $0.trainNumber == "17087" }?.info == nil)
+        let roma = RFIStationMonitorParser.parse(Self.rfiRomaFixtureHTML)
+        #expect(roma.rows.first { $0.trainNumber == "4622" }?.info == "NO-STOP")
+        // The itinerary must never leak into the board note.
+        for row in padova.rows + roma.rows {
+            #expect(!(row.info ?? "").contains("FERMA A:"))
+            #expect(!(row.info ?? "").contains("Fermate successive"))
+        }
     }
 
     @Test func rfiDelayParsingNeverFakesDelay() {
@@ -1920,7 +1949,7 @@ struct Binario1Tests {
     }
 
     @Test func rfiMapperBuildsValidRows() {
-        let ref = Self.romeDate(2026, 6, 16, 17, 0)
+        let ref = Self.romeDate(2026, 8, 18, 12, 34)
         let response = RFILiveMapper.map(RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML), referenceDate: ref)
         #expect(response.sourceKind == .rfiLive)
         #expect(response.isScheduled == false)
@@ -1928,27 +1957,56 @@ struct Binario1Tests {
         #expect(response.station.name == "Padova")
         #expect(response.rows.count == 4)
 
-        let venezia = response.rows.first { $0.trainNumber == "5928" }
-        #expect(venezia?.category == "REG")
-        #expect(venezia?.destination == "VENEZIA SANTA LUCIA")
-        #expect(venezia?.delayMinutes == nil)          // "0" → no fake delay
-        #expect(venezia?.status == .onTime)
-        #expect(venezia?.platformDisplay == "1")
+        // A quiet train stays ON TIME. Before the boarding-column fix this row came back
+        // `.departing`, because every row matches the substring "lampeggi".
+        let rovigo = response.rows.first { $0.trainNumber == "17087" }
+        #expect(rovigo?.category == "REG")
+        #expect(rovigo?.destination == "ROVIGO")
+        #expect(rovigo?.delayMinutes == nil)           // empty cell → no fake delay
+        #expect(rovigo?.status == .onTime)
+        #expect(rovigo?.platformDisplay == "1")
 
-        let italo = response.rows.first { $0.trainNumber == "9902" }
-        #expect(italo?.platformDisplay == "--")        // missing platform handled safely
-        #expect(italo?.status == .departing)
+        // Boarding + no delay → departing (verbose "Categoria ALTA VELOCITA'" → "AV").
+        let boarding = response.rows.first { $0.trainNumber == "8929" }
+        #expect(boarding?.category == "AV")
+        #expect(boarding?.destination == "NAPOLI CENTRALE")
+        #expect(boarding?.status == .departing)
+        #expect(boarding?.platformDisplay == "1")
 
-        let cancelled = response.rows.first { $0.trainNumber == "2774" }
-        #expect(cancelled?.status == .cancelled)
-        #expect(cancelled?.category == "RV")
+        // A delay outranks boarding: 8906 is doing both.
+        let boardingAndLate = response.rows.first { $0.trainNumber == "8906" }
+        #expect(boardingAndLate?.delayMinutes == 5)
+        #expect(boardingAndLate?.status == .delayed)
 
-        // Verbose "Categoria Alta Velocita&#39;" → compact "AV".
-        let av = response.rows.first { $0.trainNumber == "9402" }
-        #expect(av?.category == "AV")
+        let late = response.rows.first { $0.trainNumber == "3513" }
+        #expect(late?.category == "RV")
+        #expect(late?.delayMinutes == 20)
+        #expect(late?.status == .delayed)
+        #expect(late?.notes == "CARROZZA 1 IN TESTA AL TRENO")   // the Informazioni note
+
+        // Missing platform is never invented — real Roma Termini rows carry none.
+        // (`map` is Padova-locked in this DEBUG spike, so only the ROW is asserted here.)
+        let roma = RFILiveMapper.map(RFIStationMonitorParser.parse(Self.rfiRomaFixtureHTML), referenceDate: ref)
+        #expect(roma.rows.first { $0.trainNumber == "9584" }?.platformDisplay == "--")
+        #expect(roma.rows.first { $0.trainNumber == "12657" }?.status == .departing)
+        #expect(roma.rows.first { $0.trainNumber == "12522" }?.status == .onTime)
+
+        // Cancellation: NO cancelled train appeared in either real download, so it is
+        // covered at the predicate level rather than faked into a fixture.
+        // See Binario1/docs/17_VIAGGIATRENO_SPIKE.md (punto 5).
+        let cancelledRow = RFIMonitorRow(
+            operatorName: "TRENITALIA", category: "Categoria RV", trainNumber: "2774",
+            destination: "BOLOGNA CENTRALE", time: "12:41", delay: "Cancellato",
+            platform: nil, info: "Treno cancellato", isDeparting: false
+        )
+        #expect(RFILiveMapper.isCancelled(cancelledRow))
+        #expect(!RFILiveMapper.isCancelled(
+            RFIMonitorRow(operatorName: nil, category: nil, trainNumber: "1", destination: "X",
+                          time: "12:00", delay: "10", platform: "1", info: nil, isDeparting: false)
+        ))
 
         // No mapped category leaks the raw RFI label or HTML entities.
-        for r in response.rows {
+        for r in response.rows + roma.rows {
             #expect(!r.category.contains("Categoria"))
             #expect(!r.category.contains("&#"))
         }
@@ -2033,7 +2091,8 @@ struct Binario1Tests {
 
     @Test func rfiParserDecodesHTMLEntities() {
         let board = RFIStationMonitorParser.parse(Self.rfiPadovaFixtureHTML)
-        let av = board.rows.first { $0.trainNumber == "9402" }
+        // Real markup: alt="Categoria ALTA VELOCITA&#39;"
+        let av = board.rows.first { $0.trainNumber == "8906" }
         #expect(av?.category?.contains("&#") == false)  // entity decoded by the parser
         #expect(av?.category?.contains("'") == true)    // &#39; → apostrophe
     }

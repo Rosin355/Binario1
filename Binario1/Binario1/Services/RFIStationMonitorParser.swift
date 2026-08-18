@@ -8,9 +8,10 @@
 //
 //  NOTE: RFI HTML is not a stable contract and can change. The row reader is
 //  POSITIONAL over the table's <td> cells (more portable than fragile class
-//  names); station name / updated-at use light markers. These were tuned against a
-//  representative fixture (Binario1Tests/Fixtures) and will need verification
-//  against the live page — that verification is exactly the point of this spike.
+//  names); station name / updated-at use light markers. Verified against REAL
+//  downloads of the live page (Padova + Roma Termini, 2026-08-18), which are the
+//  fixtures in Binario1Tests/Fixtures. Keep it that way: an invented fixture once hid
+//  a wrong departing rule — see Binario1/docs/17_VIAGGIATRENO_SPIKE.md (Appendice A).
 //
 
 #if DEBUG
@@ -68,20 +69,54 @@ enum RFIStationMonitorParser {
 
     // MARK: - Rows (positional <td> cells)
 
+    /// Positional cell indexes of the RFI monitor table, verified against the live page
+    /// (ids in the real markup, in order):
+    ///   0 RVettore · 1 RCategoria · 2 RTreno · 3 RStazione · 4 ROrario
+    ///   5 RRitardo · 6 RBinario · 7 RExLampeggio · 8 RDettagli
+    static let boardingCellIndex = 7
+    static let detailsCellIndex = 8
+
+    /// True when the "In partenza"/"In arrivo" cell carries the boarding icon.
+    ///
+    /// The signal is an `<img class="exlampeggio" alt="Si">` INSIDE the RExLampeggio
+    /// cell; when the train is not boarding the cell is empty and the `<td>` carries
+    /// `aria-label="No"`. Testing the ROW for the substring "lampeggi" is WRONG: every
+    /// row contains it as part of that cell's own id/class (RExLampeggio /
+    /// ExLampeggio_classtd), and the `<tr>` class is only zebra striping
+    /// ("row yellowRow" / "row greyRow"). Verified on the live monitor 2026-08-18:
+    /// 2 of 40 rows at Padova, 2 of 40 at Roma Termini, 0 of 40 on the arrivals board.
+    static func isBoardingCell(_ cellHTML: String?) -> Bool {
+        guard let cellHTML else { return false }
+        return firstGroup(in: cellHTML, pattern: "(<img[^>])") != nil
+    }
+
+    /// The free-text note from the details cell — the block under the "Informazioni"
+    /// heading of the popup, never the "Fermate successive" stop list (a long itinerary,
+    /// not a board note). Real values seen: "CARROZZA 1 IN TESTA AL TRENO",
+    /// "VIA MONTEBELLUNA", "NO-STOP", "VIAGGIATORI DA … CON BUS SOSTITUTIVO ALLE ORE …".
+    /// nil when the row has no Informazioni block (29 of 40 rows had one).
+    static func detailsNote(_ cellHTML: String?) -> String? {
+        guard let cellHTML,
+              let raw = firstGroup(
+                  in: cellHTML,
+                  pattern: "titoloInfoAggiuntive[^>]*>\\s*Informazioni\\s*</div>\\s*<div[^>]*testoinfoaggiuntive[^>]*>(.*?)</div>"
+              )
+        else { return nil }
+        return clean(raw)
+    }
+
     static func rows(in html: String) -> [RFIMonitorRow] {
         let scope = substring(html, between: "<tbody", and: "</tbody>") ?? html
-        // Capture the WHOLE <tr …>…</tr> element, opening tag included: RFI marks a
-        // boarding train with a blinking CSS class on the <tr> itself, so a pattern
-        // that captured only the inner cells could never see it (`isDeparting` from
-        // "lampeggi" was dead code — every row fell back to onTime/delayed).
+        // Capture the WHOLE <tr …>…</tr> element, opening tag included, so the header
+        // guard and any future row-level attribute stay visible. NOTE: the row's own
+        // class carries NO board information — see `isBoardingCell`.
         return allGroups(in: scope, pattern: "(<tr[^>]*>.*?</tr>)").compactMap { row in
             guard !row.localizedCaseInsensitiveContains("<th") else { return nil }  // header row
-            let isDeparting = row.localizedCaseInsensitiveContains("lampeggi")
             let cells = allGroups(in: row, pattern: "<td[^>]*>(.*?)</td>")
             guard cells.count >= 5 else { return nil }
             func text(_ i: Int) -> String? { i < cells.count ? clean(cells[i]) : nil }
+            func cell(_ i: Int) -> String? { i < cells.count ? cells[i] : nil }
 
-            let info = text(7)
             return RFIMonitorRow(
                 operatorName: imgAltOrText(cells.indices.contains(0) ? cells[0] : ""),
                 category: imgAltOrText(cells.indices.contains(1) ? cells[1] : ""),
@@ -90,8 +125,11 @@ enum RFIStationMonitorParser {
                 time: text(4),
                 delay: text(5),
                 platform: text(6),
-                info: info,
-                isDeparting: isDeparting || (info?.localizedCaseInsensitiveContains("stazione") ?? false)
+                info: detailsNote(cell(detailsCellIndex)),
+                // ONLY the boarding column. The old "info contains 'stazione'" fallback
+                // is gone: it read the wrong cell, and on the real page "IN STAZIONE"
+                // appears only in the page-level notice banner, outside the table.
+                isDeparting: isBoardingCell(cell(boardingCellIndex))
             )
         }
     }

@@ -2,6 +2,81 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-08-18 — FIX: `isDeparting` del parser RFI (Swift + backend), fixture rifatte da HTML reale
+
+Stato: **corretto e verificato su entrambi i lati.** Chiude la regressione registrata
+nell'Appendice A di [17_VIAGGIATRENO_SPIKE.md](17_VIAGGIATRENO_SPIKE.md). Nessun push
+ancora: `9e27f14` tocca `supabase/**` e va in deploy automatico.
+
+### Il segnale vero, misurato (non dedotto)
+Su 3 download reali (Padova partenze, Roma Termini partenze, Padova arrivi — 40 righe
+ciascuno) il tag di apertura `<tr>` ha **solo due valori**, `row yellowRow` e
+`row greyRow`, 20 e 20: è **zebratura**, non porta informazione di board. Il segnale
+"in partenza" è un `<img class="exlampeggio" alt="Si">` **dentro la cella
+`RExLampeggio`** (colonna `<th id="HInArrivo">` = "In partenza"/"In Arrivo"); quando il
+treno non è in partenza la cella è vuota e il `<td>` porta `aria-label="No"`.
+Conteggi reali: **2/40** a Padova (8906, 8929), **2/40** a Roma (12657, 20245),
+**0/40** sugli arrivi. Due icone alternate (`LampeggioGrey.png` / `LampeggioGold.png`)
+= i due fotogrammi del lampeggio, entrambe con `alt="Si"` → il segnale è la presenza
+dell'`<img>`, non il nome del file. **Segnale non ambiguo → `isDeparting` resta attivo**
+(non c'era motivo di disattivarlo).
+
+### Cosa era rotto
+- `/lampeggi/i` sull'intero `<tr>`: la sottostringa è nell'**id/classe di quella cella**
+  (`RExLampeggio` / `ExLampeggio_classtd`), quindi presente in **40/40** righe e in
+  **0/40** tag di apertura. `isDeparting` è passato da sempre-falso a **sempre-vero**;
+  con la precedenza `cancelled → delayed → departing → onTime`, **32 righe su 40**
+  avrebbero mostrato "in partenza" invece di "in orario".
+- `info = text(7)` leggeva proprio la cella `RExLampeggio` (vuota), non `RDettagli`
+  (cella 8). Quindi `notes` era sempre vuoto **e** `isCancelledRow`, che ispeziona
+  `delay + info`, non ha mai avuto un `info` reale da leggere.
+- L'euristica `info contiene "stazione"` era doppiamente priva di base: leggeva la cella
+  sbagliata e sulla pagina vera `IN STAZIONE` compare **solo nel banner avvisi**, fuori
+  dalla tabella. **Rimossa.**
+
+### Correzione (allineata Swift ↔ backend)
+`isBoardingCell(cella 7)` = presenza di `<img>`; `detailsNote(cella 8)` = solo il blocco
+`testoinfoaggiuntive` che segue il titolo **Informazioni**, mai l'itinerario "Fermate
+successive" (~2 KB per riga). Stessa logica, stessi nomi, in
+`Binario1/Services/RFIStationMonitorParser.swift` e `supabase/functions/board/rfi.ts`.
+
+### Fixture: da inventate a reali
+Le vecchie fixture erano scritte a mano e marcavano il treno in partenza con
+`<tr class="riga lampeggia">`, forma **inesistente** nella pagina vera: verificavano
+l'invenzione, non RFI. Sostituite con **estratti verbatim** di download reali
+(2026-08-18): `rfi-padova-departures.sample.html` (4 righe) e
+`rfi-roma-termini-departures.sample.html` (5 righe, con binari mancanti reali e il
+numero treno alfanumerico `CB706`). Uniche modifiche: righe scartate e payload base64
+dei loghi accorciati (il parser non legge `src`). Copia identica per il backend in
+`rfi_fixtures.ts` (importata solo dai test, mai da `index.ts`). Policy in
+[12_DECISIONS.md](12_DECISIONS.md).
+
+### Verifiche rosso→verde
+- **Backend**: 4 test rossi con il difetto reintrodotto → **29/29 verdi** col fix
+  (`deno test`, `deno check` pulito). Erano 21 test.
+- **iOS**: 3 test rossi con il difetto reintrodotto
+  (`rfiDepartingComesOnlyFromTheBoardingColumn`, `rfiInfoComesFromTheInformazioniNote`,
+  `rfiMapperBuildsValidRows`) → **125/125 verdi** col fix, 0 falliti, più i 10 UI test.
+  **123 → 125**: nessun test perso, +2 nuovi test di regressione dedicati.
+
+### Gap noto lasciato aperto di proposito (fuori mandato)
+`updatedAt` **non viene catturato** dalla pagina reale: RFI scrive "aggiornato il
+18/08/2026 alle ore 12:34:29" spezzato su più `<span>`, e il pattern non trova un
+`HH:mm`. Il backend ricade quindi sul proprio `fetchedAt` — onesto, ma il timestamp
+della sorgente si perde. **Non toccato** (nessuna modifica al contratto in questo
+ticket); ora è **asserito nei test** su entrambi i lati perché resti visibile invece di
+essere dato per funzionante.
+
+### Non verificabile con dati reali
+Nessun treno cancellato nei download: la cancellazione resta coperta **solo** dal
+predicato (`isCancelled` / `isCancelledRow` su riga costruita in memoria), non da una
+fixture. Dichiarato nei test e in [12_DECISIONS.md](12_DECISIONS.md).
+
+### Vincoli rispettati
+Guardrail Release/`.mock` e A3 intatti (nessuna modifica a `Binario1App.swift`,
+`BackendEndpointConfig.swift`, xcconfig); A1/B1/B4/B3-lite e il fix della race non
+toccati; nessuna modifica a `registry.ts`, `index.ts`, `hardening.ts`.
+
 ## 2026-08-18 — Spike ViaggiaTreno come fonte SECONDARIA (fallback tabellone)
 
 Stato: **spike chiuso, nessun codice scritto.** Documento:
