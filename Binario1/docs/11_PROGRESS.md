@@ -4,41 +4,44 @@ Cronologia sintetica delle milestone. Tenere conciso.
 
 ## 2026-08-18 — Ticket C2: promozione RFI 2829 "Terme Euganee-Abano-Montegrotto"
 
-Stato: **codice completo e verde — FERMO PRIMA DEL DEPLOY, come concordato.**
-iOS **142/142**, backend **deno test 29/29**. Nessun commit, nessun push, nessun deploy.
-Chiusura passo 1 (spezzatura titolo, opzione B) inclusa; **manca solo lo smoke test
-post-deploy**, che parte quando la CI è verde.
+Stato: **CHIUSA E VERIFICATA END-TO-END.** iOS **142/142**, backend **deno test 29/29**,
+deploy CI verde (run #3, 25s) e **smoke test post-deploy superato su tutte e 4 le
+chiamate**. Committata in `191cfc2` (iOS) + `1f7ac41` (registry) e pushata su `main`.
 
-### Il deploy non è stato eseguito (decisione presa insieme)
-Il punto 3 chiedeva deploy + smoke test post-deploy, ma il deploy passa dalla CI
-(`.github/workflows/deploy-board.yml`: push su `main` che tocca `supabase/functions/**`,
-oppure `workflow_dispatch` — che comunque deploya ciò che sta sul remoto), mentre la
-sezione WORKFLOW vieta commit e push. Contraddizione segnalata e risolta scegliendo di
-**fermarsi prima del deploy**: il diff è pronto per la revisione, la CI eseguirà
-`deno test` e il deploy quando deciderai di pushare. **Lo smoke test post-deploy sulle 3
-stazioni resta da fare** ed è l'unica verifica del ticket ancora aperta.
+### Deploy e smoke test post-deploy — SUPERATO
+Il punto 3 chiedeva il deploy, ma la sezione WORKFLOW del ticket vietava commit e push,
+mentre il deploy passa proprio dalla CI (`deploy-board.yml`: push su `main` che tocca
+`supabase/functions/**`). Contraddizione segnalata e risolta fermandosi prima del deploy;
+il push è poi stato autorizzato esplicitamente in un giro successivo. Due commit:
+`191cfc2` (iOS) e `1f7ac41` (registry — è quello che innesca il workflow). CI verde.
 
-**Baseline PRE-deploy misurata** (endpoint attuale, sola lettura, 2026-08-18):
+**Confronto baseline → post-deploy (2026-08-18, `/board?stationSlug=…&type=departures`)**
 
-| slug | esito |
-|---|---|
-| `padova` | 200, 40 righe |
-| `roma-termini` | 200, 40 righe |
-| `terme-euganee-abano-montegrotto` | **404 `unknown_station`** (atteso: non ancora deployato) |
-| `montegrotto-terme` | 404 `unknown_station` |
-| `padova` senza token | **401** |
+| chiamata | baseline (pre-deploy) | post-deploy | atteso? |
+|---|---|---|---|
+| `padova` | 200, 40 righe | **200, 40 righe** — `station.id padova`, placeId 2000 | ✅ invariato |
+| `roma-termini` | 200, 40 righe | **200, 40 righe** — `station.id roma-termini`, placeId 2416 | ✅ invariato |
+| `terme-euganee-abano-montegrotto` | **404 `unknown_station`** | **200, 14 righe** — `station.id terme-euganee-abano-montegrotto`, name "Terme Euganee-Abano-Montegrotto", placeId **2829** | ✅ **l'unico esito cambiato** |
+| `padova` senza token | 401 | **401** | ✅ invariato |
+| *(extra)* `montegrotto-terme` | 404 `unknown_station` | **404 `unknown_station`** | ✅ il vecchio slug resta respinto — un id solo |
 
-Dopo il deploy il terzo slug deve passare a 200 con righe riferite a TERME EUGANEE, e
-gli altri quattro esiti devono restare identici.
-
-Smoke test **diretto su RFI** (già fatto nel C1-B, ripetuto qui): `placeId=2829` → 200,
-`<title>Stazione di TERME EUGANEE-ABANO-MONTEGROTTO</title>`, 17 righe reali:
+Estratto della risposta della nuova stazione (`source.kind: rfiLive`):
 
 ```
-17084 | VENEZIA S.LUCIA  | 16:05 | rit. 10 | bin. 1
-3981  | BOLOGNA CENTRALE | 16:18 |         | bin. 1
-3982  | VENEZIA S.LUCIA  | 16:35 |         | bin. 1
+station: Terme Euganee-Abano-Montegrotto  (id terme-euganee-abano-montegrotto, sourcePlaceId 2829)
+  17:55  REG  17103  -> FERRARA            bin. 3  onTime
+  18:06  REG  17088  -> VENEZIA S.LUCIA    bin. 1  onTime
+  18:18  RV   3985   -> BOLOGNA CENTRALE   bin. 1  onTime
 ```
+
+I capolinea (Ferrara, Venezia S.Lucia, Bologna Centrale) e i binari 1/3 combaciano con il
+download diretto da RFI `placeId=2829`: sono i dati di QUELLA stazione, non di un'altra.
+Le 14 righe contro le 17 della sessione precedente sono semplicemente lo scorrere della
+giornata (finestra oraria più avanzata), non una perdita di righe.
+
+**Controllo anti-contaminazione**: intersezione degli id riga fra le tre stazioni =
+**0 righe in comune** per tutte e tre le coppie. Nessuna stazione serve il tabellone di
+un'altra — il footgun che B3-lite aveva chiuso resta chiuso con tre stazioni.
 
 ### Verifica sull'id: rinomina SICURA (era la domanda del punto 1)
 Cercata ogni traccia di station id in persistenza:
