@@ -971,6 +971,220 @@ struct Binario1Tests {
         #expect(!vm.rows.contains { $0.id == "pd1" })
     }
 
+    /// Board service whose rows depend on the board TYPE, and which parks the chosen
+    /// type mid-flight. Reproduces the arrivals/departures mix-up.
+    private actor ModeGatedBoardService: TrainBoardService {
+        private let rowsByType: [BoardType: [TrainBoardRow]]
+        private let gatedType: BoardType?                  // nil → never parks
+        private var continuation: CheckedContinuation<Void, Never>?
+        private(set) var isParked = false
+        private(set) var requested: [String] = []          // "station|type", in order
+
+        init(rowsByType: [BoardType: [TrainBoardRow]], gatedType: BoardType? = nil) {
+            self.rowsByType = rowsByType
+            self.gatedType = gatedType
+        }
+
+        func release() {
+            continuation?.resume()
+            continuation = nil
+            isParked = false
+        }
+
+        func fetchBoard(stationId: String, type: BoardType) async throws -> StationBoardResponse {
+            requested.append("\(stationId)|\(type.rawValue)")
+            if type == gatedType, continuation == nil, !isParked {
+                isParked = true
+                await withCheckedContinuation { self.continuation = $0 }
+            }
+            let station = Station(id: stationId, name: stationId, city: nil, displayName: stationId,
+                                  countryCode: "IT", timezone: "Europe/Rome", providerCodes: nil)
+            return StationBoardResponse(station: station, boardType: type, locale: nil, supportedLocales: [],
+                                        rows: rowsByType[type] ?? [],
+                                        generatedAt: Binario1Tests.romeDate(2026, 6, 17, 17, 0),
+                                        sourceUpdatedAt: nil, isStale: false, warningMessageKey: nil)
+        }
+    }
+
+    /// An ARRIVALS row: carries `origin`, no `destination` (the mirror of `boardRow`).
+    private static func arrivalRow(_ id: String, _ origin: String, _ h: Int, _ m: Int) -> TrainBoardRow {
+        let t = romeDate(2026, 6, 17, h, m)
+        return TrainBoardRow(id: id, trainNumber: id, category: "REG", operatorName: nil,
+                             origin: origin, destination: nil, scheduledTime: t, expectedTime: nil,
+                             delayMinutes: nil, plannedPlatform: nil, actualPlatform: "1",
+                             status: .onTime, notes: nil, lastUpdated: t)
+    }
+
+    /// REGRESSION (C3): toggling to ARRIVI while a station-change fetch is still in
+    /// flight showed the DEPARTURES payload under the ARRIVI header — same times, same
+    /// platforms, and an empty origin column (departure rows have no `origin`).
+    @MainActor
+    @Test func togglingArrivalsDuringAStationChangeNeverShowsDepartures() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let terme = Self.servedStation("terme-euganee-abano-montegrotto", "Terme Euganee-Abano-Montegrotto")
+        let service = ModeGatedBoardService(
+            rowsByType: [.departures: [Self.boardRow("dep1", "Ferrara", 18, 6)],
+                         .arrivals: [Self.arrivalRow("arr1", "Ferrara", 18, 5)]],
+            gatedType: .departures)                        // the departures fetch parks
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova, terme],
+                                       liveServedStationIDs: [padova.id, terme.id])
+
+        // 1. "Cambia" → the new station's DEPARTURES fetch starts and parks in flight.
+        let change = Task { await vm.changeStation() }
+        while await !service.isParked { await Task.yield() }
+        #expect(vm.station.id == terme.id)
+
+        // 2. The user toggles ARRIVI while that fetch is still running. This is exactly
+        //    what the view does: `.task(id: boardType)` re-fires a NON-forced refresh.
+        vm.selectBoardType(.arrivals)
+        await vm.refresh()
+
+        // 3. The departures response finally lands.
+        await service.release()
+        await change.value
+
+        // The header says ARRIVI → the rows must be arrivals, never the departures.
+        #expect(vm.boardType == .arrivals)
+        #expect(!vm.rows.contains { $0.id == "dep1" }, "departures painted under the ARRIVI header")
+        #expect(vm.rows.allSatisfy { $0.origin != nil }, "arrival rows must carry an origin")
+        // …and an arrivals request must actually have been issued.
+        let issued = await service.requested
+        #expect(issued.contains { $0.hasSuffix("|arrivals") }, "no arrivals fetch was ever made: \(issued)")
+    }
+
+    /// The same defect WITHOUT a station change: toggling ARRIVI while the very first
+    /// departures load is still in flight. Distinguishes "arrivals broken in the tab"
+    /// from "broken only after a station change".
+    @MainActor
+    @Test func togglingArrivalsDuringTheFirstLoadNeverShowsDepartures() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let service = ModeGatedBoardService(
+            rowsByType: [.departures: [Self.boardRow("dep1", "Ferrara", 18, 6)],
+                         .arrivals: [Self.arrivalRow("arr1", "Ferrara", 18, 5)]],
+            gatedType: .departures)
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova],
+                                       liveServedStationIDs: [padova.id])
+
+        let initial = Task { await vm.refresh() }          // first load parks in flight
+        while await !service.isParked { await Task.yield() }
+        vm.selectBoardType(.arrivals)
+        await vm.refresh()
+        await service.release()
+        await initial.value
+
+        #expect(vm.boardType == .arrivals)
+        #expect(!vm.rows.contains { $0.id == "dep1" }, "departures painted under the ARRIVI header")
+        let issued = await service.requested
+        #expect(issued.contains { $0.hasSuffix("|arrivals") }, "no arrivals fetch was ever made: \(issued)")
+    }
+
+    /// Toggling back and forth on the SAME station must always end up showing rows that
+    /// belong to the selected board — never the other one, not even for a frame.
+    @MainActor
+    @Test func repeatedBoardTypeTogglesAlwaysMatchTheHeader() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let service = ModeGatedBoardService(
+            rowsByType: [.departures: [Self.boardRow("dep1", "Ferrara", 18, 6)],
+                         .arrivals: [Self.arrivalRow("arr1", "Ferrara", 18, 5)]])
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova],
+                                       liveServedStationIDs: [padova.id])
+        await vm.refresh()
+        #expect(vm.rows.map(\.id) == ["dep1"])
+
+        for _ in 0..<3 {
+            vm.selectBoardType(.arrivals)
+            #expect(vm.rows.isEmpty, "the departures rows survived the switch to ARRIVI")
+            await vm.refresh(force: true)
+            #expect(vm.rows.map(\.id) == ["arr1"])
+            #expect(vm.rows.allSatisfy { $0.origin != nil && $0.destination == nil })
+
+            vm.selectBoardType(.departures)
+            #expect(vm.rows.isEmpty, "the arrival rows survived the switch to PARTENZE")
+            await vm.refresh(force: true)
+            #expect(vm.rows.map(\.id) == ["dep1"])
+            #expect(vm.rows.allSatisfy { $0.destination != nil })
+        }
+    }
+
+    /// Picking a station from the Partenze picker REPLACES the tab's station (it does
+    /// not stack): the board refetches with the new slug and the previous rows are gone.
+    @MainActor
+    @Test func pickingAStationFromTheTabReplacesItAndRefetches() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let terme = Self.servedStation("terme-euganee-abano-montegrotto", "Terme Euganee-Abano-Montegrotto")
+        let service = RecordingBoardService(rowsByStation: [
+            "padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)],
+            "terme-euganee-abano-montegrotto": [Self.boardRow("te1", "Ferrara", 18, 6)],
+        ])
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova],   // no carousel any more
+                                       liveServedStationIDs: [padova.id, terme.id])
+        await vm.refresh()
+        #expect(vm.rows.map(\.id) == ["pd1"])
+
+        await vm.selectStation(terme)
+        #expect(vm.station.id == terme.id)                       // replaced, not stacked
+        #expect(service.requestedStationIDs == ["padova", terme.id])
+        #expect(vm.rows.map(\.id) == ["te1"])                    // its own rows
+        #expect(!vm.rows.contains { $0.id == "pd1" })            // never the previous station's
+        // The picker is not limited to `selectableStations`: the old carousel list no
+        // longer gates what the user may choose.
+        #expect(vm.allowsStationChange)
+    }
+
+    /// A station the build cannot serve, chosen from the picker: honest state, and no
+    /// live fetch is even attempted.
+    @MainActor
+    @Test func pickingAnUnservedStationFromTheTabShowsHonestStateWithoutFetching() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let firenze = Station(id: "firenze-smn", name: "Firenze Santa Maria Novella", city: "Firenze",
+                              displayName: "Firenze Santa Maria Novella", countryCode: "IT",
+                              timezone: "Europe/Rome", providerCodes: nil)
+        let service = RecordingBoardService(rowsByStation: [
+            "padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)],
+        ])
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova],
+                                       liveServedStationIDs: [padova.id])
+        await vm.refresh()
+        #expect(vm.rows.map(\.id) == ["pd1"])
+
+        await vm.selectStation(firenze)
+        #expect(vm.station.id == "firenze-smn")
+        #expect(vm.isBoardUnavailableForStation)                 // honest state
+        #expect(vm.rows.isEmpty)                                 // Padova's rows dropped
+        #expect(vm.errorMessageKey == nil)                       // not a raw error
+        #expect(service.requestedStationIDs == ["padova"])        // NO fetch for Firenze
+    }
+
+    /// The board opened from Cerca keeps its station LOCKED: the picker cannot move it.
+    @MainActor
+    @Test func boardOpenedFromCercaIgnoresStationSelection() async {
+        let padova = Self.servedStation("padova", "Padova")
+        let terme = Self.servedStation("terme-euganee-abano-montegrotto", "Terme Euganee-Abano-Montegrotto")
+        let service = RecordingBoardService(rowsByStation: [
+            "padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)],
+            "terme-euganee-abano-montegrotto": [Self.boardRow("te1", "Ferrara", 18, 6)],
+        ])
+        let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: false,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       selectableStations: [padova],
+                                       liveServedStationIDs: [padova.id, terme.id])
+        await vm.refresh()
+        await vm.selectStation(terme)
+        #expect(vm.station.id == "padova")                       // unchanged
+        #expect(vm.rows.map(\.id) == ["pd1"])
+        #expect(service.requestedStationIDs == ["padova"])
+    }
+
     /// Defense in depth: the bundled fixture describes Padova, so it must refuse any
     /// other slug rather than returning Padova's board for it.
     @Test func fixtureFetcherRefusesForeignStationSlug() async {

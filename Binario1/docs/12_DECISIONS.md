@@ -206,6 +206,49 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   per questa stazione". Cambio stazione e stato onesto **azzerano le righe** precedenti.
 - **404 `unknown_station` è un caso previsto**, non un errore da mostrare grezzo.
 
+## Validazione a due assi: stazione E modalità (C3)
+
+- **Le righe mostrate devono sempre appartenere sia alla STAZIONE sia alla MODALITÀ
+  dichiarate dall'header.** Il fix race copriva solo l'asse stazione; l'asse modalità
+  mancava, e una risposta di partenze in volo finiva sotto l'header ARRIVI (stessi
+  orari, stessi binari, colonna provenienza vuota perché le righe di partenza non hanno
+  `origin`).
+- **Il cambio di modalità invalida come il cambio di stazione**: stesso
+  `invalidateSelection()` — bump del token di generazione e `rows = []`. Le righe di un
+  tabellone non devono mai sopravvivere al passaggio all'altro, nemmeno per un frame.
+- **Il collasso dei fetch duplicati avviene per chiave `stazione|tipo`**, mai su "un
+  fetch qualsiasi in volo". Un guard globale sull'in-flight inghiottiva la richiesta
+  arrivi quando l'utente toccava ARRIVI mentre un altro fetch era in corso: l'unica
+  richiesta emessa restava quella di partenze. Un doppio scatto del `.task` continua a
+  collassare; una richiesta genuinamente diversa parte sempre.
+- **Al mismatch di payload si espone `error.dataUnavailable`, NON
+  `markBoardUnavailable`**: la stazione È servita, è il payload a essere sbagliato.
+  Dire "tabellone non disponibile per questa stazione" sarebbe una diagnosi falsa;
+  l'errore dati è onesto e porta con sé il pulsante Riprova.
+- Corollario di metodo: un bug di questa famiglia va **riprodotto con un test rosso**
+  prima di correggerlo. Qui la riproduzione ha smentito la causa ipotizzata (vedi
+  `11_PROGRESS.md`, C3): il difetto esisteva anche **senza** cambio stazione, quindi
+  ricostruire il view model non lo avrebbe risolto.
+
+## Selezione stazione: una via sola (C3)
+
+- **Il carosello di "Cambia" è RIMOSSO.** Con il catalogo servito destinato a crescere a
+  centinaia di stazioni nel B3-full, ciclare tra le stazioni servite è inutilizzabile.
+- **"Cambia" apre lo sheet di ricerca stazione**, non un push: il tab Partenze non ha un
+  NavigationStack e un push porterebbe il chevron indietro. La selezione **sostituisce**
+  la stazione restando nel tab. È la differenza voluta con l'ingresso da Cerca, dove il
+  push col back è corretto e resta com'è.
+- **Una sola implementazione della ricerca**: `CercaView` in modalità picker
+  (`onSelectStation`), non una seconda lista. Le due porte d'ingresso non possono
+  divergere.
+- **`selectStation(_:)` è l'unico ingresso** per cambiare stazione; `changeStation()` vi
+  delega. Quest'ultimo è **orfano dalla UI** e sopravvive solo come soggetto del test di
+  regressione del fix race — insieme a `selectableStations`. Rimuoverli, e sciogliere
+  `AppEnvironment.allowsStationChange` (ancora legato a `selectableStations.count > 1`,
+  concettualmente stantio col picker), è **cleanup previsto dentro il B3-full**.
+- Il board aperto da Cerca resta bloccato (`allowsStationChange: false`): il picker non
+  può spostarne la stazione.
+
 ## Policy di naming del catalogo stazioni (C2 — da applicare in blocco nel B3-full)
 
 - **Il nome ufficiale RFI è la fonte di verità** per `name` / `displayName`. Niente nomi

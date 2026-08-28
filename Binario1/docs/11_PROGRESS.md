@@ -2,6 +2,128 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-08-18 — Ticket C3: "Cambia" apre la ricerca; fix arrivi che mostravano partenze
+
+Stato: **CHIUSA E VERIFICATA SUL DEVICE.** Suite iOS **148/148** (erano 142, +6).
+**Nessun file `supabase/**` toccato** → la CI di deploy non si attiva.
+
+### Il bug: tre difetti che si sommano, non uno
+Riprodotto con un test rosso PRIMA di toccare il codice, non dedotto leggendo.
+
+1. **`selectBoardType` non puliva niente.** `changeStation()` azzerava `rows`, bumpava
+   `fetchGeneration` e resettava lo stato; `selectBoardType(_:)` faceva solo
+   `boardType = type`. Le righe dell'altro tabellone restavano visibili sotto il nuovo
+   header finché non arrivava una risposta. È il sintomo che si vedeva.
+2. **La richiesta arrivi non partiva affatto.** `guard force || !isRefreshing else
+   { return }` scartava *qualsiasi* refresh non forzato mentre c'era un fetch in volo.
+   Il toggle ARRIVI arriva dal `.task(id: boardType)` della view, che chiama `refresh()`
+   **non forzato** → usciva subito. Provato registrando le richieste effettive al
+   service: `["terme-euganee-abano-montegrotto|departures"]`, **zero** richieste arrivi.
+3. **Nessuna validazione di modalità sulla risposta.** Il token di generazione e
+   `sameStation` coprivano solo l'asse stazione. La risposta partenze in volo tornava,
+   passava entrambe le guardie e popolava `rows` con `boardType == .arrivals`.
+   Provenienza "--" ovunque perché le righe di partenza hanno `origin: nil`.
+
+### Correzione a una premessa del ticket
+Il ticket attribuiva il bug al riuso del VM nel carosello. **Non era così**, e un secondo
+test lo dimostra: succede identico **senza alcun cambio stazione** — Padova appena
+aperta, toggle ARRIVI durante il primo caricamento → `["padova|departures"]`, stesso
+esito. Conseguenza: **sostituire il VM via `makeStationBoardViewModel` non avrebbe
+risolto il bug**; avrebbe sistemato la variante col cambio stazione lasciando intatta
+l'altra. Il cambio stazione lo rendeva solo riproducibile a colpo sicuro, perché
+`changeStation()` girava in un `Task {}` del bottone header, non cancellato dal cambio
+di `boardType`: il suo fetch era garantito in volo e garantito che atterrasse.
+*(Nota: l'auto-refresh a 30s guariva da solo — aspettando mezzo minuto le righe giuste
+comparivano.)*
+
+### Il fix
+- `selectBoardType` ora rispecchia il cambio stazione: `invalidateSelection()` condiviso
+  (bump generazione + `rows = []` + reset stato). Le righe di un tabellone non
+  sopravvivono mai al passaggio all'altro.
+- Il collasso dei duplicati diventa **per chiave `stazione|tipo`** (`inFlightKeys`)
+  invece che "un fetch qualsiasi in volo": un doppio scatto del `.task` collassa ancora,
+  ma una richiesta genuinamente diversa non viene mai inghiottita.
+- La validazione d'identità si estende alla **modalità**, su due livelli: la guardia di
+  supersessione confronta `requestedType == boardType` oltre a generazione e stazione;
+  e `response.boardType == requestedType` verifica che il payload *sia* il tabellone
+  chiesto. Al mismatch **non** si usa `markBoardUnavailable` (la stazione È servita, è
+  il payload a essere sbagliato): si scarta e si espone `error.dataUnavailable`, che ha
+  già il pulsante Riprova.
+- Verificato prima di introdurre il controllo che **tutti** i service etichettano la
+  risposta col tipo richiesto: mock (`adapt` riscrive `boardType: type`), backend, e gli
+  spike scheduled/RFI che delegano gli arrivi al mock. Nessun path regredisce.
+
+### "Cambia" apre la ricerca stazione (sheet)
+- **Sheet, non push** (opzione scelta): il tab Partenze non ha un NavigationStack, e un
+  push porterebbe il chevron indietro che il ticket vieta. Lo sheet ha una dismissal
+  naturale e la selezione **sostituisce** la stazione in place.
+- **Una sola implementazione della ricerca**: `CercaView` guadagna una modalità picker
+  (`onSelectStation` / `onCancel`). In quella modalità mostra solo la lista stazioni —
+  niente category card, niente mode header e quindi niente chevron — e ogni riga è un
+  `Button` che riporta la scelta invece di un `NavigationLink`. Init esplicito perché
+  quello memberwise sarebbe `private` (lo `@State` lo è) e `CercaView()` deve continuare
+  a funzionare per il tab.
+- `StationBoardView` espone `onRequestStationChange`. Il tab lo passa (apre lo sheet);
+  il board pushato da Cerca lo lascia nil e resta `allowsStationChange: false` → il
+  **lucchetto su "Cambia" è invariato**.
+- Nuovo `selectStation(_:)` sul VM: unica via per cambiare stazione dal tab.
+  `changeStation()` (il vecchio ciclo) ora vi **delega**, quindi esiste un solo percorso
+  di invalidazione.
+- Stazione non servita scelta dal picker → stato onesto, **nessun fetch** (la guardia
+  `isServed` esistente).
+
+### Localizzazione
+Nuova: `search.picker.title` ("Cambia stazione" / "Change station"). Il pulsante di
+chiusura riusa `action.close` ("Chiudi" / "Close"), già presente.
+
+### File
+`ViewModel/StationBoardViewModel.swift`, `Views/CercaView.swift`,
+`Views/StationBoardView.swift`, `Views/RootTabView.swift`, `Localizable.xcstrings`,
+`Binario1Tests.swift`. **Non toccati**: guardrail Release/`.mock`, parser, registry
+backend, C2, `supabase/**`.
+
+### Test (142 → 148)
+- `togglingArrivalsDuringAStationChangeNeverShowsDepartures` — la riproduzione del bug
+  segnalato: rosso prima del fix, verde dopo. Asserisce anche che una richiesta arrivi
+  **venga effettivamente emessa**.
+- `togglingArrivalsDuringTheFirstLoadNeverShowsDepartures` — la stessa cosa senza cambio
+  stazione (è ciò che smentisce la premessa del ticket).
+- `repeatedBoardTypeTogglesAlwaysMatchTheHeader` — 3 giri avanti e indietro: dopo ogni
+  switch `rows` è vuoto (mai le righe dell'altro tabellone) e dopo ogni fetch le righe
+  hanno il verso giusto (`origin` per gli arrivi, `destination` per le partenze).
+- `pickingAStationFromTheTabReplacesItAndRefetches` — sostituisce, non impila.
+- `pickingAnUnservedStationFromTheTabShowsHonestStateWithoutFetching`.
+- `boardOpenedFromCercaIgnoresStationSelection` — il board da Cerca resta bloccato.
+Restano verdi i due test che proteggono il fix race
+(`inFlightFetchForPreviousStationCannotPaintNewStation`) e il dedupe
+(`boardRefreshDedupesRapidDuplicatesButAllowsForceAndBoardChange`).
+
+### Debito lasciato in chiaro — cleanup previsto DENTRO il B3-full
+Entrambe le voci diventano concrete quando il catalogo servito cresce, quindi vanno
+chiuse nel B3-full e non prima:
+- `changeStation()` e `selectableStations` **non sono più raggiungibili dalla UI** (il
+  carosello è sparito dal prodotto), ma restano nel VM perché sono il soggetto del test
+  di regressione del fix race, che il ticket chiedeva di non toccare. Rimuoverli è
+  cleanup da fare con quel test riscritto su `selectStation` — stesso percorso, quindi
+  la protezione non si perde.
+- `AppEnvironment.allowsStationChange` per il backend live vale ancora
+  `selectableStations.count > 1`. Oggi è vero (3 stazioni servite), ma con il picker la
+  condizione è concettualmente stantia: se il registry tornasse a una sola stazione,
+  "Cambia" si bloccherebbe pur potendo mostrare l'intero catalogo.
+
+### Verifica sul device — superata su tutte le varianti
+Verificato dall'utente su device reale:
+- **arrivi corretti anche al toggle immediato durante il primo caricamento** — cioè la
+  variante senza cambio stazione, quella che smentiva la premessa del ticket e che una
+  sostituzione del VM non avrebbe risolto;
+- sheet "Cambia" **senza chevron**, che sostituisce la stazione restando nel tab;
+- stato onesto sulle stazioni non servite;
+- ingresso da Cerca invariato, col lucchetto su "Cambia".
+
+L'integrazione simulatore lato agente resta indisponibile ("Xcode is installed but not
+selected" benché `xcode-select -p` sia corretto), quindi la prova visiva è interamente
+dell'utente; da qui la copertura a test è a livello di view model.
+
 ## 2026-08-18 — Ticket C2: promozione RFI 2829 "Terme Euganee-Abano-Montegrotto"
 
 Stato: **CHIUSA E VERIFICATA END-TO-END.** iOS **142/142**, backend **deno test 29/29**,

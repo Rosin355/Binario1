@@ -38,13 +38,18 @@ final class StationBoardViewModel {
     private let service: TrainBoardService
     /// Number of fetches currently in flight. Several can overlap: a forced fetch
     /// (station change / pull-to-refresh) starts IMMEDIATELY instead of queuing behind
-    /// a slow one, and any superseded result is discarded on arrival.
+    /// a slow one, and any superseded result is discarded on arrival. Drives the spinner.
     private var inFlightFetches = 0
-    private var isRefreshing: Bool { inFlightFetches > 0 }
-    /// Bumped whenever the selection changes (station switch). A fetch captures the
-    /// generation it started in; if it no longer matches when the response lands, that
-    /// response is STALE and must never touch the board — this is what stops a slow
-    /// Padova response from painting rows under the Roma Termini header.
+    /// In-flight fetches per board KEY (`station|boardType`). Collapsing duplicates is
+    /// per board, not global: an "any fetch in flight" guard silently dropped the
+    /// arrivals request when the user toggled ARRIVI during a station change, leaving
+    /// the departures payload to land under the arrivals header.
+    private var inFlightKeys: [String: Int] = [:]
+    /// Bumped whenever the SELECTION changes — station switch or board-type switch. A
+    /// fetch captures the generation it started in; if it no longer matches when the
+    /// response lands, that response is STALE and must never touch the board. This is
+    /// what stops a slow Padova response from painting rows under the Roma Termini
+    /// header, and a departures response from painting under the ARRIVI header.
     private var fetchGeneration = 0
     private var lastFetchAt: Date?
     private var lastFetchKey: String?
@@ -210,17 +215,22 @@ final class StationBoardViewModel {
     /// non-forced calls for the SAME board within `minAutoRefreshInterval` are
     /// skipped so accidental duplicate triggers never double-fetch.
     func refresh(force: Bool = false) async {
+        // The board this request is FOR. Captured up front: `boardType` can change
+        // under us while the fetch is in flight, and the response must be judged
+        // against what was asked, not against what is selected now.
+        let requestedType = boardType
+        let key = "\(station.id)|\(requestedType.rawValue)"
         // A forced refresh (station change / pull-to-refresh) must START NOW, in
-        // parallel with any slow in-flight fetch — queuing behind it is what left the
-        // new station with no request of its own. Non-forced calls still collapse.
-        guard force || !isRefreshing else { return }
+        // parallel with any slow in-flight fetch. Non-forced calls collapse only onto
+        // an identical board already in flight — a DIFFERENT station or board type
+        // always gets its own request.
+        guard force || inFlightKeys[key] == nil else { return }
         // A station the live board doesn't serve must never trigger a fetch (its
         // fallback would belong to another station). Honest state, no rows.
         guard isServed(station) else {
             markBoardUnavailable()
             return
         }
-        let key = "\(station.id)|\(boardType.rawValue)"
         if !force, key == lastFetchKey, let last = lastFetchAt,
            now().timeIntervalSince(last) < minAutoRefreshInterval {
             #if DEBUG
@@ -235,22 +245,20 @@ final class StationBoardViewModel {
         // response belongs to a selection the user has already left.
         let requestedStationID = station.id
         let generation = fetchGeneration
-        inFlightFetches += 1
+        beginFetch(key)
         if rows.isEmpty { isLoading = true }
-        defer {
-            inFlightFetches -= 1
-            // Keep the spinner up while another (newer) fetch is still running.
-            if inFlightFetches == 0 { isLoading = false }
-        }
+        defer { endFetch(key) }
 
         do {
-            let response = try await service.fetchBoard(stationId: requestedStationID, type: boardType)
-            // Superseded while in flight (station switched) → drop it silently. Never
-            // paint one station's rows under another station's header.
+            let response = try await service.fetchBoard(stationId: requestedStationID, type: requestedType)
+            // Superseded while in flight — the user switched STATION or BOARD TYPE →
+            // drop it silently. Never paint rows that contradict the header, on either
+            // axis.
             guard generation == fetchGeneration,
-                  Self.sameStation(requestedStationID, station.id) else {
+                  Self.sameStation(requestedStationID, station.id),
+                  requestedType == boardType else {
                 #if DEBUG
-                print("[Board] discarded stale response for \(requestedStationID) (now \(station.id))")
+                print("[Board] discarded stale response for \(requestedStationID)|\(requestedType.rawValue) (now \(station.id)|\(boardType.rawValue))")
                 #endif
                 return
             }
@@ -262,6 +270,21 @@ final class StationBoardViewModel {
                 print("[Board] identity mismatch · requested=\(requestedStationID) · responded=\(response.station.id) → honest state")
                 #endif
                 markBoardUnavailable()
+                lastFetchKey = key
+                lastFetchAt = now()
+                return
+            }
+            // …and it must BE the board we asked for. Same principle as the station
+            // identity check, other axis: a departures payload must never populate the
+            // arrivals view. Not `markBoardUnavailable` — the STATION is served, it is
+            // this payload that is wrong, so surface a retryable data error instead of
+            // claiming the station has no board.
+            guard response.boardType == requestedType else {
+                #if DEBUG
+                print("[Board] board-type mismatch · requested=\(requestedType.rawValue) · responded=\(response.boardType.rawValue) → discarded")
+                #endif
+                rows = []
+                errorMessageKey = "error.dataUnavailable"
                 lastFetchKey = key
                 lastFetchAt = now()
                 return
@@ -317,9 +340,47 @@ final class StationBoardViewModel {
     /// Switches board type. Mutating `boardType` retriggers the view's `.task(id:)`,
     /// which performs the fetch — so we deliberately do NOT fetch here (that would
     /// be a duplicate request on every board-type switch).
+    ///
+    /// The invalidation is the same a station change performs, on the other axis: the
+    /// previous board's rows must never remain visible under the new header while the
+    /// new board loads. Without it, ARRIVI showed the departures list — same times,
+    /// same platforms, and an empty origin column.
     func selectBoardType(_ type: BoardType) {
         guard boardType != type else { return }
         boardType = type
+        invalidateSelection()
+    }
+
+    /// Switch to an explicitly chosen station (the Partenze station picker) and reload.
+    /// The single path for changing station in the tab: `changeStation` delegates here.
+    func selectStation(_ station: Station) async {
+        guard allowsStationChange else { return }
+        self.station = station
+        invalidateSelection()
+        await refresh(force: true)
+    }
+
+    /// Drop everything belonging to the PREVIOUS selection: bump the generation so any
+    /// in-flight response is discarded when it lands, and clear the rows so the board
+    /// can never show data contradicting its own header while the new one loads.
+    private func invalidateSelection() {
+        fetchGeneration += 1
+        rows = []
+        isBoardUnavailableForStation = false
+        errorMessageKey = nil
+        lastUpdated = nil
+    }
+
+    private func beginFetch(_ key: String) {
+        inFlightKeys[key, default: 0] += 1
+        inFlightFetches += 1
+    }
+
+    private func endFetch(_ key: String) {
+        if let n = inFlightKeys[key], n > 1 { inFlightKeys[key] = n - 1 } else { inFlightKeys[key] = nil }
+        inFlightFetches -= 1
+        // Keep the spinner up while another (newer) fetch is still running.
+        if inFlightFetches == 0 { isLoading = false }
     }
 
     /// Cycle to the next selectable station and reload its board. In live mode the
@@ -335,16 +396,6 @@ final class StationBoardViewModel {
         // it came from (catalog entry vs code constant), so whole-struct equality would
         // silently fail to advance.
         let next = (all.firstIndex { $0.id == station.id }.map { $0 + 1 } ?? 0) % all.count
-        station = all[next]
-        // Invalidate any in-flight fetch for the PREVIOUS station: when its response
-        // lands it will no longer match this generation and is dropped.
-        fetchGeneration += 1
-        // Drop the previous station's rows immediately: they must never be visible
-        // under the new station's name while the new board loads.
-        rows = []
-        isBoardUnavailableForStation = false
-        errorMessageKey = nil
-        lastUpdated = nil
-        await refresh(force: true)
+        await selectStation(all[next])
     }
 }

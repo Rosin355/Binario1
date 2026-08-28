@@ -18,6 +18,10 @@ struct StationBoardView: View {
     /// Bumped when the Partenze tab is (re)entered → replays the title intro
     /// animation without reloading data.
     var animationToken: Int = 0
+    /// Called when the user taps "Cambia". The Partenze tab presents the station
+    /// picker; the board pushed from Cerca leaves this nil — its station is locked
+    /// (`allowsStationChange: false`), so the control stays visibly disabled.
+    var onRequestStationChange: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
@@ -37,7 +41,7 @@ struct StationBoardView: View {
                     animationToken: animationToken,
                     isFavorite: isFavorite,
                     onToggleFavorite: { isFavorite.toggle() },
-                    onChangeStation: { Task { await viewModel.changeStation() } },
+                    onChangeStation: { onRequestStationChange?() },
                     onShowInfo: { showsInfo = true }
                 )
                 .padding(.top, 2)
@@ -172,9 +176,9 @@ struct StationBoardView: View {
                 .foregroundStyle(BoardColors.amberBright)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            if viewModel.allowsStationChange {
+            if viewModel.allowsStationChange, onRequestStationChange != nil {
                 Button {
-                    Task { await viewModel.changeStation() }
+                    onRequestStationChange?()
                 } label: {
                     Text("action.changeStation.short")
                         .font(BoardFont.text(14, .bold))

@@ -42,6 +42,11 @@ struct RootTabView: View {
         )
     )
 
+    /// Presents the station picker (the Partenze "Cambia" sheet). A sheet, not a
+    /// push: the selection REPLACES the tab's station, so there must be no navigation
+    /// stack and no back chevron — the user never leaves Partenze.
+    @State private var showsStationPicker = false
+
     @State private var selectedTab: AppTab = .departures
     /// Bumped each time the Partenze tab is (re)selected → replays its intro animation.
     @State private var departuresAnimationToken = 0
@@ -55,7 +60,23 @@ struct RootTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("tab.departures", systemImage: "tram.fill", value: AppTab.departures) {
-                StationBoardView(viewModel: stationViewModel, animationToken: departuresAnimationToken)
+                StationBoardView(viewModel: stationViewModel,
+                                 animationToken: departuresAnimationToken,
+                                 onRequestStationChange: { showsStationPicker = true })
+                    .sheet(isPresented: $showsStationPicker) {
+                        // The SAME search UI as the Cerca tab, in picker mode — one
+                        // implementation, two entry points.
+                        CercaView(
+                            onSelectStation: { station in
+                                showsStationPicker = false
+                                // Replaces the station in place. A station the build
+                                // cannot serve lands on the honest state without a
+                                // fetch — the guard lives in the view model.
+                                Task { await stationViewModel.selectStation(station) }
+                            },
+                            onCancel: { showsStationPicker = false }
+                        )
+                    }
             }
             Tab("tab.trips", systemImage: "suitcase.fill", value: AppTab.trips) {
                 TripsView(viewModel: tripsViewModel, animationToken: tripsAnimationToken)

@@ -1080,6 +1080,22 @@
         }
       }
     },
+    "search.picker.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change station"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia stazione"
+          }
+        }
+      }
+    },
     "search.prompt" : {
       "localizations" : {
         "en" : {

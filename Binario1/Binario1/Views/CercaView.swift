@@ -12,7 +12,23 @@
 import SwiftUI
 
 struct CercaView: View {
+    /// When set, Cerca acts as a station PICKER (the Partenze "Cambia" sheet): the
+    /// station list only, every row REPORTS BACK through this closure instead of
+    /// pushing a board, and a Close item is offered. Nil = the full Cerca tab.
+    /// Same view, same view model — the two entry points cannot drift apart.
+    private let onSelectStation: ((Station) -> Void)?
+    private let onCancel: (() -> Void)?
+
     @State private var viewModel = CercaViewModel()
+
+    /// Explicit init: the memberwise one would be private (the `@State` is private),
+    /// and `CercaView()` must keep working for the tab.
+    init(onSelectStation: ((Station) -> Void)? = nil, onCancel: (() -> Void)? = nil) {
+        self.onSelectStation = onSelectStation
+        self.onCancel = onCancel
+    }
+
+    private var isPicker: Bool { onSelectStation != nil }
 
     var body: some View {
         @Bindable var vm = viewModel
@@ -27,8 +43,16 @@ struct CercaView: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            .navigationTitle("tab.search")
+            .navigationTitle(isPicker ? "search.picker.title" : "tab.search")
+            .navigationBarTitleDisplayMode(isPicker ? .inline : .automatic)
             .searchable(text: $vm.query, prompt: Text("search.prompt"))
+            .toolbar {
+                if isPicker {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("action.close") { onCancel?() }
+                    }
+                }
+            }
             // Tapping a station opens the SAME board screen the Partenze tab shows,
             // built by the composition root (no duplicated wiring). A station the
             // build can't honestly serve renders the existing honest state there and
@@ -47,7 +71,11 @@ struct CercaView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let mode = viewModel.selectedMode {
+        if isPicker {
+            // Picker: the station list only — no category cards, no mode header (and
+            // so no back chevron): the sheet itself is the way out.
+            stationModeContent
+        } else if let mode = viewModel.selectedMode {
             VStack(alignment: .leading, spacing: 16) {
                 modeHeader(mode)
                 switch mode {
@@ -127,8 +155,15 @@ struct CercaView: View {
         VStack(alignment: .leading, spacing: 10) {
             BoardSectionHeader(titleKey: "search.stations", systemImage: "tram.fill")
             panelList(stations) { station in
-                NavigationLink(value: station) { stationRow(station) }
-                    .buttonStyle(.plain)
+                if let onSelectStation {
+                    // Picker: report the choice back; the tab REPLACES its station.
+                    // No push, no stack, no back chevron.
+                    Button { onSelectStation(station) } label: { stationRow(station) }
+                        .buttonStyle(.plain)
+                } else {
+                    NavigationLink(value: station) { stationRow(station) }
+                        .buttonStyle(.plain)
+                }
             }
         }
     }
