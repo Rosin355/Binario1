@@ -14,16 +14,23 @@
 import Foundation
 
 protocol StationCatalog: Sendable {
-    /// All catalog stations (stored order).
+    /// All catalog stations (stored order), operational points included. This is the
+    /// complete catalog — use `searchable` for anything the user picks from.
     var all: [Station] { get }
+    /// The stations a USER may pick: `all` minus the operational points. Search, the
+    /// idle list and the picker all read this, so a posto di movimento can never be
+    /// opened as a board. `station(named:)` still resolves the excluded ones, so a
+    /// name persisted or printed anywhere keeps mapping to its entity.
+    var searchable: [Station] { get }
     /// Stations SERVED by the live board backend (their `id` is a verified slug in the
     /// backend registry). Derived from the catalog's `servedByLiveBoard` flag — the
     /// list is never duplicated in code. Drives the live station picker; any other
     /// station must not attempt a live fetch (honest unavailable state instead).
     var liveServed: [Station] { get }
     /// Ranked search by display name (prefix > token-prefix > substring) then city.
-    /// Empty query → `all`. Diacritic/case-insensitive; no abbreviation expansion so
-    /// a single letter doesn't expand (e.g. "s" ≠ "SANTA").
+    /// Empty query → `searchable`. Diacritic/case-insensitive; no abbreviation expansion so
+    /// a single letter doesn't expand (e.g. "s" ≠ "SANTA"). Operational points are
+    /// never returned (see `Station.operationalPoint`).
     func search(_ query: String, limit: Int) -> [Station]
     /// Canonical lookup: the station whose displayName OR a board/search alias
     /// canonicalizes equal to `name` (via StationNameMatcher). Nil when the name isn't a known
@@ -33,6 +40,8 @@ protocol StationCatalog: Sendable {
 
 extension StationCatalog {
     func search(_ query: String) -> [Station] { search(query, limit: 20) }
+    /// Default derivation: the catalog minus the operational points.
+    var searchable: [Station] { all.filter { !$0.isOperationalPoint } }
     /// Default derivation: filter the catalog by the `servedByLiveBoard` flag.
     var liveServed: [Station] { all.filter(\.isServedByLiveBoard) }
     /// Whether the live board backend serves this station id (registry slug).
@@ -71,14 +80,14 @@ final class DefaultStationCatalog: StationCatalog, @unchecked Sendable {
     /// Minimal fallback used only if the bundled JSON is missing/corrupt.
     static let embeddedFallback: [Station] = [
         .padova, .bolognaCentrale, .firenzeSMN, .milanoPortaGaribaldi,
-        .veneziaSantaLucia, .reggioEmiliaAV,
+        .veneziaSLucia, .reggioEmiliaAV,
     ]
 
     // MARK: - Search
 
     func search(_ query: String, limit: Int = 20) -> [Station] {
         let q = Self.fold(query)
-        guard !q.isEmpty else { return all }
+        guard !q.isEmpty else { return searchable }
         let ranked = all.compactMap { station -> (station: Station, rank: Int)? in
             guard let r = Self.rank(station, query: q) else { return nil }
             return (station, r)
@@ -90,6 +99,11 @@ final class DefaultStationCatalog: StationCatalog, @unchecked Sendable {
     }
 
     private static func rank(_ s: Station, query q: String) -> Int? {
+        // Operational points (PM / PC / PES) never surface in search: opening a board
+        // for one would promise a timetable that does not exist. They stay in the
+        // catalog and `station(named:)` still resolves them, so a name keeps mapping
+        // to an entity — see `Station.operationalPoint`.
+        guard !s.isOperationalPoint else { return nil }
         // A `searchAliases` hit ranks exactly like a displayName hit — "monte" must
         // find "Terme Euganee-Abano-Montegrotto" as readily as its official name.
         // Best (lowest) rank across the official name and every alias wins.

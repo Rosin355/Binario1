@@ -42,11 +42,29 @@ struct Station: Identifiable, Codable, Equatable, Hashable {
     /// FOOTGUN: `id` MUST equal the backend registry slug exactly ("padova",
     /// "roma-termini") — a mismatch yields 404 unknown_station.
     var servedByLiveBoard: Bool? = nil
+    /// True when this entry is an OPERATIONAL POINT, not a passenger station: RFI's
+    /// list carries "PM …" (posto di movimento), "PC …" (posto di comunicazione),
+    /// "… PES" and a "BIVIO …" among its 2435 entries. They exist so a name still
+    /// resolves to an entity, but a passenger never boards there.
+    ///
+    /// Consequences, both deliberate: excluded from board-destination matching
+    /// (`StationNameMatcher.matches(station:boardName:)` returns false — an
+    /// operational point is never a printed terminus, so "NAPOLI AFRAGOLA PES" can
+    /// never answer for a row reading "NAPOLI AFRAGOLA"), and excluded from search
+    /// results (opening a board for one would promise a timetable that does not
+    /// exist). Absent/false → an ordinary passenger station.
+    ///
+    /// JSON key: `operationalPoint`. C4 introduces the flag; POPULATING it for the
+    /// 21 real entries belongs to B3-full, with the national catalog.
+    var operationalPoint: Bool? = nil
 }
 
 extension Station {
     /// Whether the live board backend serves this station (see `servedByLiveBoard`).
     var isServedByLiveBoard: Bool { servedByLiveBoard == true }
+    /// Whether this entry is an operational point, not a passenger station
+    /// (see `operationalPoint`).
+    var isOperationalPoint: Bool { operationalPoint == true }
 }
 
 extension Station {
@@ -72,9 +90,13 @@ extension Station {
         timezone: "Europe/Rome", providerCodes: ProviderCodes(rfi: "MI_PG", viaggiatreno: "S01645")
     )
 
-    nonisolated static let veneziaSantaLucia = Station(
-        id: "venezia-santa-lucia", name: "Venezia Santa Lucia", city: "Venezia",
-        displayName: "Venezia Santa Lucia", countryCode: "IT",
+    /// OFFICIAL RFI name (placeId 3009 → "VENEZIA S.LUCIA"). "Venezia Santa Lucia" is
+    /// the common form and lives on as a `searchAlias` in the catalog — see the naming
+    /// policy in docs/12_DECISIONS.md. Renamed in place (one id per station, never a
+    /// duplicate entity).
+    nonisolated static let veneziaSLucia = Station(
+        id: "venezia-s-lucia", name: "Venezia S.Lucia", city: "Venezia",
+        displayName: "Venezia S.Lucia", countryCode: "IT",
         timezone: "Europe/Rome", providerCodes: ProviderCodes(rfi: "VE_SL", viaggiatreno: "S02593")
     )
 
@@ -95,6 +117,6 @@ extension Station {
     /// Mock station carousel used by the home "Cambia" action (and to exercise
     /// long-name layout). The board data itself stays mock.
     nonisolated static let demoStations: [Station] = [
-        .bolognaCentrale, .firenzeSMN, .milanoPortaGaribaldi, .veneziaSantaLucia, .reggioEmiliaAV,
+        .bolognaCentrale, .firenzeSMN, .milanoPortaGaribaldi, .veneziaSLucia, .reggioEmiliaAV,
     ]
 }

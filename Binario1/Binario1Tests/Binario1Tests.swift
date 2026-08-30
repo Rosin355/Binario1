@@ -1431,38 +1431,286 @@ struct Binario1Tests {
 
     /// The board header names the station the user opened, and the pre-rename origin
     /// persisted in old installs still counts as "departing from here".
+    ///
+    /// C4 changed WHERE that tolerance comes from. It used to be the permissive
+    /// subset rule, which also matched genuinely different stations; it is now the
+    /// catalog resolving both sides to the same entity through `searchAliases`. So
+    /// this test now passes the catalog — and the second half pins that the tolerance
+    /// did NOT become a free-for-all.
     @Test func savedJourneyFromTheOldNameStillDepartsFromThisBoard() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
         #expect(SavedJourneyMatcher.journeyDeparts(
             from: "Terme Euganee-Abano-Montegrotto",
             journey: SavedJourney(id: "old", direction: .homeToWork,
                                   origin: "Montegrotto Terme", destination: "Padova",
                                   departure: Self.romeDate(2026, 6, 17, 7, 18), platform: nil,
-                                  durationMinutes: 0, status: .onTime)))
-        // The ≥2-token rule still protects genuinely different stations: BATTAGLIA is
-        // not a token of the official name, so the neighbouring station does not match.
+                                  durationMinutes: 0, status: .onTime),
+            catalog: catalog))
+        // A genuinely different neighbouring station still does not match.
         #expect(!SavedJourneyMatcher.journeyDeparts(
             from: "Terme Euganee-Abano-Montegrotto",
             journey: SavedJourney(id: "other", direction: .homeToWork,
                                   origin: "Battaglia Terme", destination: "Padova",
                                   departure: Self.romeDate(2026, 6, 17, 7, 18), platform: nil,
-                                  durationMinutes: 0, status: .onTime)))
+                                  durationMinutes: 0, status: .onTime),
+            catalog: catalog))
     }
 
-    /// KNOWN COLLISION, pinned so it cannot regress silently into a surprise.
+    /// The assertion this test makes is INVERTED from the one it made before C4, and
+    /// that inversion is the whole point of the ticket.
     ///
-    /// "Abano Terme" is a SEPARATE RFI station (placeId 364), not in the catalog. Its
-    /// canonical tokens {ABANO, TERME} are a SUBSET of the official name's
-    /// {TERME, EUGANEE, ABANO, MONTEGROTTO}, so `StationNameMatcher`'s ≥2-token rule
-    /// matches them TODAY. Harmless while 364 is absent — the only station answering
-    /// to "Abano" is this one. It becomes a real false positive the day 364 is added,
-    /// and the fix belongs to the matcher, which this ticket must not touch.
-    /// See the `_note` on the catalog entry and docs/11_PROGRESS.md.
-    @Test func abanoTermeCollidesWithTheOfficialNameUntilRFI364IsAdded() {
-        #expect(StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Abano Terme"))
-        // Not a blanket "Terme" collision: the shared generic token alone is not enough.
+    /// "Abano Terme" is a SEPARATE RFI station (placeId 364). Its canonical tokens
+    /// {ABANO, TERME} are a subset of the official name's {TERME, EUGANEE, ABANO,
+    /// MONTEGROTTO}, so the old ≥2-token subset rule matched them. It no longer does:
+    /// the matcher is canonical EQUALITY, and adding tokens means a different station.
+    ///
+    /// The catalog-level debt is a DIFFERENT thing and is still open: the `Abano` /
+    /// `Abano Terme` searchAliases on the Terme Euganee entry still make
+    /// `station(named:)` resolve them to it, because that lookup compares aliases by
+    /// canonical equality. That debt is retired when placeId 364 enters the catalog
+    /// with B3-full — see the `_note` on the entry and docs/11_PROGRESS.md.
+    @Test func abanoTermeNoLongerMatchesTheOfficialName() {
+        #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Abano Terme"))
         #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Battaglia Terme"))
         #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Venezia Mestre"))
+        // The catalog alias debt is still there, deliberately, until 364 is added.
+        let catalog = DefaultStationCatalog.shared
+        if catalog.all.count > DefaultStationCatalog.embeddedFallback.count {
+            #expect(catalog.station(named: "Abano Terme")?.id == "terme-euganee-abano-montegrotto")
+        }
     }
+
+
+    // MARK: - C4: station-name matching is canonical EQUALITY, never a subset
+
+    /// The 8 collision pairs that hit stations ALREADY SHIPPED in the catalog of 17.
+    /// These are not hypotheticals: the old ≥2-token subset rule matched every one of
+    /// them, so a board row for the AV station could answer for the city station.
+    @Test func aNameThatOnlyAddsTokensIsADifferentStation() {
+        let shipped: [(String, String)] = [
+            ("Reggio Emilia", "REGGIO EMILIA AV MEDIOPADANA"),
+            ("Bologna Centrale", "BOLOGNA C.LE/AV"),
+            ("Genova Piazza Principe", "GENOVA PIAZZA PRINCIPE SOTTERRANEA"),
+            ("Milano Porta Garibaldi", "MILANO PORTA GARIBALDI SOTTERRANEA"),
+            ("Venezia Mestre", "VENEZIA MESTRE GAZZERA"),
+            ("Venezia Mestre", "VENEZIA MESTRE OLIMPIA"),
+            ("Venezia Mestre", "VENEZIA MESTRE OSPEDALE"),
+            ("Abano Terme", "TERME EUGANEE-ABANO-MONTEGROTTO"),
+        ]
+        for (short, long) in shipped {
+            #expect(!StationNameMatcher.matches(short, long), "\"\(short)\" still matches \"\(long)\"")
+            #expect(!StationNameMatcher.matches(long, short), "match is not symmetric for \(short)")
+        }
+    }
+
+    /// Property test over EVERY pair of the RFI national list (2435 entries, extracted
+    /// 2026-08-28) that the old subset rule collided. Not three hand-picked cases: the
+    /// complete set, so a future loosening of the rule breaks the suite immediately.
+    /// The full list itself lands with B3-full; these are its 53 colliding pairs.
+    @Test func noKnownRFICollisionPairEverMatches() {
+        for (a, b) in Self.rfiSubsetCollisionPairs {
+            #expect(!StationNameMatcher.matches(a, b), "\"\(a)\" matches \"\(b)\"")
+        }
+        // Sanity: the fixture is the real one, not silently emptied.
+        #expect(Self.rfiSubsetCollisionPairs.count == 53)
+    }
+
+    /// Every saint form collapses to ONE neutral token, so the abbreviation RFI
+    /// actually writes and the full spelling are the same name. Before C4 "S." became
+    /// "SANTA", which guessed a gender (wrong for the masculine majority) and left
+    /// "SAN PAOLO" unable to match its own abbreviation.
+    @Test func saintFormsCollapseToASingleNeutralToken() {
+        #expect(StationNameMatcher.matches("SAN GIOVANNI", "S.GIOVANNI"))
+        #expect(StationNameMatcher.matches("Santa Lucia", "S. Lucia"))
+        #expect(StationNameMatcher.matches("SS.PIETRO", "S.PIETRO"))
+        #expect(StationNameMatcher.canonical("S.GIOVANNI") == "S GIOVANNI")     // not SANTA
+        // The two collisions the neutral token makes VISIBLE are real, and the
+        // equality rule dissolves them rather than the neutral token hiding them.
+        #expect(!StationNameMatcher.matches("SAN PAOLO", "BIELLA S.PAOLO"))
+        #expect(!StationNameMatcher.matches("SAN PAOLO", "S.PAOLO SOLBRITO"))
+    }
+
+    /// An operational point (PM / PC / PES) is never a printed terminus, so it must
+    /// never answer for a board destination — otherwise "NAPOLI AFRAGOLA PES" would be
+    /// a candidate for a row reading "NAPOLI AFRAGOLA". Synthetic entry: C4 introduces
+    /// the flag, B3-full populates the 21 real ones.
+    @Test func anOperationalPointIsNeverABoardDestination() {
+        let pes = Station(id: "napoli-afragola-pes", name: "Napoli Afragola PES", city: "Napoli",
+                          displayName: "Napoli Afragola PES", countryCode: "IT",
+                          timezone: "Europe/Rome", providerCodes: nil, boardAliases: nil,
+                          searchAliases: nil, servedByLiveBoard: nil, operationalPoint: true)
+        #expect(pes.isOperationalPoint)
+        // Not even its own exact name matches — it is excluded as a KIND of entry.
+        #expect(!StationNameMatcher.matches(station: pes, boardName: "NAPOLI AFRAGOLA PES"))
+        #expect(!StationNameMatcher.matches(station: pes, boardName: "NAPOLI AFRAGOLA"))
+        // The same station without the flag would match its own name: the guard is
+        // what makes the difference, not the name.
+        var passenger = pes
+        passenger.operationalPoint = nil
+        #expect(StationNameMatcher.matches(station: passenger, boardName: "NAPOLI AFRAGOLA PES"))
+    }
+
+    /// Option B, both halves: an operational point is excluded from what the user can
+    /// pick, but `station(named:)` still resolves it, so a name never loses its entity.
+    @Test func anOperationalPointIsUnsearchableButStillResolvesByName() {
+        let pm = Station(id: "pm-ispra", name: "PM Ispra", city: nil,
+                         displayName: "PM Ispra", countryCode: "IT", timezone: "Europe/Rome",
+                         providerCodes: nil, boardAliases: nil, searchAliases: nil,
+                         servedByLiveBoard: nil, operationalPoint: true)
+        let padova = Station(id: "padova", name: "Padova", city: "Padova", displayName: "Padova",
+                             countryCode: "IT", timezone: "Europe/Rome", providerCodes: nil)
+        let catalog = DefaultStationCatalog(stations: [pm, padova])
+        #expect(catalog.all.count == 2)                       // still in the catalog
+        #expect(catalog.searchable.map(\.id) == ["padova"])   // but never offered
+        #expect(catalog.search("ispra").isEmpty)
+        #expect(catalog.search("").map(\.id) == ["padova"])   // idle list too
+        #expect(catalog.station(named: "PM Ispra")?.id == "pm-ispra")   // name → entity
+    }
+
+    /// RISK 3, pinned instead of implicit. `CercaViewModel.saveRoute` stores the text
+    /// as typed when the name is NOT a catalog station ("no invented name"). With the
+    /// matcher now strict, this test states exactly what such a journey does.
+    ///
+    /// The behaviour it asserts: a free-text origin matches only by canonical
+    /// equality — spelling and abbreviation differences are still absorbed, but a name
+    /// that merely OVERLAPS the board station no longer counts as departing from it.
+    /// A name the catalog knows (including via `searchAliases`) keeps working, because
+    /// the catalog resolves it to the entity.
+    @Test func aSavedJourneyOnANonCanonicalNameHasAnAssertedBehaviour() {
+        let catalog = Self.testCatalog()
+        func journey(origin: String) -> SavedJourney {
+            SavedJourney(id: "j-\(origin)", direction: .homeToWork, origin: origin,
+                         destination: "Roma Termini",
+                         departure: Self.romeDate(2026, 6, 17, 7, 18), platform: nil,
+                         durationMinutes: 0, status: .onTime)
+        }
+        // Free text that canonicalizes to the board station: still departs from here.
+        #expect(SavedJourneyMatcher.journeyDeparts(from: "Venezia Santa Lucia",
+                                                   journey: journey(origin: "VENEZIA S.LUCIA"),
+                                                   catalog: catalog))
+        // Free text NOT in the catalog and not canonically equal: does NOT depart from
+        // here. Before C4 the bare city matched the station, which is how a journey
+        // saved as "Venezia" attached itself to Venezia Mestre AND Santa Lucia at once.
+        #expect(!SavedJourneyMatcher.journeyDeparts(from: "Venezia Santa Lucia",
+                                                    journey: journey(origin: "Venezia"),
+                                                    catalog: catalog))
+        #expect(!SavedJourneyMatcher.journeyDeparts(from: "Venezia Mestre",
+                                                    journey: journey(origin: "Venezia"),
+                                                    catalog: catalog))
+        // And with no catalog at all the rule is the same: equality, not overlap.
+        #expect(!SavedJourneyMatcher.journeyDeparts(from: "Venezia Santa Lucia",
+                                                    journey: journey(origin: "Venezia")))
+    }
+
+    /// RISK 1, pinned. With the subset rule gone, the abbreviation table inside
+    /// `canonical` is the ONLY bridge between the form a board PRINTS and the official
+    /// name (`boardAliases` being the explicit escape hatch). If someone trims that
+    /// table, destinations stop resolving SILENTLY — so the coverage it provides for
+    /// the served stations is asserted here and must break the suite instead.
+    @Test func abbreviationExpansionCoversTheServedStationsBoardForms() {
+        // Expansions the served stations' destinations depend on.
+        #expect(StationNameMatcher.canonical("S.") == "S")
+        #expect(StationNameMatcher.canonical("Bologna C.LE") == "BOLOGNA CENTRALE")
+        #expect(StationNameMatcher.canonical("Firenze CENT") == "FIRENZE CENTRALE")
+        #expect(StationNameMatcher.canonical("Verona P.NUOVA") == "VERONA PORTA NUOVA")
+        #expect(StationNameMatcher.canonical("Torino P.TA Susa") == "TORINO PORTA SUSA")
+        #expect(StationNameMatcher.canonical("Milano PTA Garibaldi") == "MILANO PORTA GARIBALDI")
+        // …and the round trip that matters: printed form ⇄ official name.
+        for (printed, official) in [("VENEZIA S.LUCIA", "Venezia S.Lucia"),
+                                    ("BOLOGNA C.LE", "Bologna Centrale"),
+                                    ("VERONA P.NUOVA", "Verona Porta Nuova"),
+                                    ("TERME EUGANEE-ABANO-MONTEGROTTO", "Terme Euganee-Abano-Montegrotto"),
+                                    ("ROMA TERMINI", "Roma Termini"),
+                                    ("PADOVA", "Padova")] {
+            #expect(StationNameMatcher.matches(printed, official), "\(printed) lost its bridge to \(official)")
+        }
+    }
+
+    /// The catalog carries the OFFICIAL RFI name (placeId 3009 "VENEZIA S.LUCIA").
+    /// The common form survives as a searchAlias — needed, because search folds
+    /// WITHOUT expanding abbreviations, so "santa" would otherwise find nothing.
+    @MainActor
+    @Test func veneziaCarriesTheOfficialNameAndKeepsTheCommonOneSearchable() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let venezia = catalog.station(named: "Venezia S.Lucia")
+        #expect(venezia?.id == "venezia-s-lucia")
+        #expect(venezia?.displayName == "Venezia S.Lucia")
+        // One entity, reached from every spelling: official, common, printed.
+        #expect(catalog.station(named: "Venezia Santa Lucia")?.id == "venezia-s-lucia")
+        #expect(catalog.station(named: "VENEZIA S.LUCIA")?.id == "venezia-s-lucia")
+        #expect(catalog.station(named: "Venezia S.L.")?.id == "venezia-s-lucia")
+        // No duplicate entity was introduced by the rename.
+        #expect(catalog.all.filter { $0.displayName.uppercased().contains("LUCIA") }.count == 1)
+        // The searchAlias earns its place: the common name is still typeable.
+        let vm = CercaViewModel(savedStore: freshStore("binario1.tests.c4-venezia"),
+                                boardStationIDs: [])
+        vm.query = "santa lucia"
+        #expect(vm.stationResults.contains { $0.id == "venezia-s-lucia" })
+        // Mestre is still a different station, in both directions.
+        #expect(!StationNameMatcher.matches("Venezia S.Lucia", "Venezia Mestre"))
+    }
+
+    /// The 53 pairs of the RFI national list (2435 entries, extracted 2026-08-28) that
+    /// the pre-C4 ≥2-token subset rule matched. Left/right is short/long: the short
+    /// name's canonical tokens are a strict subset of the long one's. Kept as a
+    /// literal rather than a bundle fixture so it needs no project-file change.
+    private static let rfiSubsetCollisionPairs: [(String, String)] = [
+        ("ABANO TERME", "TERME EUGANEE-ABANO-MONTEGROTTO"),
+        ("BOLOGNA CENTRALE", "BOLOGNA C.LE/AV"),
+        ("BORGO S.LORENZO", "BORGO S.LORENZO RIMORELLI"),
+        ("CAMPO DI GIOVE", "CAMPO DI GIOVE-MONTE MAIELLA"),
+        ("CITTA' DI CASTELLO", "CITTA' DI CASTELLO - FORNACE"),
+        ("CITTA' DI CASTELLO", "CITTA' DI CASTELLO - ZONA INDUSTRIALE"),
+        ("FONTANA LIRI", "FONTANA LIRI INFERIORE"),
+        ("GENOVA PIAZZA PRINCIPE", "GENOVA PIAZZA PRINCIPE SOTTERRANEA"),
+        ("L'AQUILA", "L'AQUILA CAMPO DI PILE"),
+        ("L'AQUILA", "L'AQUILA S.GREGORIO"),
+        ("L'AQUILA", "L'AQUILA SASSA NUCLEO SVILUPPO"),
+        ("MERCATO S.SEVERINO", "VALLE DI MERCATO S.SEVERINO"),
+        ("MILANO PORTA GARIBALDI", "MILANO PORTA GARIBALDI SOTTERRANEA"),
+        ("NAPOLI AFRAGOLA", "NAPOLI AFRAGOLA PES"),
+        ("NOCERA INFERIORE", "NOCERA INFERIORE MERCATO"),
+        ("PORTO EMPEDOCLE", "PORTO EMPEDOCLE SUCCURSALE"),
+        ("PORTO TORRES", "PORTO TORRES MARITTIMA"),
+        ("PRATOLA PELIGNA", "PRATOLA PELIGNA SUPERIORE"),
+        ("REGGIO EMILIA", "REGGIO EMILIA AV MEDIOPADANA"),
+        ("S.AMBROGIO", "DOMEGLIARA-S.AMBROGIO"),
+        ("S.BIAGIO", "GENOVA S.BIAGIO"),
+        ("S.BIAGIO", "MONTE S.BIAGIO-TERRACINA MARE"),
+        ("S.BIAGIO", "S.BIAGIO DI CALLALTA"),
+        ("S.CASSIANO", "S.CASSIANO VALCHIAVENNA"),
+        ("S.DOMENICA", "SCALEA S.DOMENICA TALAO"),
+        ("S.FILIPPO", "ROMA S.FILIPPO NERI"),
+        ("S.GENNARO", "PALMA S.GENNARO"),
+        ("S.GIORGIO", "CASTEL S.GIORGIO ROCCAPIEMONTE"),
+        ("S.GIORGIO", "PIETRARSA-S.GIORGIO A CREMANO"),
+        ("S.GIORGIO", "PORTO S.GIORGIO FERMO"),
+        ("S.GIORGIO", "S.GIORGIO CASALE"),
+        ("S.GIORGIO", "S.GIORGIO DELLE PERTICHE"),
+        ("S.GIORGIO", "S.GIORGIO DI NOGARO"),
+        ("S.GIORGIO", "S.GIORGIO DI PIANO"),
+        ("S.LORENZO", "BORGO S.LORENZO"),
+        ("S.LORENZO", "BORGO S.LORENZO RIMORELLI"),
+        ("S.LORENZO", "MARINA DI S.LORENZO"),
+        ("S.LORENZO", "PALERMO S.LORENZO"),
+        ("S.LORENZO", "S.LORENZO MAGGIORE"),
+        ("S.MICHELE", "CONDOVE-CHIUSA S.MICHELE"),
+        ("S.MICHELE", "OLIVETTA S.MICHELE"),
+        ("S.MICHELE", "S.MICHELE DI SERINO"),
+        ("S.MICHELE", "S.MICHELE IN BOSCO"),
+        ("S.MICHELE", "VICOFORTE S.MICHELE"),
+        ("S.MICHELE", "VILLA S.MICHELE"),
+        ("S.VINCENZO", "COMPRE S.VINCENZO"),
+        ("S.VINCENZO", "S.VINCENZO VALLE ROVETO"),
+        ("SAN PAOLO", "BIELLA S.PAOLO"),
+        ("SAN PAOLO", "S.PAOLO SOLBRITO"),
+        ("VENEZIA MESTRE", "VENEZIA MESTRE GAZZERA"),
+        ("VENEZIA MESTRE", "VENEZIA MESTRE OLIMPIA"),
+        ("VENEZIA MESTRE", "VENEZIA MESTRE OSPEDALE"),
+        ("VILLA S.GIOVANNI", "VILLA S.GIOVANNI CANNITELLO"),
+    ]
 
     /// Crash test for the C1-A title policy: the longest name the app has ever shown.
     /// It must lose no glyph and never drop below the minimum scale. The SPLIT it

@@ -206,6 +206,49 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   per questa stazione". Cambio stazione e stato onesto **azzerano le righe** precedenti.
 - **404 `unknown_station` è un caso previsto**, non un errore da mostrare grezzo.
 
+## Match fra nomi di stazione: uguaglianza canonica, mai sottoinsieme (C4)
+
+- **Due nomi di stazione coincidono solo se le loro forme canoniche sono UGUALI.** La
+  vecchia regola accettava anche il sottoinsieme di token (col vincolo ≥2 token). È
+  stata rimossa: **aggiungere token significa stazione diversa**. `REGGIO EMILIA` non è
+  `REGGIO EMILIA AV MEDIOPADANA`, `GENOVA PIAZZA PRINCIPE` non è la `SOTTERRANEA`,
+  `BOLOGNA CENTRALE` non è `BOLOGNA C.LE/AV`, `NAPOLI AFRAGOLA` non è `NAPOLI AFRAGOLA
+  PES`.
+- **Il difetto era reale e già spedito, non teorico.** Sull'elenco autorevole RFI (2435
+  voci, `PlaceId` del monitor, estratto il 2026-08-28) il subset test produceva **53
+  coppie di collisione, 8 delle quali su stazioni già presenti nel catalogo delle 17** —
+  fra cui `VENEZIA MESTRE` contro le tre `VENEZIA MESTRE GAZZERA / OLIMPIA / OSPEDALE`.
+  Con l'uguaglianza canonica le collisioni sull'intero elenco sono **0**.
+- **Il ponte fra la forma che il tabellone STAMPA e il nome ufficiale sono due cose
+  esplicite**: l'espansione delle abbreviazioni dentro `canonical` (`C.LE` → CENTRALE,
+  `P.NUOVA` → PORTA NUOVA) e i `boardAliases` dichiarati sulla stazione. **Non** un
+  match permissivo. Verificato che il match delle destinazioni abbreviate non dipendeva
+  affatto dal subset: `VENEZIA S.L.` passava già dall'alias, `BOLOGNA C.LE` già
+  dall'espansione. Delle asserzioni del matcher già verdi, la regola stretta ne
+  cambiava **una sola**: quella che fissava la collisione Abano.
+- **Corollario**: la tabella di espansione è ora PORTANTE. Una forma stampata che non
+  raggiunge il nome ufficiale non è più recuperata da un match approssimato: è un match
+  mancato. Un test asserisce la copertura delle abbreviazioni su cui poggiano le
+  stazioni servite, così ridurla rompe la suite invece di degradare in silenzio.
+- **Token neutro per i santi**: `S. / SAN / SANT / SANTA / SANTO / SANTI / SS` → `S`.
+  RFI scrive `S.` per entrambi i generi (231 nomi su 2435); espanderlo in `SANTA`
+  indovinava il genere e sbagliava sulla maggioranza maschile (`S.GIOVANNI` è *San*
+  Giovanni), e soprattutto impediva ai 4 nomi scritti `SAN …` per esteso di agganciare
+  la propria forma abbreviata. Non indovinare è meglio che indovinare male. Il token
+  neutro rende visibili 2 collisioni che il codice prima non vedeva (`BIELLA S.PAOLO` e
+  `S.PAOLO SOLBRITO` contro `SAN PAOLO`): sono reali, e la regola stretta le scioglie.
+- **I punti operativi non sono capolinea.** Le voci `PM …` / `PC …` / `… PES` / `BIVIO …`
+  (21 su 2435) portano `operationalPoint: true` e sono escluse **sia dal matching delle
+  destinazioni sia dalla ricerca**, ma `station(named:)` continua a risolverle: un nome
+  non perde mai la sua entità. Aprire il tabellone di un posto di movimento sarebbe una
+  promessa non mantenuta; il flag lo impedisce alla radice.
+- **La tolleranza sui nomi vecchi si sposta dove è ispezionabile.** Un'origine salvata
+  sotto una grafia precedente ("Montegrotto Terme") continua ad agganciare, ma via
+  `searchAliases` risolti dal catalogo — una lista esplicita e recensibile — invece che
+  via una regola permissiva che agganciava anche stazioni diverse. Per questo
+  `journeyDeparts` accetta ora un `catalog`, simmetrico al lato destinazione che lo
+  aveva già.
+
 ## Validazione a due assi: stazione E modalità (C3)
 
 - **Le righe mostrate devono sempre appartenere sia alla STAZIONE sia alla MODALITÀ
@@ -255,7 +298,10 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   inventati, commerciali o d'uso comune nel catalogo. Il nome ufficiale è quello che
   compare nella lista `PlaceId` del monitor RFI e nel `<title>Stazione di …</title>`.
   Esempio C2: la stazione di Montegrotto si chiama **"Terme Euganee-Abano-Montegrotto"**;
-  "Montegrotto Terme" NON esiste come stazione RFI.
+  "Montegrotto Terme" NON esiste come stazione RFI. Secondo caso applicato (C4): il nome
+  ufficiale è **"Venezia S.Lucia"** (placeId 3009), non "Venezia Santa Lucia" che era una
+  forma nostra; id rinominato in `venezia-s-lucia`, forma comune scesa a `searchAlias`.
+  Delle 17 voci del catalogo è **l'unica** che divergeva dal nome ufficiale RFI.
 - **`searchAliases`** = i nomi che l'UTENTE cerca (comuni, storici, colloquiali). Sono
   solo per la ricerca e per la risoluzione canonica: un alias entra nel ranking **con lo
   stesso rango del nome ufficiale**, e `station(named:)` li accetta, così un nome

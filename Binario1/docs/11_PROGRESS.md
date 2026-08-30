@@ -2,6 +2,98 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-08-28 — Ticket C4: il match fra nomi di stazione diventa uguaglianza canonica
+
+Stato: **implementato, suite NON eseguita in questa sessione** (nessuna toolchain Swift
+nel container remoto — vedi "Verifica" sotto). Suite attesa **156** (erano 148, +8).
+**Nessun file `supabase/**` toccato** → la CI di deploy non si attiva.
+
+### Perché un ticket a sé, prima del B3-full
+Il difetto non era un rischio del catalogo nazionale: era **già nella build spedita**.
+Sulle 17 stazioni del catalogo attuale, 8 coppie collidevano — `VENEZIA MESTRE` contro
+`VENEZIA MESTRE GAZZERA / OLIMPIA / OSPEDALE`, `REGGIO EMILIA` contro `REGGIO EMILIA AV
+MEDIOPADANA`, `GENOVA PIAZZA PRINCIPE` contro la `SOTTERRANEA`, `MILANO PORTA GARIBALDI`
+contro la `SOTTERRANEA`, `BOLOGNA CENTRALE` contro `BOLOGNA C.LE/AV`, più la nota Abano.
+Correzione autonoma e spedibile per conto suo, con un diff isolato invece che dentro un
+cambiamento da 2435 stazioni.
+
+### La misura che ha guidato la decisione
+Elenco autorevole RFI (`<select name="PlaceId">` del monitor, 2435 voci, estratto il
+2026-08-28, HTML salvato dal browser perché l'egress verso `iechub.rfi.it` è negato in
+sessione). Sotto la vecchia regola ≥2 token: **53 coppie collidenti**, grado massimo 7
+(`S.GIORGIO`), 45 su 53 con un membro corto di 2 token. Sotto l'uguaglianza canonica:
+**0**, su tutte le 2435.
+
+### Correzione a un'ipotesi del ticket
+L'ipotesi era che il driver fossero le famiglie numerose (`S.GIOVANNI` e simili, 9+
+membri). **Non è così**: fra i membri reali della famiglia le collisioni sono **zero**,
+perché `{VILLA, S, GIOVANNI}` e `{SESTO, S, GIOVANNI}` non sono uno sottoinsieme
+dell'altro. Il driver sono i **suffissi qualificatori** — `AV`, `SOTTERRANEA`, `PES`,
+`GAZZERA`, `C.LE/AV` — che creano un superset del nome corto.
+
+### Verifica misurata prima di cambiare la regola
+La domanda decisiva era se il match delle destinazioni abbreviate poggiasse sul
+comportamento permissivo. **Non ci poggia**: `VENEZIA S.L.` passa dal `boardAlias`,
+`BOLOGNA C.LE` e `VERONA P.NUOVA` dall'espansione delle abbreviazioni, entrambe per
+uguaglianza esatta. Passando ogni asserzione già verde attraverso la regola stretta, ne
+cambiava **una sola**: quella che fissava la collisione Abano, cioè il difetto stesso.
+`station(named:)` non usa `matches` affatto (confronta forme canoniche), quindi il raggio
+d'azione del cambiamento è il solo `SavedJourneyMatcher`.
+
+### Un caso che il primo controllo aveva mancato
+`journeyDeparts` era **cieco al catalogo**, mentre il lato destinazione lo riceveva già.
+Reggeva sul subset per agganciare un'origine salvata sotto una grafia vecchia
+("Montegrotto Terme"). Con la regola stretta si sarebbe rotto in silenzio. Corretto
+rendendo simmetrici i due assi: `journeyDeparts`/`journeysDeparting` accettano un
+`catalog` e risolvono entrambi i lati a entità, così la tolleranza viene dai
+`searchAliases` — espliciti e recensibili — invece che da una regola permissiva.
+
+### Il cambiamento
+- `StationNameMatcher.matches` = **uguaglianza canonica**. Nessun subset.
+- `canonical`: token neutro per i santi (`S./SAN/SANT/SANTA/SANTO/SANTI/SS` → `S`), e le
+  espansioni a token singolo applicate **token per token** invece che con una replace su
+  stringa, che consumava lo spazio condiviso fra due token adiacenti e ne saltava il
+  secondo.
+- `Station.operationalPoint` + `isOperationalPoint`: escluso dal matching destinazioni e
+  dalla ricerca (`StationCatalog.searchable`), ma risolvibile da `station(named:)`.
+  **Il flag nasce qui, il popolamento delle 21 voci è del B3-full.**
+- Venezia rinominata al nome ufficiale `Venezia S.Lucia` (placeId 3009), id
+  `venezia-s-lucia`, `"Venezia Santa Lucia"` scesa a `searchAlias`. `boardAliases` da 2 a
+  1: `"Venezia S. Lucia"` è diventata ridondante (canonicalizza sul displayName),
+  `"Venezia S.L."` resta necessaria. La forma comune **non** è ridondante fra i
+  `searchAliases`, perché la ricerca folda senza espandere le abbreviazioni: senza di
+  essa digitare "santa" non troverebbe più la stazione.
+
+### Test (+8)
+Due riscritti, sei nuovi. `abanoTermeCollidesWith…` è diventato
+`abanoTermeNoLongerMatchesTheOfficialName`: **l'asserzione si inverte**, ed è il senso
+del ticket. Il debito di catalogo sugli alias Abano resta invece aperto e ora è asserito
+esplicitamente: si estingue quando il placeId 364 entra in catalogo col B3-full.
+Le 53 coppie sono in suite come test di proprietà (letterale Swift, non un fixture di
+bundle, così non serve toccare il progetto Xcode). I due test richiesti sui rischi:
+comportamento di una tratta salvata su nome NON canonico, e copertura della tabella di
+espansione — che con la regola stretta è portante, quindi ridurla deve rompere la suite
+invece di far fallire i match in silenzio.
+
+### Verifica — leggere prima di fidarsi
+**La suite non è stata eseguita**: il container remoto non ha `swift`, `swiftc` né
+`xcodebuild`. Al posto dell'esecuzione, la logica di `canonical`/`matches` è stata
+replicata riga per riga in un oracolo JS e verificata su: le 12 asserzioni positive e le
+17 negative della suite, le 53 coppie **estratte dal file di test appena scritto**, e
+tutte le 2435 voci RFI (0 collisioni). Resta da eseguire `xcodebuild test` in locale: il
+rischio residuo è di **compilazione**, non di logica.
+
+### Nota per il B3-full (dal rischio 2)
+Con centinaia di stazioni servite, ognuna può stampare forme abbreviate non censite, e
+con la regola stretta **una destinazione non risolta è un match mancato SILENZIOSO** —
+la riga semplicemente non viene evidenziata, senza errore. Serve renderlo osservabile.
+Proposta da valutare nel B3-full, non implementata ora: contare nel backend, per ogni
+risposta, le destinazioni che non risolvono ad alcuna entità del catalogo, ed esporle nel
+blocco `diagnostics` già presente (development-only) come elenco dei nomi non risolti.
+Diventa una lista di `boardAliases` mancanti, ricavata dal traffico reale invece che
+indovinata; le forme ricorrenti si promuovono ad alias, e il conteggio a zero è il
+segnale che la copertura è completa.
+
 ## 2026-08-18 — Ticket C3: "Cambia" apre la ricerca; fix arrivi che mostravano partenze
 
 Stato: **CHIUSA E VERIFICATA SUL DEVICE.** Suite iOS **148/148** (erano 142, +6).

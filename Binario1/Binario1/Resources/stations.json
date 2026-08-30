@@ -10,14 +10,16 @@
     "servedByLiveBoard": true
   },
   {
-    "id": "venezia-santa-lucia",
-    "name": "Venezia Santa Lucia",
+    "_note": "OFFICIAL RFI name (PlaceId select, placeId 3009: 'VENEZIA S.LUCIA'). Renamed in C4 from 'Venezia Santa Lucia', which was our own form, not RFI's; the id was renamed in place (one entity, never a duplicate). 'Venezia S. Lucia' was dropped from boardAliases: it canonicalizes to the displayName, so it is now redundant. 'Venezia Santa Lucia' moved to searchAliases and is NOT redundant there: search folds without expanding abbreviations, so without it typing 'santa' would no longer find this station. Keys starting with '_' are ignored by the decoder.",
+    "id": "venezia-s-lucia",
+    "name": "Venezia S.Lucia",
     "city": "Venezia",
-    "displayName": "Venezia Santa Lucia",
+    "displayName": "Venezia S.Lucia",
     "countryCode": "IT",
     "timezone": "Europe/Rome",
     "providerCodes": { "rfi": "VE_SL", "viaggiatreno": "S02593" },
-    "boardAliases": ["Venezia S.L.", "Venezia S. Lucia"]
+    "boardAliases": ["Venezia S.L."],
+    "searchAliases": ["Venezia Santa Lucia"]
   },
   {
     "id": "venezia-mestre",

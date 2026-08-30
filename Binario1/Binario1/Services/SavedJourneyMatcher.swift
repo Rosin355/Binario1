@@ -13,15 +13,32 @@ import Foundation
 
 enum SavedJourneyMatcher {
 
-    /// True when `journey` departs from the station shown on the board: the board
-    /// station name matches the journey's origin (via `StationNameMatcher`).
-    static func journeyDeparts(from stationName: String, journey: SavedJourney) -> Bool {
-        StationNameMatcher.matches(stationName, journey.origin)
+    /// True when `journey` departs from the station shown on the board.
+    ///
+    /// When a `catalog` is given, BOTH sides are resolved to catalog entities and
+    /// compared by id — the mirror of what the destination side already did. This is
+    /// what keeps an origin persisted under an older or colloquial spelling working
+    /// ("Montegrotto Terme" → Terme Euganee-Abano-Montegrotto) now that the matcher is
+    /// canonical equality: the tolerance comes from the entity's `searchAliases`, an
+    /// explicit and reviewable list, instead of the old permissive subset rule which
+    /// also matched genuinely different stations.
+    ///
+    /// Without a catalog — or when either side is not a catalog station — it falls
+    /// back to the plain canonical name comparison.
+    static func journeyDeparts(from stationName: String, journey: SavedJourney,
+                               catalog: StationCatalog? = nil) -> Bool {
+        if let catalog,
+           let board = catalog.station(named: stationName),
+           let origin = catalog.station(named: journey.origin) {
+            return board.id == origin.id
+        }
+        return StationNameMatcher.matches(stationName, journey.origin)
     }
 
     /// The subset of `journeys` that depart from the given board station.
-    static func journeysDeparting(from stationName: String, in journeys: [SavedJourney]) -> [SavedJourney] {
-        journeys.filter { journeyDeparts(from: stationName, journey: $0) }
+    static func journeysDeparting(from stationName: String, in journeys: [SavedJourney],
+                                  catalog: StationCatalog? = nil) -> [SavedJourney] {
+        journeys.filter { journeyDeparts(from: stationName, journey: $0, catalog: catalog) }
     }
 
     /// True when a DEPARTURES board row heads to the saved journey's destination.

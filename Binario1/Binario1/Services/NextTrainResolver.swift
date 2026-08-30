@@ -78,7 +78,7 @@ final class NextTrainResolver: NextTrainResolving, @unchecked Sendable {
 
         // Only journeys departing from the served station can resolve; the rest are
         // honestly "unavailable" without a wasted fetch.
-        let served = SavedJourneyMatcher.journeysDeparting(from: boardStation.displayName, in: journeys)
+        let served = SavedJourneyMatcher.journeysDeparting(from: boardStation.displayName, in: journeys, catalog: catalog)
         let servedIDs = Set(served.map(\.id))
         for journey in journeys where !servedIDs.contains(journey.id) {
             result[journey.id] = .unavailable

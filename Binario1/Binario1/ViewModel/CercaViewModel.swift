@@ -80,7 +80,8 @@ final class CercaViewModel {
     /// order). A typed query keeps the catalog's own ranking untouched.
     var stationResults: [Station] {
         guard !isSearching else { return stations }
-        let all = catalog.all
+        // `searchable`, not `all`: operational points are never offered to the user.
+        let all = catalog.searchable
         let withBoard = all.filter { hasLiveBoard($0) }
         let rest = all.filter { !hasLiveBoard($0) }
         return withBoard + rest

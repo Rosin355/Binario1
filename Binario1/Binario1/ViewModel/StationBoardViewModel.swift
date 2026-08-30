@@ -158,7 +158,7 @@ final class StationBoardViewModel {
         guard boardType == .departures, !savedJourneys.isEmpty, !isScheduledSampleOutOfWindow else { return [] }
         // Same predicate the Viaggi next-train resolver uses (shared helper) so the
         // two features can never diverge.
-        let fromHere = SavedJourneyMatcher.journeysDeparting(from: station.displayName, in: savedJourneys)
+        let fromHere = SavedJourneyMatcher.journeysDeparting(from: station.displayName, in: savedJourneys, catalog: catalog)
         guard !fromHere.isEmpty else { return [] }
         let matched = SavedJourneyMatcher.rows(sortedRows, matchingDestinationsOf: fromHere, catalog: catalog)
         return Array(matched.prefix(3))
