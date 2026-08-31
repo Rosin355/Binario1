@@ -3,8 +3,16 @@
 //
 // IMPORTANT: `rfiLivePlaceId` (RFI LIVE monitor id) and `prmScheduledId` (PRM
 // "Quadro Orario" SCHEDULE id) are DIFFERENT id systems — never mix them.
-// Add a new station ONLY when its rfiLivePlaceId is VERIFIED against the live RFI
-// monitor. Do not activate guessed/unverified ids.
+//
+// The registry is BUILT FROM THE SHARED ARTIFACT (`rfi_stations_tsv.ts`), parsed
+// into a Map once at module init. That artifact is RFI's own `PlaceId` list, so
+// no id here is ever guessed — the previous hand-maintained literal has been
+// replaced, not extended. See docs/12_DECISIONS.md.
+//
+// The artifact is a DATED SNAPSHOT: RFI opens and closes stations, so the entry
+// count moves between extractions. Never assert the count — assert properties.
+
+import { RFI_STATIONS_TSV } from "./rfi_stations_tsv.ts";
 
 export interface StationEntry {
   slug: string;
@@ -17,32 +25,66 @@ export interface StationEntry {
   prmScheduledId?: string;
 }
 
-/// Verified-active stations only — each `rfiLivePlaceId` confirmed against the live
-/// RFI monitor (https://iechub.rfi.it/…/Monitor?placeId=…, page title "Stazione di X").
-/// TODO(future — each requires a VERIFIED rfiLivePlaceId before activation):
-///   Bologna Centrale, Venezia Santa Lucia, Milano Centrale.
-///   Do NOT add them with guessed placeIds.
-export const STATIONS: Record<string, StationEntry> = {
-  padova: { slug: "padova", displayName: "Padova", rfiLivePlaceId: "2000", prmScheduledId: "1861" },
-  // Verified: placeId 2416 → "Stazione di ROMA TERMINI". prmScheduledId NOT verified
-  // → intentionally omitted (never guessed); live board works without it.
-  "roma-termini": { slug: "roma-termini", displayName: "Roma Termini", rfiLivePlaceId: "2416" },
-  // Verified: placeId 2829 → "Stazione di TERME EUGANEE-ABANO-MONTEGROTTO", 17 real
-  // departure rows. Taken from RFI's own station list (the `PlaceId` select on
-  // iechub.rfi.it/ArriviPartenze/, 2434 entries) — no guessed id. RFI has NO station
-  // named "Montegrotto Terme"; this is the one serving it, between ABANO TERME
-  // (placeId 364, a DIFFERENT station, not registered here) and BATTAGLIA TERME.
-  // displayName is the OFFICIAL RFI name — see the naming policy in docs/12_DECISIONS.md.
-  // prmScheduledId NOT verified → intentionally omitted.
-  "terme-euganee-abano-montegrotto": {
-    slug: "terme-euganee-abano-montegrotto",
-    displayName: "Terme Euganee-Abano-Montegrotto",
-    rfiLivePlaceId: "2829",
-  },
-};
+/// PRM ids are NOT in the shared artifact (a different id system) and are never
+/// guessed: this overlay carries only the ones verified by hand. A station absent
+/// here is live-active without a PRM id, which is the normal case.
+const PRM_SCHEDULED_IDS: Readonly<Record<string, string>> = { padova: "1861" };
+
+/// Station name → registry slug, and the contract between app and backend: the
+/// iOS catalog's `Station.id` MUST equal this slug or the fetch 404s.
+///
+/// The rule is deliberately plain — lowercase, every run of non-alphanumerics
+/// becomes one hyphen, no leading/trailing hyphen. It reproduces the four slugs
+/// that were hand-written before national coverage ("padova", "roma-termini",
+/// "venezia-s-lucia", "terme-euganee-abano-montegrotto") with no special cases,
+/// and it is INJECTIVE over the whole artifact — asserted in `registry_test.ts`,
+/// because a collision would silently drop a station from the Map.
+export function stationSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/// Parse the shared TSV artifact. `#` comments and blank lines are skipped; every
+/// remaining line must be `placeId<TAB>name`. Malformed input throws at init
+/// rather than yielding a half-built registry.
+export function parseStationsTSV(tsv: string): Map<string, StationEntry> {
+  const stations = new Map<string, StationEntry>();
+  let lineNumber = 0;
+  for (const line of tsv.split("\n")) {
+    lineNumber++;
+    if (line === "" || line.startsWith("#")) continue;
+    const [rfiLivePlaceId, displayName, ...extra] = line.split("\t");
+    if (extra.length > 0 || !rfiLivePlaceId || !displayName) {
+      throw new Error(
+        `rfi-stations.tsv line ${lineNumber}: expected "placeId<TAB>name", got ${JSON.stringify(line)}`,
+      );
+    }
+    const slug = stationSlug(displayName);
+    if (slug === "") {
+      throw new Error(
+        `rfi-stations.tsv line ${lineNumber}: name ${JSON.stringify(displayName)} yields an empty slug`,
+      );
+    }
+    if (stations.has(slug)) {
+      // A Map would silently keep the last writer and a station would vanish from
+      // the registry with no error. Refuse to start instead.
+      throw new Error(`rfi-stations.tsv line ${lineNumber}: slug "${slug}" collides with an earlier station`);
+    }
+    const prmScheduledId = PRM_SCHEDULED_IDS[slug];
+    stations.set(slug, {
+      slug,
+      displayName,
+      rfiLivePlaceId,
+      ...(prmScheduledId ? { prmScheduledId } : {}),
+    });
+  }
+  return stations;
+}
+
+/// Every station RFI's own list knows about, keyed by slug. Built once at init.
+export const STATIONS: ReadonlyMap<string, StationEntry> = parseStationsTSV(RFI_STATIONS_TSV);
 
 export function resolveStation(slug: string | null | undefined): StationEntry | undefined {
-  return STATIONS[(slug ?? "").toLowerCase().trim()];
+  return STATIONS.get((slug ?? "").toLowerCase().trim());
 }
 
 export type BoardType = "departures" | "arrivals";

@@ -26,9 +26,13 @@ jobs:
         with:
           deno-version: v2.x
 
+      # --allow-read: one test reads the iOS copy of the shared station artifact and
+      # asserts it is byte-identical to the backend's embedded copy. Without the flag
+      # that test FAILS (it does not skip), so the gate cannot pass silently.
+      # Everything else stays permissionless — no network, no env.
       - name: Run backend tests
         working-directory: supabase/functions/board
-        run: deno test
+        run: deno test --allow-read
 
       - uses: supabase/setup-cli@v1
         with:
