@@ -108,6 +108,22 @@ test di regressione del fix race riscritto su `selectStation(_:)`, che percorre 
 con la copertura nazionale quella condizione non può più essere falsa, e una condizione
 che non può fallire nasconde ciò che doveva proteggere.
 
+### Flakiness del runner simulatore (ambiente, non codice)
+
+Annotato perché non confonda una diagnosi futura. Durante questa sessione il test
+runner del simulatore è caduto **due volte** con `Failed to install or launch the test
+runner` / `Mach error -308 (ipc/mig) server died`, in entrambi i casi con **0 test
+eseguiti** e `** TEST FAILED **` — cioè un fallimento che *sembra* la suite rossa ma non
+lo è: nessuna asserzione è stata valutata. La stessa famiglia dei System Failure
+registrati in `5267bb5` (là su `Binario1UITests`).
+
+Rimedio che ha funzionato: `xcrun simctl shutdown all` e rilancio; subito dopo, suite
+verde senza toccare una riga di codice.
+
+**Come distinguerlo da un rosso vero**: un fallimento di test riporta il nome del test e
+un conteggio di passati > 0; questo riporta 0 passati e 0 falliti. Se il conteggio è
+0/0, la diagnosi è l'ambiente — non cercare la causa nel diff.
+
 ### Verifica campionaria sul monitor live (Passo 3)
 75 stazioni sondate (69 passeggeri + 6 punti operativi), stratificate su hub curati,
 distribuzione uniforme sull'alfabeto e punti operativi. Parser reale del backend
