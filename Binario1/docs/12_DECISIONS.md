@@ -231,14 +231,14 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   mancato. Un test asserisce la copertura delle abbreviazioni su cui poggiano le
   stazioni servite, così ridurla rompe la suite invece di degradare in silenzio.
 - **Token neutro per i santi**: `S. / SAN / SANT / SANTA / SANTO / SANTI / SS` → `S`.
-  RFI scrive `S.` per entrambi i generi (231 nomi su 2435); espanderlo in `SANTA`
+  RFI scrive `S.` per entrambi i generi (231 nomi sullo snapshot del 2026-08-31); espanderlo in `SANTA`
   indovinava il genere e sbagliava sulla maggioranza maschile (`S.GIOVANNI` è *San*
   Giovanni), e soprattutto impediva ai 4 nomi scritti `SAN …` per esteso di agganciare
   la propria forma abbreviata. Non indovinare è meglio che indovinare male. Il token
   neutro rende visibili 2 collisioni che il codice prima non vedeva (`BIELLA S.PAOLO` e
   `S.PAOLO SOLBRITO` contro `SAN PAOLO`): sono reali, e la regola stretta le scioglie.
 - **I punti operativi non sono capolinea.** Le voci `PM …` / `PC …` / `… PES` / `BIVIO …`
-  (21 su 2435) portano `operationalPoint: true` e sono escluse **sia dal matching delle
+  (21 nello snapshot del 2026-08-31) portano `operationalPoint: true` e sono escluse **sia dal matching delle
   destinazioni sia dalla ricerca**, ma `station(named:)` continua a risolverle: un nome
   non perde mai la sua entità. Aprire il tabellone di un posto di movimento sarebbe una
   promessa non mantenuta; il flag lo impedisce alla radice.
@@ -248,6 +248,113 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   via una regola permissiva che agganciava anche stazioni diverse. Per questo
   `journeyDeparts` accetta ora un `catalog`, simmetrico al lato destinazione che lo
   aveva già.
+
+## Catalogo nazionale: l'artefatto condiviso (B3-full)
+
+- **Una sola fonte per iOS e backend: `rfi-stations.tsv`**, estratto dal `<select
+  name="PlaceId">` di `iechub.rfi.it/ArriviPartenze/` — la lista autorevole di RFI, la
+  stessa che pilota il monitor live. Due colonne: `placeId` e nome ufficiale. Nessun id
+  indovinato, nessuna fonte alternativa. Si rigenera con
+  `tools/generate-rfi-stations-tsv.mjs`, non si edita a mano.
+- **L'artefatto è uno SNAPSHOT DATATO, non una verità perpetua.** Nulla garantisce che
+  l'elenco di RFI sia stabile, quindi il conteggio non è una costante su cui appoggiarsi:
+  l'header porta fonte e data. **Nessun test asserisce il conteggio**, si asseriscono
+  proprietà (unicità, iniettività, àncore note). Un'asserzione sul numero non dimostra
+  nulla mentre passa e si rompe a ogni variazione a monte.
+  *(Nota di metodo: questa premessa NON va appoggiata a un cambiamento realmente
+  avvenuto. L'unica variazione di conteggio osservata finora — 2434 vs 2435 — non era
+  di RFI: era un difetto di estrazione, vedi sotto.)*
+- **La duplicazione è una COPIA VERIFICATA, non due liste.** I due runtime non possono
+  condividere un file, quindi il backend incorpora l'artefatto in
+  `rfi_stations_tsv.ts`; `rfi_stations_tsv_test.ts` asserisce che le due copie sono
+  **identiche byte a byte**, e senza `--allow-read` quel test FALLISCE invece di
+  saltare (la CI passa il flag). Una copia non verificata è solo un secondo elenco che
+  diverge in silenzio.
+- **Normalizzazione TIPOGRAFICA soltanto**: dove RFI digita un backtick al posto
+  dell'apostrofo (10 voci) diventa un apostrofo. **Mai la struttura**: spaziatura,
+  trattini e slash restano come RFI li scrive (`CITTA' DI CASTELLO - ZONA INDUSTRIALE`
+  conserva il trattino spaziato, `BOLOGNA C.LE/AV` il suo slash). Toccare la struttura
+  significherebbe inventare nomi. Effetto collaterale utile: senza backtick l'artefatto
+  è incorporabile *raw* in un template literal, e il generatore lo verifica.
+- **Il conteggio 2434 vs 2435 non era deriva di RFI: era un estrattore cieco.**
+  L'opzione di MILANO CENTRALE porta `selected="selected"` PRIMA di `value`, quindi un
+  pattern ancorato su `<option value=` la perdeva — una stazione fra le più grandi
+  d'Italia, sparita senza errore. Il generatore ora confronta le righe estratte con i
+  tag `<option>` presenti e **fallisce** se non coincidono. La lezione è generale: la
+  perdita silenziosa di dati va resa rumorosa, non spiegata come variazione a monte.
+
+## Grafia dei nomi: maiuscolo verbatim RFI (B3-full)
+
+- **`displayName` è il nome ufficiale RFI, verbatim e MAIUSCOLO** ("VENEZIA S.LUCIA",
+  "TERME EUGANEE-ABANO-MONTEGROTTO"). Con 17 voci il Title Case si curava a mano; con
+  l'elenco nazionale andrebbe **generato**, e generarlo significa inventare una grafia
+  che RFI non ha mai scritto: 233 nomi portano particelle (DI/DEL/DELLA/DA/IN/SUL) che
+  vanno minuscole, 232 abbreviazioni puntate (`S.LUCIA`, `C.LE`), 47 un apostrofo dove
+  l'italiano vuole un accento (`MONDOVI'`). Il maiuscolo non decide nessuna di queste
+  domande, ed è anche la resa del tabellone fisico.
+- **Conseguenza accettata**: ricerca e tratte salvate mostrano il maiuscolo. Il match
+  non ne risente — `canonical` maiuscolizza comunque, quindi un nome persistito in
+  grafia precedente continua a risolvere.
+- **`Station.id` = slug del nome ufficiale**, regola unica e senza casi speciali
+  (minuscolo, ogni sequenza di non-alfanumerici → un trattino). Riproduce senza
+  eccezioni i quattro slug scritti a mano prima della copertura nazionale. Due id
+  disallineati sono stati **rinominati in place**, non duplicati: `firenze-smn` →
+  `firenze-santa-maria-novella`, `reggio-emilia-av` → `reggio-emilia-av-mediopadana`
+  (nessuna persistenza contiene id di stazione: le tratte salvate memorizzano i nomi).
+- **`stations.json` non è più il catalogo: è un OVERLAY curato.** Porta solo ciò che la
+  lista RFI non ha — città, `providerCodes` verificati, `boardAliases`,
+  `searchAliases`. Non può rinominare né introdurre una stazione; un id non presente
+  nell'artefatto è un errore, e un test lo dichiara.
+
+## Registry backend: da lista statica a Map dall'artefatto (B3-full)
+
+- **Il registry è costruito dall'artefatto embedded e indicizzato in una `Map` all'init**
+  (opzione 2). La lista letterale mantenuta a mano è stata **sostituita**, non estesa.
+- **Una collisione di slug fa fallire l'init**, non viene assorbita: una `Map`
+  terrebbe l'ultimo scrittore e una stazione sparirebbe dal registry senza errore.
+  Sullo snapshot attuale la regola è iniettiva (nessuna collisione), e un test lo
+  asserisce come proprietà più il caso sintetico che la violerebbe.
+- **`servedByLiveBoard` è derivato dalla presenza nel registry.** Poiché registry e
+  catalogo nascono dallo stesso artefatto, la copertura è **totale**: ogni stazione del
+  catalogo è servita.
+- **A copertura totale il guardrail va tenuto vivo con una stazione NON SERVITA
+  SINTETICA.** Prima del B3-full ogni slug fuori dai 3 registrati era una stazione non
+  servita reale, e l'invariante si testava da sé; ora non esiste più un caso reale. Il
+  test usa un registry-fixture che omette deliberatamente una voce. **L'invariante non
+  è stata indebolita: è stato sostituito il soggetto**, perché l'unica alternativa era
+  smettere di testarla proprio quando la superficie si allarga a tutta Italia.
+- **I 21 punti operativi restano nel registry** (RFI serve davvero quei placeId: il
+  campione mostra righe reali su `BIVIO D'AURISINA`, `PC CALDIERO`…). L'irraggiungibilità
+  è imposta da iOS, che li esclude da ricerca e da matching destinazioni.
+
+## Titolo stazione: il wrap spezza anche sul trattino (B3-full)
+
+- **La riga primaria del titolo si spezza sul TRATTINO oltre che sullo spazio.** RFI ha
+  nomi che sono un unico composto trattinato senza spazi
+  (`MARCELLINA-VERBICARO-ORSOMARSO`, 30 caratteri): con la rottura solo sullo spazio
+  finivano interi sulla riga primaria come **una sola parola**, che non aveva nulla su
+  cui andare a capo e poteva solo rimpicciolire. Sull'artefatto le righe primarie oltre
+  soglia passano **da 49 a 0**.
+- **I separatori dentro una riga sono preservati verbatim**; si perde solo quello sul
+  punto di rottura. Altrimenti `ABANO-MONTEGROTTO` verrebbe reso `ABANO MONTEGROTTO` —
+  un nome diverso da quello ufficiale, anche senza alcun a capo.
+- **Una riga primaria non può restare una particella isolata**: `SAN` sopra `PAOLO` si
+  legge come troncamento, non come a capo. Quando la primaria finirebbe su una
+  particella di testa, assorbe la parte successiva. Sullo snapshot i casi reali sono 5
+  (`SAN PAOLO`, `SAN GOTTARDO`, `SAN POLO MATESE`, `SAN FAUSTINO-CASIGLIANO`,
+  `SU CANALE`).
+
+## Selezione stazione: chiusi i due debiti del C3 (B3-full)
+
+- **`changeStation()` e `selectableStations` sono RIMOSSI.** Erano irraggiungibili
+  dalla UI dal C3 (il carosello è sparito dal prodotto) e sopravvivevano solo come
+  soggetto del test di regressione del fix race. Quel test è stato **riscritto su
+  `selectStation(_:)`**, che percorre lo stesso `invalidateSelection()`: la protezione è
+  ri-puntata, non persa.
+- **`AppEnvironment.allowsStationChange` non è più `selectableStations.count > 1`.** Con
+  la copertura nazionale quella condizione è banalmente vera, ed è peggio che stantia:
+  una condizione che non può più essere falsa nasconde ciò che doveva proteggere. Ora
+  dichiara ciò che conta davvero — se la sorgente è multi-stazione.
 
 ## Validazione a due assi: stazione E modalità (C3)
 

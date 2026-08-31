@@ -81,7 +81,6 @@ final class StationBoardViewModel {
 
     /// Stations the `Cambia` action cycles through (live: only the ones the backend
     /// serves; mock: the demo carousel).
-    private let selectableStations: [Station]
 
     /// Ids the LIVE board serves. Nil → no restriction (mock/demo sources). When set,
     /// a station outside it never triggers a fetch: the UI shows the honest
@@ -102,7 +101,6 @@ final class StationBoardViewModel {
          savedJourneys: [SavedJourney] = [],
          savedJourneysProvider: (() -> [SavedJourney])? = nil,
          catalog: StationCatalog? = nil,
-         selectableStations: [Station] = Station.demoStations,
          liveServedStationIDs: Set<String>? = nil) {
         self.service = service
         self.station = station
@@ -111,7 +109,6 @@ final class StationBoardViewModel {
         self.savedJourneys = savedJourneys
         self.savedJourneysProvider = savedJourneysProvider
         self.catalog = catalog
-        self.selectableStations = selectableStations
         self.liveServedStationIDs = liveServedStationIDs
     }
 
@@ -352,7 +349,10 @@ final class StationBoardViewModel {
     }
 
     /// Switch to an explicitly chosen station (the Partenze station picker) and reload.
-    /// The single path for changing station in the tab: `changeStation` delegates here.
+    /// The ONLY path for changing station. The `changeStation()` carousel that used to
+    /// delegate here was removed in B3-full: it had been unreachable from the UI since
+    /// C3 replaced the carousel with the search sheet, and cycling a national catalog
+    /// was never going to be usable.
     func selectStation(_ station: Station) async {
         guard allowsStationChange else { return }
         self.station = station
@@ -383,19 +383,4 @@ final class StationBoardViewModel {
         if inFlightFetches == 0 { isLoading = false }
     }
 
-    /// Cycle to the next selectable station and reload its board. In live mode the
-    /// cycle covers ONLY the stations the backend serves (Padova ↔ Roma Termini);
-    /// in mock mode it's the demo carousel.
-    func changeStation() async {
-        // Single-station sources (e.g. Padova scheduled timetable) stay put so the
-        // station title and the board rows can never disagree.
-        guard allowsStationChange else { return }
-        let all = selectableStations
-        guard !all.isEmpty else { return }
-        // Match by id: the same station can carry different metadata depending on where
-        // it came from (catalog entry vs code constant), so whole-struct equality would
-        // silently fail to advance.
-        let next = (all.firstIndex { $0.id == station.id }.map { $0 + 1 } ?? 0) % all.count
-        await selectStation(all[next])
-    }
 }

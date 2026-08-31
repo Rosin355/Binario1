@@ -1,5 +1,16 @@
 # 01 — MVP Scope
 
+> **STATO AL 2026-08-31 (chiusura B3-full).** Questo documento è stato scritto prima
+> della Milestone 1 e descriveva un MVP a dati mock. Buona parte è **superata dai
+> fatti**: il backend reale è in produzione da giugno 2026 e il catalogo stazioni è
+> nazionale da agosto. Le sezioni sotto sono state riallineate; dove una voce è stata
+> superata lo dice esplicitamente invece di essere cancellata, così resta leggibile
+> perché era in quella lista.
+>
+> La fonte di verità sulle decisioni è `12_DECISIONS.md`; la cronologia è
+> `11_PROGRESS.md`. In caso di conflitto, vincono quelli — questo documento è il più
+> vecchio dei tre.
+
 ## Scopo della prima versione
 
 La prima versione deve dimostrare tre cose:
@@ -20,16 +31,24 @@ La prima versione deve dimostrare tre cose:
 - Refresh manuale.
 - Auto-refresh ogni 30 secondi.
 
-### Ricerca stazione mock
+### Ricerca stazione — ~~mock~~ **catalogo reale nazionale** ✅
 
-- Lista stazioni mock.
-- Search field minimale.
-- Selezione stazione.
-- Persistenza ultima stazione selezionata con `AppStorage`.
+- ~~Lista stazioni mock.~~ **Fatto, e superato**: catalogo nazionale (2435 voci)
+  dall'artefatto condiviso `rfi-stations.tsv`, nomi ufficiali RFI (B1, poi B3-full).
+- Search field minimale. ✅
+- Selezione stazione. ✅ — apre il tabellone della stazione scelta.
+- ~~Persistenza ultima stazione selezionata con `AppStorage`.~~ **Non fatto, e non più
+  previsto in questa forma**: la stazione iniziale è derivata dalla sorgente
+  (`AppEnvironment.initialStation`). Se serve un "ricordati l'ultima stazione", è una
+  feature da decidere, non un residuo da completare.
 
-### Dettaglio treno base
+### Dettaglio treno base — **NON implementato**
 
-Al tap su una riga, mostra sheet o navigation detail con:
+Mai costruito. Non è un debito nascosto: è una feature mai iniziata, da ridecidere
+alla luce del posizionamento (un tabellone fisico non ha un "dettaglio treno"). Se
+resta in scope, va rispecificata.
+
+Al tap su una riga, mostrerebbe sheet o navigation detail con:
 
 - categoria + numero;
 - origine/destinazione;
@@ -61,21 +80,34 @@ Gestire:
 
 ### Dati mock
 
-Usare `mock/board-response.sample.json` come fonte iniziale.
+~~Usare `mock/board-response.sample.json` come fonte iniziale.~~ **Superato**: i mock
+restano solo come sorgente di Release App Store e per i test/preview. La sorgente reale
+è il backend.
 
 ## Funzionalità OUT of scope
+
+Ancora fuori scope:
 
 - Login.
 - Biglietti.
 - Pagamenti.
 - Push notification reali.
 - Geofencing.
-- Widget.
-- Live Activities.
-- Backend reale.
 - Language switch avanzato con onboarding dedicato.
-- Scraping lato app.
-- Pubblicazione App Store.
+- **Scraping lato app** — e resta un vincolo di architettura, non una preferenza: il
+  parsing della sorgente appartiene al backend.
+- **Ricerca tratta A→B / journey planning (B2)** — **rimosso dallo scope**, non
+  rinviato (`12_DECISIONS.md`). Aggiunto qui perché la sua assenza va dichiarata.
+
+Non più fuori scope (superate dai fatti):
+
+- ~~Backend reale.~~ **In produzione da 2026-06**: Edge Function `board` su Supabase,
+  con app token e rate limit. È oggi la sorgente dati dell'app.
+- ~~Widget.~~ ~~Live Activities.~~ **Prossimo blocco di lavoro**: mockup M1 approvati,
+  4 correzioni M1-fix pendenti. (`00_PDR.md` li elenca ancora fra i non-obiettivi: è la
+  contraddizione da sanare nella revisione del PRD.)
+- ~~Pubblicazione App Store.~~ Non ancora fatta, ma non più esclusa per principio: la
+  build Release è configurata (`.mock`, senza token) proprio per poterci arrivare.
 
 ## User stories MVP
 

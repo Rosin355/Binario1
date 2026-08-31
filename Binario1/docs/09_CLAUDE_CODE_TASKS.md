@@ -1,5 +1,18 @@
 # 09 — Task Breakdown per Claude Code
 
+> **STATO AL 2026-08-31 (chiusura B3-full): questo documento è ARCHIVIO STORICO.**
+> È il backlog della Milestone 1, e i suoi 13 task sono **tutti completati o superati**.
+> Non va usato per pianificare: i nomi che propone non esistono più nel codice
+> (`Binario1Service` → `TrainBoardService`, `RemoteBinario1Service` → `BackendBoardService`
+> + `URLSessionBackendBoardFetcher`), e il Task 12 descrive un service remoto "non attivo
+> di default" che è stato sostituito dall'adapter backend, in produzione da 2026-06.
+>
+> **Il lavoro corrente si pianifica per ticket** (B*/C*), registrati in `11_PROGRESS.md`
+> con le decisioni in `12_DECISIONS.md`. Lo stato reale e il lavoro successivo sono nella
+> sezione "STATO ALLA FINE DELLA FASE" in coda a `11_PROGRESS.md`.
+>
+> Conservato perché documenta come il progetto è stato avviato, non cosa fare adesso.
+
 ## Come lavorare
 
 Procedere a piccoli passi. Dopo ogni task, compilare e verificare.

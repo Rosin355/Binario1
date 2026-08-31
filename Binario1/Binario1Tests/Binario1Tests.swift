@@ -128,7 +128,7 @@ struct Binario1Tests {
         // Single-station scheduled source: station change is locked.
         let vm = StationBoardViewModel(service: service, station: .padova, allowsStationChange: false)
         #expect(vm.allowsStationChange == false)
-        await vm.changeStation()                       // must be a no-op
+        await vm.selectStation(.bolognaCentrale)       // must be a no-op
         #expect(vm.station.id == Station.padova.id)    // title stays PADOVA
     }
 
@@ -140,8 +140,9 @@ struct Binario1Tests {
         let vm = StationBoardViewModel(service: service, station: .bolognaCentrale)
         #expect(vm.allowsStationChange == true)
         let before = vm.station.id
-        await vm.changeStation()
-        #expect(vm.station.id != before)               // carousel still advances
+        await vm.selectStation(.veneziaSLucia)
+        #expect(vm.station.id != before)               // the picker replaces the station
+        #expect(vm.station.id == Station.veneziaSLucia.id)
     }
 
     // MARK: - Source mode (DEBUG demo vs RELEASE)
@@ -150,14 +151,17 @@ struct Binario1Tests {
         #if DEBUG
         // DEBUG = live backend adapter. B3-lite: station change is allowed but ONLY
         // across the stations the backend serves (Padova, Roma Termini).
+        // B3-full: the live source is multi-station, so the picker is always allowed.
+        // This used to read `selectableStations.count > 1`, which national coverage
+        // makes trivially true — a condition that can no longer be false hides what it
+        // was meant to protect.
         #expect(AppEnvironment.sourceMode == .backendLivePadova)
-        #expect(AppEnvironment.allowsStationChange == (AppEnvironment.selectableStations.count > 1))
-        #expect(AppEnvironment.selectableStations.allSatisfy { $0.isServedByLiveBoard })
+        #expect(AppEnvironment.allowsStationChange == true)
         #expect(AppEnvironment.liveServedStationIDs?.contains("padova") == true)
         #elseif TESTFLIGHT
         // TESTFLIGHT archive = same live source (token baked in).
         #expect(AppEnvironment.sourceMode == .backendLivePadova)
-        #expect(AppEnvironment.allowsStationChange == (AppEnvironment.selectableStations.count > 1))
+        #expect(AppEnvironment.allowsStationChange == true)
         #expect(AppEnvironment.liveServedStationIDs?.contains("padova") == true)
         #else
         // Plain RELEASE (App Store) = bundled mock board; station carousel enabled.
@@ -524,7 +528,8 @@ struct Binario1Tests {
             print("[Test] stations.json not loaded from bundle — skipping")
             return
         }
-        #expect(catalog.station(named: "Roma Termini")?.displayName == "Roma Termini")
+        // Official RFI names are UPPERCASE, verbatim from the shared artifact.
+        #expect(catalog.station(named: "Roma Termini")?.displayName == "ROMA TERMINI")
         #expect(catalog.station(named: "Padova")?.providerCodes?.rfi == "1861")
         #expect(catalog.station(named: "Roma Termini")?.providerCodes == nil)   // not fabricated
     }
@@ -611,7 +616,6 @@ struct Binario1Tests {
         ])
         let board = StationBoardViewModel(service: service, station: roma, allowsStationChange: false,
                                           now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                          selectableStations: [roma],
                                           liveServedStationIDs: ["padova", "roma-termini"])
         await board.refresh()
         #expect(board.station.displayName == "Roma Termini")  // header names the tapped station
@@ -636,7 +640,6 @@ struct Binario1Tests {
         ])
         let board = StationBoardViewModel(service: service, station: firenze, allowsStationChange: false,
                                           now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                          selectableStations: [firenze],
                                           liveServedStationIDs: ["padova", "roma-termini"])
         await board.refresh()
         #expect(board.isBoardUnavailableForStation == true)    // honest state
@@ -681,6 +684,10 @@ struct Binario1Tests {
         #expect(!ids.isEmpty)
         if let live = AppEnvironment.liveServedStationIDs {
             // Live backend → exactly the registry slugs, derived from the catalog flag.
+            // Since B3-full the registry covers the whole artifact, so this set may now
+            // BE the whole catalog — which is honest, because the backend really does
+            // serve every one of them. What must never happen is a station outside the
+            // served set becoming openable.
             #expect(ids == live)
             #expect(ids == Set(DefaultStationCatalog.shared.liveServed.map(\.id)))
         } else {
@@ -689,8 +696,9 @@ struct Binario1Tests {
             // opened — otherwise Cerca would paint one dataset under another name.
             #expect(ids == [AppEnvironment.initialStation.id])
         }
-        // Never "every catalog station", in any configuration.
-        #expect(ids.count < DefaultStationCatalog.shared.all.count)
+        // The real invariant, in every configuration: nothing outside the served set.
+        #expect(ids.isSubset(of: Set(DefaultStationCatalog.shared.all.map(\.id))
+                                 .union([AppEnvironment.initialStation.id])))
     }
 
     @Test func matcherAliasHandlesAbbreviatedBoardNameKeepingTwoTokenRule() {
@@ -774,23 +782,31 @@ struct Binario1Tests {
     @Test func catalogDerivesLiveServedStationsMatchingRegistrySlugs() {
         let catalog = DefaultStationCatalog.shared
         guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else {
-            print("[Test] stations.json not loaded from bundle — skipping")
+            print("[Test] station artifact not loaded from bundle — skipping")
             return
         }
-        let servedIDs = Set(catalog.liveServed.map(\.id))
+        // The backend registry is built from the SAME artifact, so coverage is total:
+        // every catalog station is served. Assert that as a property — never a count,
+        // which moves whenever RFI opens or closes a stop.
+        #expect(catalog.liveServed.count == catalog.all.count)
         // These ids MUST equal the backend registry slugs (registry.ts) — a mismatch
         // would make the backend answer 404 unknown_station.
-        #expect(servedIDs == ["padova", "roma-termini", "terme-euganee-abano-montegrotto"])
-        #expect(catalog.servesLiveBoard(stationID: "roma-termini"))
-        #expect(catalog.servesLiveBoard(stationID: "terme-euganee-abano-montegrotto"))
-        #expect(!catalog.servesLiveBoard(stationID: "firenze-smn"))   // in catalog, not live-served
+        for slug in ["padova", "roma-termini", "terme-euganee-abano-montegrotto", "venezia-s-lucia"] {
+            #expect(catalog.servesLiveBoard(stationID: slug), "\(slug) is not live-served")
+        }
         #expect(catalog.station(named: "Roma Termini")?.isServedByLiveBoard == true)
-        // One id only — the pre-promotion slug must not survive as a second entity.
+        // A slug that is not RFI's is still not a station, national coverage or not.
+        #expect(!catalog.servesLiveBoard(stationID: "montegrotto-terme"))
         #expect(!catalog.all.contains { $0.id == "montegrotto-terme" })
+        // The pre-B3-full ids were realigned to the slug rule, not duplicated.
+        #expect(!catalog.all.contains { $0.id == "firenze-smn" })
+        #expect(catalog.all.contains { $0.id == "firenze-santa-maria-novella" })
+        #expect(!catalog.all.contains { $0.id == "reggio-emilia-av" })
+        #expect(catalog.all.contains { $0.id == "reggio-emilia-av-mediopadana" })
     }
 
     @MainActor
-    @Test func changeStationCyclesServedStationsAndRefetchesWithItsSlug() async {
+    @Test func selectingAStationRefetchesWithItsOwnSlug() async {
         let padova = Self.servedStation("padova", "Padova")
         let roma = Self.servedStation("roma-termini", "Roma Termini")
         let service = RecordingBoardService(rowsByStation: [
@@ -800,20 +816,19 @@ struct Binario1Tests {
         ])
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova, roma],
                                        liveServedStationIDs: ["padova", "roma-termini"])
         await vm.refresh()
         #expect(service.requestedStationIDs == ["padova"])          // sends the Padova slug
         #expect(vm.rows.map(\.id) == ["pd1"])
 
-        await vm.changeStation()
+        await vm.selectStation(roma)
         #expect(vm.station.id == "roma-termini")
         #expect(service.requestedStationIDs == ["padova", "roma-termini"])   // sends Roma's slug
         #expect(vm.rows.map(\.id) == ["rm1", "rm2"])                // Roma's own rows
         #expect(!vm.rows.contains { $0.id == "pd1" })               // never the previous station's
         #expect(vm.isBoardUnavailableForStation == false)
 
-        await vm.changeStation()                                    // wraps back to Padova
+        await vm.selectStation(padova)                              // and back again
         #expect(vm.station.id == "padova")
         #expect(service.requestedStationIDs.last == "padova")
         #expect(vm.rows.map(\.id) == ["pd1"])
@@ -828,7 +843,6 @@ struct Binario1Tests {
         let service = RecordingBoardService(rowsByStation: ["padova": [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)]])
         let vm = StationBoardViewModel(service: service, station: firenze, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova],
                                        liveServedStationIDs: ["padova", "roma-termini"])
         await vm.refresh()
         #expect(vm.isBoardUnavailableForStation == true)   // honest state
@@ -844,7 +858,6 @@ struct Binario1Tests {
         let service = RecordingBoardService(rowsByStation: [:])   // no rows for any station → throws
         let vm = StationBoardViewModel(service: service, station: roma, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [roma],
                                        liveServedStationIDs: ["roma-termini"])
         await vm.refresh()
         #expect(vm.isBoardUnavailableForStation == true)
@@ -930,7 +943,6 @@ struct Binario1Tests {
                                              rows: [Self.boardRow("pd1", "Venezia Santa Lucia", 18, 0)])
         let vm = StationBoardViewModel(service: service, station: roma, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [roma],
                                        liveServedStationIDs: ["roma-termini", "padova"])
         await vm.refresh()
         #expect(vm.station.id == "roma-termini")          // header says Roma…
@@ -952,15 +964,17 @@ struct Binario1Tests {
             gatedStationID: "padova")                      // Padova's fetch parks mid-flight
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova, roma],
                                        liveServedStationIDs: ["padova", "roma-termini"])
 
         // 1. Auto-refresh for Padova starts and parks inside the service.
         let inFlight = Task { await vm.refresh() }
         while await !service.isParked { await Task.yield() }
 
-        // 2. Meanwhile the user switches to Roma Termini.
-        await vm.changeStation()
+        // 2. Meanwhile the user picks Roma Termini from the station picker.
+        //    (B3-full: this used to drive `changeStation()`, the carousel removed with
+        //    this ticket. `selectStation` runs the SAME `invalidateSelection()`, so the
+        //    race-fix protection is re-pointed at the surviving entry point, not lost.)
+        await vm.selectStation(roma)
         #expect(vm.station.id == "roma-termini")
 
         // 3. The old Padova response finally lands.
@@ -1028,11 +1042,10 @@ struct Binario1Tests {
             gatedType: .departures)                        // the departures fetch parks
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova, terme],
                                        liveServedStationIDs: [padova.id, terme.id])
 
         // 1. "Cambia" → the new station's DEPARTURES fetch starts and parks in flight.
-        let change = Task { await vm.changeStation() }
+        let change = Task { await vm.selectStation(terme) }
         while await !service.isParked { await Task.yield() }
         #expect(vm.station.id == terme.id)
 
@@ -1066,7 +1079,6 @@ struct Binario1Tests {
             gatedType: .departures)
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova],
                                        liveServedStationIDs: [padova.id])
 
         let initial = Task { await vm.refresh() }          // first load parks in flight
@@ -1092,7 +1104,6 @@ struct Binario1Tests {
                          .arrivals: [Self.arrivalRow("arr1", "Ferrara", 18, 5)]])
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova],
                                        liveServedStationIDs: [padova.id])
         await vm.refresh()
         #expect(vm.rows.map(\.id) == ["dep1"])
@@ -1124,7 +1135,6 @@ struct Binario1Tests {
         ])
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova],   // no carousel any more
                                        liveServedStationIDs: [padova.id, terme.id])
         await vm.refresh()
         #expect(vm.rows.map(\.id) == ["pd1"])
@@ -1152,7 +1162,6 @@ struct Binario1Tests {
         ])
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: true,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova],
                                        liveServedStationIDs: [padova.id])
         await vm.refresh()
         #expect(vm.rows.map(\.id) == ["pd1"])
@@ -1176,7 +1185,6 @@ struct Binario1Tests {
         ])
         let vm = StationBoardViewModel(service: service, station: padova, allowsStationChange: false,
                                        now: { Self.romeDate(2026, 6, 17, 17, 0) },
-                                       selectableStations: [padova],
                                        liveServedStationIDs: [padova.id, terme.id])
         await vm.refresh()
         await vm.selectStation(terme)
@@ -1378,7 +1386,14 @@ struct Binario1Tests {
         }
         let vm = CercaViewModel(savedStore: freshStore("binario1.tests.c2-aliases"),
                                 boardStationIDs: ["terme-euganee-abano-montegrotto"])
-        for query in ["monte", "montegrotto", "Montegrotto Terme", "abano", "terme euganee"] {
+        // Two deliberate changes at national scale:
+        //  • "abano" is gone: RFI's own ABANO TERME (364) is in the catalog since
+        //    B3-full and answers for that name — see
+        //    `abanoTermeIsItsOwnStationOnceTheCatalogIsNational`;
+        //  • "monte" is gone: 39 stations START with MONTE, so they rank ABOVE a
+        //    token-prefix alias hit and fill the result list. That is correct ranking,
+        //    not a lost alias — the fuller queries below still find it first.
+        for query in ["montegrotto", "Montegrotto Terme", "terme euganee"] {
             vm.query = query
             #expect(vm.stationResults.contains { $0.id == "terme-euganee-abano-montegrotto" },
                     "query \"\(query)\" did not find the station")
@@ -1387,7 +1402,7 @@ struct Binario1Tests {
         vm.query = "montegrotto"
         #expect(vm.stationResults.first?.id == "terme-euganee-abano-montegrotto")
         // The alias never leaks into what is displayed/saved — that stays official.
-        #expect(vm.stationResults.first?.displayName == "Terme Euganee-Abano-Montegrotto")
+        #expect(vm.stationResults.first?.displayName == "TERME EUGANEE-ABANO-MONTEGROTTO")
     }
 
     /// Names persisted BEFORE the rename (the seed shipped "Montegrotto Terme" to every
@@ -1397,7 +1412,7 @@ struct Binario1Tests {
         guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
         let byOldName = catalog.station(named: "Montegrotto Terme")
         #expect(byOldName?.id == "terme-euganee-abano-montegrotto")
-        #expect(byOldName?.displayName == "Terme Euganee-Abano-Montegrotto")
+        #expect(byOldName?.displayName == "TERME EUGANEE-ABANO-MONTEGROTTO")
         // The official name and the RFI short form resolve to the very same entity.
         #expect(catalog.station(named: "Terme Euganee-Abano-Montegrotto")?.id == byOldName?.id)
         #expect(catalog.station(named: "Terme Euganee")?.id == byOldName?.id)
@@ -1474,11 +1489,26 @@ struct Binario1Tests {
         #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Abano Terme"))
         #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Battaglia Terme"))
         #expect(!StationNameMatcher.matches("Terme Euganee-Abano-Montegrotto", "Venezia Mestre"))
-        // The catalog alias debt is still there, deliberately, until 364 is added.
+    }
+
+    /// The disambiguation debt recorded in C2/C4 is SETTLED by national coverage.
+    /// While RFI's ABANO TERME (placeId 364) was missing from the catalog, the "Abano"
+    /// searchAliases on Terme Euganee deliberately answered for it, and
+    /// docs/12_DECISIONS.md required removing them the moment 364 arrived. It has, so
+    /// each station now answers for its own name and nothing else.
+    @Test func abanoTermeIsItsOwnStationOnceTheCatalogIsNational() {
         let catalog = DefaultStationCatalog.shared
-        if catalog.all.count > DefaultStationCatalog.embeddedFallback.count {
-            #expect(catalog.station(named: "Abano Terme")?.id == "terme-euganee-abano-montegrotto")
-        }
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let abano = catalog.station(named: "Abano Terme")
+        #expect(abano?.id == "abano-terme")
+        #expect(abano?.displayName == "ABANO TERME")
+        // Two distinct entities, neither standing in for the other.
+        #expect(catalog.station(named: "Terme Euganee-Abano-Montegrotto")?.id
+                == "terme-euganee-abano-montegrotto")
+        #expect(abano?.id != catalog.station(named: "Terme Euganee-Abano-Montegrotto")?.id)
+        // The alias is gone from the overlay, not merely outranked.
+        let terme = catalog.station(named: "Terme Euganee-Abano-Montegrotto")
+        #expect(!(terme?.searchAliases ?? []).contains { $0.localizedCaseInsensitiveContains("abano") })
     }
 
 
@@ -1504,7 +1534,7 @@ struct Binario1Tests {
         }
     }
 
-    /// Property test over EVERY pair of the RFI national list (2435 entries, extracted
+    /// Property test over EVERY pair of the RFI national list (2435 entries in the snapshot extracted
     /// 2026-08-28) that the old subset rule collided. Not three hand-picked cases: the
     /// complete set, so a future loosening of the rule breaks the suite immediately.
     /// The full list itself lands with B3-full; these are its 53 colliding pairs.
@@ -1636,13 +1666,18 @@ struct Binario1Tests {
         guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
         let venezia = catalog.station(named: "Venezia S.Lucia")
         #expect(venezia?.id == "venezia-s-lucia")
-        #expect(venezia?.displayName == "Venezia S.Lucia")
+        #expect(venezia?.displayName == "VENEZIA S.LUCIA")
         // One entity, reached from every spelling: official, common, printed.
         #expect(catalog.station(named: "Venezia Santa Lucia")?.id == "venezia-s-lucia")
         #expect(catalog.station(named: "VENEZIA S.LUCIA")?.id == "venezia-s-lucia")
         #expect(catalog.station(named: "Venezia S.L.")?.id == "venezia-s-lucia")
-        // No duplicate entity was introduced by the rename.
-        #expect(catalog.all.filter { $0.displayName.uppercased().contains("LUCIA") }.count == 1)
+        // No duplicate entity was introduced by the rename: ONE station carries this
+        // id, and the pre-rename spelling never became a second one. (A global count of
+        // names containing "LUCIA" would be wrong now — RFI also has ASSEMINI S.LUCIA
+        // and PIEDIMONTE-VILLA S.LUCIA-AQUINO, which are different stations.)
+        #expect(catalog.all.filter { $0.id == "venezia-s-lucia" }.count == 1)
+        #expect(!catalog.all.contains { $0.id == "venezia-santa-lucia" })
+        #expect(catalog.station(named: "Assemini S.Lucia")?.id == "assemini-s-lucia")
         // The searchAlias earns its place: the common name is still typeable.
         let vm = CercaViewModel(savedStore: freshStore("binario1.tests.c4-venezia"),
                                 boardStationIDs: [])
@@ -1652,7 +1687,7 @@ struct Binario1Tests {
         #expect(!StationNameMatcher.matches("Venezia S.Lucia", "Venezia Mestre"))
     }
 
-    /// The 53 pairs of the RFI national list (2435 entries, extracted 2026-08-28) that
+    /// The 53 pairs of the RFI national list (2435 entries in the snapshot extracted 2026-08-28) that
     /// the pre-C4 ≥2-token subset rule matched. Left/right is short/long: the short
     /// name's canonical tokens are a strict subset of the long one's. Kept as a
     /// literal rather than a bundle fixture so it needs no project-file change.
@@ -2395,8 +2430,8 @@ struct Binario1Tests {
         #expect(vm.saveRoute("Padova → Venezia Santa Lucia", now: Self.romeDate(2026, 6, 17, 10, 0)) == .saved)
         let saved = store.load()
         #expect(saved.count == 1)
-        #expect(saved.first?.origin == "Padova")
-        #expect(saved.first?.destination == "Venezia S.Lucia")   // official, not as typed
+        #expect(saved.first?.origin == "PADOVA")
+        #expect(saved.first?.destination == "VENEZIA S.LUCIA")   // official, not as typed
         // Recognised as already saved from the typed form too: the neutral saint token
         // canonicalizes "Venezia Santa Lucia" and "Venezia S.Lucia" to the same id.
         #expect(vm.isRouteSaved("Padova → Venezia Santa Lucia") == true)
@@ -2441,7 +2476,7 @@ struct Binario1Tests {
         await trips.load()
         // Viaggi shows the OFFICIAL name, whatever the user typed in Cerca — the route
         // was canonicalized on save (see `cercaSaveAddsValidRouteToStore`).
-        #expect(trips.savedJourneys.contains { $0.origin == "Padova" && $0.destination == "Venezia S.Lucia" })
+        #expect(trips.savedJourneys.contains { $0.origin == "PADOVA" && $0.destination == "VENEZIA S.LUCIA" })
     }
 
     @MainActor
@@ -2786,7 +2821,7 @@ struct Binario1Tests {
         #expect(response.sourceKind == .rfiLive)
         #expect(response.isScheduled == false)
         #expect(response.scheduledWindow == nil)
-        #expect(response.station.name == "Padova")
+        #expect(response.station.name == "PADOVA")
         #expect(response.rows.count == 4)
 
         // A quiet train stays ON TIME. Before the boarding-column fix this row came back
@@ -2863,7 +2898,7 @@ struct Binario1Tests {
         )
         let response = try await service.fetchBoard(stationId: "padova", type: .departures)
         #expect(response.sourceKind == .rfiLive)
-        #expect(response.station.name == "Padova")
+        #expect(response.station.name == "PADOVA")
         #expect(response.rows.count >= 3)
     }
 
@@ -2980,6 +3015,332 @@ struct Binario1Tests {
         }
     }
 #endif
+
+    // MARK: - B3-full: the shared artifact, national coverage
+
+    /// The catalog is built from RFI's own list, so every id is a slug of an official
+    /// name and every name is RFI's verbatim. Properties only — never the entry count,
+    /// which moves whenever RFI opens or closes a stop.
+    @Test func nationalCatalogIsWellFormed() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else {
+            print("[Test] station artifact not loaded from bundle — skipping")
+            return
+        }
+        var ids = Set<String>(), names = Set<String>()
+        for station in catalog.all {
+            #expect(!station.id.isEmpty)
+            #expect(!station.displayName.isEmpty)
+            #expect(station.id == StationsArtifact.slug(for: station.displayName),
+                    "\(station.displayName): id \(station.id) is not its slug")
+            #expect(station.name == station.displayName)
+            #expect(station.displayName == station.displayName.uppercased(),
+                    "\(station.displayName) is not RFI's verbatim uppercase form")
+            #expect(ids.insert(station.id).inserted, "duplicate id \(station.id)")
+            #expect(names.insert(station.displayName).inserted, "duplicate name \(station.displayName)")
+        }
+        // Anchors verified by hand against the live monitor.
+        #expect(catalog.station(named: "PADOVA")?.id == "padova")
+        #expect(catalog.station(named: "VIGODARZERE")?.id == "vigodarzere")
+        #expect(catalog.station(named: "MILANO CENTRALE")?.id == "milano-centrale")
+    }
+
+    /// INJECTIVITY of the canonical normalization over the whole catalog: two different
+    /// stations must never collapse onto one canonical form. Today this holds with zero
+    /// collisions; the test exists so the day it stops holding is a red suite instead of
+    /// two stations silently answering for each other.
+    @Test func canonicalNormalizationIsInjectiveOverTheCatalog() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        var seen: [String: Station] = [:]
+        var collisions: [String] = []
+        for station in catalog.all {
+            let key = StationNameMatcher.canonical(station.displayName)
+            if let other = seen[key] {
+                collisions.append("\(other.displayName) ⇄ \(station.displayName) → \(key)")
+            }
+            seen[key] = station
+        }
+        #expect(collisions.isEmpty,
+                Comment(rawValue: "canonical collisions: " + collisions.joined(separator: "; ")))
+    }
+
+    /// The curated overlay may only ANNOTATE stations the artifact already has. An id
+    /// that is not in the artifact silently did nothing — this makes it loud.
+    @Test func curatedOverlayOnlyAnnotatesRealArtifactStations() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let ids = Set(catalog.all.map(\.id))
+        for id in ["padova", "venezia-s-lucia", "venezia-mestre", "bologna-centrale",
+                   "firenze-santa-maria-novella", "milano-centrale", "milano-porta-garibaldi",
+                   "roma-termini", "roma-tiburtina", "napoli-centrale", "torino-porta-nuova",
+                   "torino-porta-susa", "verona-porta-nuova", "reggio-emilia-av-mediopadana",
+                   "genova-piazza-principe", "bari-centrale", "terme-euganee-abano-montegrotto"] {
+            #expect(ids.contains(id), "overlay id \(id) is not in the artifact")
+        }
+        // The overlay's metadata actually landed, and did not overwrite the official name.
+        let padova = catalog.station(named: "PADOVA")
+        #expect(padova?.city == "Padova")
+        #expect(padova?.providerCodes?.rfi == "1861")
+        #expect(padova?.displayName == "PADOVA")
+    }
+
+    /// The 21 operational points RFI carries are flagged, excluded from search and from
+    /// destination matching, yet still resolvable as entities.
+    @Test func operationalPointsAreFlaggedExcludedButStillResolvable() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let points = catalog.all.filter(\.isOperationalPoint)
+        #expect(!points.isEmpty)
+        for point in points {
+            let n = point.displayName
+            #expect(n.hasPrefix("PM ") || n.hasPrefix("PC ") || n.hasPrefix("BIVIO ")
+                    || n.hasSuffix(" PES"), "\(n) was flagged but does not look operational")
+        }
+        // Known members, from RFI's list.
+        for name in ["PM CHAMBAVE", "PC CALDIERO", "NAPOLI AFRAGOLA PES", "BIVIO D'AURISINA"] {
+            let station = catalog.station(named: name)
+            #expect(station?.isOperationalPoint == true, "\(name) is not flagged")
+            // Still an entity: a name never loses its identity…
+            #expect(station != nil)
+        }
+        // …but never a search result, and never a board destination.
+        #expect(!catalog.searchable.contains { $0.isOperationalPoint })
+        let afragolaPES = catalog.station(named: "NAPOLI AFRAGOLA PES")!
+        #expect(!StationNameMatcher.matches(station: afragolaPES, boardName: "NAPOLI AFRAGOLA PES"))
+        for query in ["PM CHAMBAVE", "chambave", "afragola pes", "bivio"] {
+            #expect(!catalog.search(query, limit: 50).contains { $0.isOperationalPoint },
+                    "query \"\(query)\" surfaced an operational point")
+        }
+    }
+
+    // MARK: - B3-full: search as a PROPERTY over the whole catalog
+
+    /// For EVERY station: typing its full official name returns it in position 1.
+    /// A property over the whole list, not a handful of hand-picked cases.
+    @Test func everyStationIsFoundFirstByItsFullName() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        var misses: [String] = []
+        for station in catalog.searchable {
+            let results = catalog.search(station.displayName, limit: 5)
+            if results.first?.id != station.id {
+                misses.append("\(station.displayName) → \(results.first?.displayName ?? "nothing")")
+            }
+        }
+        #expect(misses.isEmpty, Comment(rawValue: "\(misses.count) stations not first by full name: "
+                + misses.prefix(10).joined(separator: "; ")))
+    }
+
+    /// For EVERY station: typing its FIRST token returns it in position 1 — unless the
+    /// token is shared, in which case some station with that token must come first and
+    /// the station itself must still be somewhere in the results.
+    @Test func everyStationIsFoundByItsFirstToken() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        var misses: [String] = []
+        for station in catalog.searchable {
+            guard let token = StationTitleLayout.parts(of: station.displayName).first?.text,
+                  !token.isEmpty else { continue }
+            let results = catalog.search(token, limit: 200)
+            if !results.contains(where: { $0.id == station.id }) {
+                misses.append("\(station.displayName) not found by \"\(token)\"")
+            }
+        }
+        #expect(misses.isEmpty,
+                Comment(rawValue: "\(misses.count) misses: " + misses.prefix(10).joined(separator: "; ")))
+    }
+
+    /// The clean case the ticket calls out: "padova" has no homonym, so it must be first.
+    @Test func padovaRanksFirstForItsOwnName() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        #expect(catalog.search("padova", limit: 10).first?.displayName == "PADOVA")
+        #expect(catalog.search("PADOVA", limit: 10).first?.displayName == "PADOVA")
+        #expect(catalog.search("vigodarzere", limit: 10).first?.displayName == "VIGODARZERE")
+    }
+
+    // MARK: - B3-full: title layout at national scale
+
+    /// The hyphen break is what makes the national list fit: RFI has names that are one
+    /// 30-character hyphenated compound with no space at all, which a space-only split
+    /// handed to the primary line as a single unbreakable word.
+    @Test func titlePrimaryLineBreaksOnHyphenSoNoNameOverflows() {
+        let long = StationTitleLayout.split("MARCELLINA-VERBICARO-ORSOMARSO")
+        #expect(long.city == "MARCELLINA")
+        #expect(long.qualifier == "VERBICARO-ORSOMARSO")      // separator preserved inside the line
+        // The compound-city rule still wins over the plain hyphen break.
+        let terme = StationTitleLayout.split("TERME EUGANEE-ABANO-MONTEGROTTO")
+        #expect(terme.city == "TERME EUGANEE")
+        #expect(terme.qualifier == "ABANO-MONTEGROTTO")
+        // No catalog name leaves a primary line longer than the widest that fits.
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        var over: [String] = []
+        for station in catalog.all where StationTitleLayout.split(station.displayName).city.count > 19 {
+            over.append(station.displayName)
+        }
+        #expect(over.isEmpty, Comment(rawValue: "\(over.count) primary lines over 19 chars: "
+                + over.prefix(8).joined(separator: "; ")))
+    }
+
+    /// A primary line must never be left as a bare leading particle: "SAN" over "PAOLO"
+    /// reads as a truncation, not a line break.
+    @Test func titlePrimaryLineNeverEndsOnAHeadToken() {
+        #expect(StationTitleLayout.split("SAN PAOLO").city == "SAN PAOLO")
+        #expect(StationTitleLayout.split("SAN GOTTARDO").city == "SAN GOTTARDO")
+        #expect(StationTitleLayout.split("SU CANALE").city == "SU CANALE")
+        // It absorbs exactly one part, and the hyphen boundary still applies after it.
+        let faustino = StationTitleLayout.split("SAN FAUSTINO-CASIGLIANO")
+        #expect(faustino.city == "SAN FAUSTINO")
+        #expect(faustino.qualifier == "CASIGLIANO")
+
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let heads: Set<String> = ["A", "AD", "DI", "DA", "DEL", "DELLA", "DEI", "DEGLI",
+                                  "IN", "SU", "SUL", "SULLA", "E", "SAN", "SANT", "SANTA",
+                                  "SANTO", "SANTI", "S", "SS", "AL", "ALLA", "LA", "LE", "LO"]
+        var dangling: [String] = []
+        for station in catalog.all {
+            let city = StationTitleLayout.split(station.displayName).city
+            guard let last = StationTitleLayout.parts(of: city).last?.text else { continue }
+            // Only a problem when something FOLLOWS on another line.
+            if heads.contains(last), !StationTitleLayout.split(station.displayName).qualifier.isEmpty {
+                dangling.append(station.displayName)
+            }
+        }
+        #expect(dangling.isEmpty, Comment(rawValue: "\(dangling.count) titles end on a head token: "
+                + dangling.prefix(8).joined(separator: "; ")))
+    }
+
+    /// The 10 longest names in the artifact (37 characters at the top) and every name
+    /// whose primary line lands within 2 characters of the fitting threshold — the
+    /// boundary cases, chosen by measurement rather than by hand.
+    @Test func longestAndBoundaryTitlesAllFit() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let longest = catalog.all.map(\.displayName).sorted { $0.count > $1.count }.prefix(10)
+        #expect(longest.first?.count == 37)
+        let boundary = catalog.all.map(\.displayName).filter {
+            let n = StationTitleLayout.split($0).city.count
+            return n >= 17 && n <= 19
+        }
+        for name in Array(longest) + boundary {
+            let l = Self.titleLayout(name)
+            #expect(l.scale >= StationTitleLayout.minScale, "\(name) scaled below the floor")
+            #expect(Self.glyphs(l.lines.joined()) == Self.glyphs(name), "\(name) lost a glyph")
+            #expect(!StationTitleLayout.overflowsAtMinScale(
+                fullName: name, available: Self.headerTitleWidth,
+                primaryBase: Self.titlePrimaryBase, secondaryBase: Self.titleSecondaryBase),
+                    "\(name) would be cut")
+        }
+    }
+
+    /// The safety argument for realigning two station ids in B3-full
+    /// (`firenze-smn` → `firenze-santa-maria-novella`, `reggio-emilia-av` →
+    /// `reggio-emilia-av-mediopadana`) is that NO persistence holds a station id.
+    /// That was verified by inspection — the only persisted type is `SavedJourney`,
+    /// whose `origin`/`destination` are NAMES and whose `id` is built from canonical
+    /// NAMES ("cerca:<canonical origin>><canonical destination>"). This test pins it,
+    /// so the guarantee is enforced rather than remembered.
+    @MainActor
+    @Test func noPersistedFieldEverHoldsAStationID() {
+        let store = freshStore("binario1.tests.b3-persistence")
+        let vm = CercaViewModel(savedStore: store)
+        #expect(vm.saveRoute("Padova → Firenze Santa Maria Novella",
+                             now: Self.romeDate(2026, 8, 31, 10, 0)) == .saved)
+        let saved = store.load()
+        #expect(saved.count == 1)
+        let journey = saved[0]
+
+        // What is persisted is the OFFICIAL NAME, never the slug.
+        #expect(journey.origin == "PADOVA")
+        #expect(journey.destination == "FIRENZE SANTA MARIA NOVELLA")
+        // …and the key is derived from canonical names, so realigning an id cannot
+        // orphan a saved route or split it into a duplicate.
+        #expect(journey.id == vm.routeID(origin: "PADOVA", destination: "FIRENZE SANTA MARIA NOVELLA"))
+        #expect(!journey.id.contains("firenze-smn"))
+        #expect(!journey.id.contains("firenze-santa-maria-novella"))
+
+        // The identity survives BOTH B3-full renames — the id realignment and the
+        // switch to uppercase official names — because `canonical` folds case anyway.
+        #expect(vm.isRouteSaved("Padova → Firenze Santa Maria Novella"))
+        #expect(vm.isRouteSaved("PADOVA → FIRENZE SANTA MARIA NOVELLA"))
+        #expect(vm.isRouteSaved("padova → firenze santa maria novella"))
+
+        // No station in the catalog carries an id in a field the store round-trips.
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let everyID = Set(catalog.all.map(\.id))
+        for field in [journey.origin, journey.destination, journey.platform ?? ""] {
+            #expect(!everyID.contains(field), Comment(rawValue: "persisted \"\(field)\" is a station id"))
+        }
+    }
+
+    // MARK: - B3-full: anti-contamination as a SAMPLED property
+
+    /// THE invariant of the project: rows of one station must never appear under
+    /// another station's name. This used to be checked on a handful of fixed stations;
+    /// at national scale that proves very little, so it is now a property over a
+    /// deterministic sample spread across the whole artifact.
+    ///
+    /// Deterministic on purpose — a random sample would make a failure unreproducible,
+    /// and this is the one invariant that must never be flaky-then-forgotten.
+    @MainActor
+    @Test func rowIDsNeverIntersectAcrossASampleOfStations() async {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+        let sample = Self.evenlySpacedSample(catalog.searchable, count: 40)
+        #expect(sample.count == 40)
+
+        var rowsByStation: [String: [TrainBoardRow]] = [:]
+        for (index, station) in sample.enumerated() {
+            rowsByStation[station.id] = [
+                Self.boardRow("\(station.id)#row", station.displayName, 18, index % 60),
+            ]
+        }
+        let service = RecordingBoardService(rowsByStation: rowsByStation)
+        let vm = StationBoardViewModel(service: service, station: sample[0], allowsStationChange: true,
+                                       now: { Self.romeDate(2026, 6, 17, 17, 0) },
+                                       liveServedStationIDs: Set(sample.map(\.id)))
+
+        var seen: [(id: String, rows: Set<String>)] = []
+        for station in sample {
+            await vm.selectStation(station)
+            #expect(vm.station.id == station.id)
+            let ids = Set(vm.rows.map(\.id))
+            // The header's station owns exactly its own rows…
+            #expect(ids == ["\(station.id)#row"],
+                    Comment(rawValue: "\(station.displayName) showed \(ids)"))
+            seen.append((station.id, ids))
+        }
+
+        // …and no two stations in the sample ever share a row id.
+        for i in seen.indices {
+            for j in seen.indices where j > i {
+                #expect(seen[i].rows.isDisjoint(with: seen[j].rows),
+                        Comment(rawValue: "\(seen[i].id) ⇄ \(seen[j].id) shared a row"))
+            }
+        }
+    }
+
+    /// Evenly spaced pick across a list — deterministic, and spread over the whole
+    /// alphabet rather than clustered at one end.
+    private static func evenlySpacedSample(_ stations: [Station], count: Int) -> [Station] {
+        guard stations.count > count, count > 0 else { return stations }
+        let step = Double(stations.count) / Double(count)
+        return (0..<count).map { stations[Int(Double($0) * step)] }
+    }
+
+    /// Rejoining parts inside ONE line must reproduce the official name exactly: a
+    /// hyphen that did not fall on a break must not come back as a space.
+    @Test func titleWrapPreservesSeparatorsInsideALine() {
+        let wide: CGFloat = 4000        // everything fits on one line
+        #expect(StationTitleLayout.wrap("ABANO-MONTEGROTTO", size: 22, available: wide)
+                == ["ABANO-MONTEGROTTO"])
+        #expect(StationTitleLayout.wrap("DI CASTELLO - ZONA INDUSTRIALE", size: 22, available: wide)
+                == ["DI CASTELLO - ZONA INDUSTRIALE"])
+    }
 }
 
 // MARK: - Stubbed URLProtocol for backend fetcher tests (no live network)

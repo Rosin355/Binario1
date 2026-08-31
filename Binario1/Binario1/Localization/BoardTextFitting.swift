@@ -87,6 +87,57 @@ enum StationTitleLayout {
     /// space-only boundary check would miss it and split the compound in half.
     private static let partSeparators: Set<Character> = [" ", "-"]
 
+    /// Leading particles that must never be left DANGLING at the end of a line. RFI's
+    /// national list has names whose first part is one of these — "SAN PAOLO", "SAN
+    /// GOTTARDO", "SU CANALE" — and breaking after it renders "SAN" over "PAOLO",
+    /// which reads as a truncation rather than a line break. When the primary line
+    /// would end on one, it absorbs the next part instead.
+    private static let headTokens: Set<String> = [
+        "A", "AD", "AI", "AL", "ALLA", "ALLE", "AGLI", "D", "DA", "DAL", "DALLA",
+        "DE", "DEI", "DEGLI", "DEL", "DELLA", "DELLE", "DI", "E", "ED", "IN",
+        "LA", "LE", "LO", "SU", "SUL", "SULLA", "SULLE",
+        "S", "SS", "SAN", "SANT", "SANTA", "SANTO", "SANTI",
+    ]
+
+    /// A name's parts, each with the separator RUN that followed it (" ", "-" or " - ").
+    /// Keeping the run verbatim matters: rejoining parts INSIDE one line must reproduce
+    /// the official name exactly — "ABANO-MONTEGROTTO" must not come back as "ABANO
+    /// MONTEGROTTO". Only the separator AT a line break is dropped.
+    static func parts(of text: String) -> [(text: String, separator: String)] {
+        var result: [(text: String, separator: String)] = []
+        var current = ""
+        var separator = ""
+        for character in text {
+            if partSeparators.contains(character) {
+                if !current.isEmpty {
+                    result.append((text: current, separator: ""))
+                    current = ""
+                }
+                if !result.isEmpty { separator.append(character) }
+            } else {
+                if !separator.isEmpty, !result.isEmpty {
+                    result[result.count - 1].separator = separator
+                    separator = ""
+                }
+                current.append(character)
+            }
+        }
+        if !current.isEmpty { result.append((text: current, separator: "")) }
+        return result
+    }
+
+    /// Rejoin parts into one line using their own separators. The final part's trailing
+    /// separator is dropped: that is where the break happened.
+    static func join(_ parts: ArraySlice<(text: String, separator: String)>) -> String {
+        guard let last = parts.indices.last else { return "" }
+        var out = ""
+        for i in parts.indices {
+            out += parts[i].text
+            if i != last { out += parts[i].separator.isEmpty ? " " : parts[i].separator }
+        }
+        return out
+    }
+
     /// The compound city `upper` starts with, plus what follows it — but only when the
     /// compound ends on a real boundary (end of name, space or hyphen), never mid-word.
     private static func compoundPrefix(of upper: String) -> (city: String, rest: String)? {
@@ -100,12 +151,29 @@ enum StationTitleLayout {
     }
 
     /// Full name → (city line, qualifier). Uppercased, never shortened.
+    ///
+    /// The primary line breaks on a HYPHEN as well as a space. RFI's national list is
+    /// full of hyphenated compounds with no space at all — "MARCELLINA-VERBICARO-
+    /// ORSOMARSO", "MONTECALVO-BUONALBERGO-CASALBORE" — and a space-only split handed
+    /// the whole 30-character name to the primary line as ONE word, which then had
+    /// nothing to wrap on and could only shrink. Across the artifact this takes the
+    /// primary lines over the fitting threshold from 49 to 0.
     static func split(_ fullName: String) -> (city: String, qualifier: String) {
         let upper = fullName.trimmingCharacters(in: .whitespaces).uppercased()
         guard !upper.isEmpty else { return ("", "") }
         if let match = compoundPrefix(of: upper) { return (match.city, match.rest) }
-        let words = upper.split(separator: " ").map(String.init)
-        return (words.first ?? upper, words.dropFirst().joined(separator: " "))
+
+        let parts = parts(of: upper)
+        guard !parts.isEmpty else { return (upper, "") }
+
+        // The primary is the first part — unless that would leave a leading particle
+        // dangling ("SAN" / "PAOLO"), in which case it absorbs the next part.
+        var index = 0
+        while index + 1 < parts.count, headTokens.contains(parts[index].text) { index += 1 }
+
+        let city = join(parts[0...index])
+        let qualifier = index + 1 < parts.count ? join(parts[(index + 1)...]) : ""
+        return (city, qualifier)
     }
 
     /// Width one line of `text` occupies at `size`.
@@ -130,19 +198,27 @@ enum StationTitleLayout {
     /// Greedy word wrap at FULL size — step 1, before any scaling. Past
     /// `maxSecondaryLines` the remaining words keep filling the last line and the
     /// scale step absorbs the overflow.
+    /// Breaks on a HYPHEN as well as a space, like `split`. Separators inside a line are
+    /// preserved verbatim; only the one at a break is dropped.
     static func wrap(_ text: String, size: CGFloat, available: CGFloat,
                      maxLines: Int = maxSecondaryLines) -> [String] {
-        let words = text.split(separator: " ").map(String.init)
-        guard !words.isEmpty else { return [] }
-        guard available > 0 else { return [words.joined(separator: " ")] }
+        let parts = parts(of: text)
+        guard !parts.isEmpty else { return [] }
+        guard available > 0 else { return [join(parts[...])] }
         var lines: [String] = []
-        for word in words {
-            guard let current = lines.last else { lines.append(word); continue }
-            let merged = current + " " + word
+        var lineStart = 0
+        for index in parts.indices {
+            if lines.isEmpty {
+                lines.append(parts[index].text)
+                lineStart = index
+                continue
+            }
+            let merged = join(parts[lineStart...index])
             if width(merged, size: size) <= available || lines.count >= maxLines {
                 lines[lines.count - 1] = merged
             } else {
-                lines.append(word)
+                lines.append(parts[index].text)
+                lineStart = index
             }
         }
         return lines

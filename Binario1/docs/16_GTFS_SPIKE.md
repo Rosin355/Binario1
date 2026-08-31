@@ -124,12 +124,22 @@ regionali toscane o liguri — non ciò che serve al tester pendolare.
   B2 diventa prioritario: richiede analisi di costo, licenza d'uso dei dati e termini di
   ridistribuzione in-app, non affrontata in questo spike.
 - **(c) Rinviare B2 — raccomandata.** L'app resta onesta su ciò che sa fare: tabellone
-  live di stazione (Padova, Roma Termini) + tratte salvate col prossimo treno reale.
-  Nessuna promessa di "ricerca soluzioni" che non possiamo mantenere.
+  live di stazione + tratte salvate col prossimo treno reale. Nessuna promessa di
+  "ricerca soluzioni" che non possiamo mantenere.
 
-**Implicazione di prodotto**: B2 è nel core del PRD ma **non è realizzabile con dati
-aperti** allo stato attuale. Va comunicato come scelta esplicita, non lasciato come
-funzione "in arrivo" a tempo indeterminato.
+> **AGGIORNAMENTO 2026-08-31 (B3-full).** La raccomandazione (c) è stata SUPERATA da una
+> decisione più netta: **B2 è rimosso dallo scope, non rinviato** (vedi
+> `12_DECISIONS.md`, "Inquadramento di prodotto"). Binario1 è un consulto del tabellone
+> di stazione, non un trip planner.
+>
+> Va inoltre corretta una frase di questo spike che ha generato confusione a valle:
+> qui si leggeva *"B2 è nel core del PRD"*. **Non lo è, e non lo è mai stato.**
+> `00_PDR.md` non elenca la ricerca tratta A→B né fra gli "Obiettivi MVP" né fra le
+> "Funzionalità principali", e alla riga 12 dice l'opposto: *"L'app non vuole essere un
+> generico travel planner"*. Era una caratterizzazione dello spike, non del PRD.
+>
+> Lo spike resta valido e utile per **ciò che ha misurato** (fattibilità e licenze dei
+> dati aperti). Non va più letto come una milestone in attesa.
 
 ## Riproducibilità
 

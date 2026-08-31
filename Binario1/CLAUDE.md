@@ -48,9 +48,20 @@ Binario1 deve essere progettata da subito per **italiano e inglese**.
 - Usa font monospaziato e micro-effetti: glow leggero, scanlines, dot-matrix/pixel feel.
 - La localizzazione non deve rompere la griglia: usare label brevi e fallback compatti.
 
-## Prima milestone
+## Prima milestone — COMPLETATA (archivio)
 
-Implementare:
+> **Aggiornamento 2026-08-31.** I 12 punti qui sotto sono fatti. Due regole di questa
+> pagina erano vere per la Milestone 1 e **non lo sono più**:
+> "usa dati mock locali" e "non integrare API esterne" — l'app consuma il backend reale
+> dal 2026-06, e il catalogo stazioni è nazionale (artefatto `rfi-stations.tsv`) dal
+> B3-full. Restano invariati i vincoli che contano: **niente parsing di sorgenti
+> ferroviarie nell'app** (è del backend), Release App Store su `.mock`, IT/EN in sync,
+> nomi di stazione come DATI e non traduzioni.
+>
+> Per lo stato reale e il lavoro corrente: `docs/11_PROGRESS.md` (sezione "STATO ALLA
+> FINE DELLA FASE") e `docs/12_DECISIONS.md`.
+
+Implementato:
 
 1. `StationBoardView`
 2. `StationBoardViewModel`

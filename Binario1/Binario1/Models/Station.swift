@@ -13,11 +13,11 @@ struct ProviderCodes: Codable, Equatable, Hashable {
 struct Station: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let name: String
-    let city: String?
+    var city: String?
     let displayName: String
     let countryCode: String
     let timezone: String
-    let providerCodes: ProviderCodes?
+    var providerCodes: ProviderCodes?
     /// Optional abbreviated forms a live RFI board may use for THIS station's name
     /// (e.g. "Venezia S.L.", "Torino P.N.") that `StationNameMatcher.canonical` can't
     /// derive on its own. Used to line up a saved journey with an abbreviated board
@@ -44,7 +44,8 @@ struct Station: Identifiable, Codable, Equatable, Hashable {
     var servedByLiveBoard: Bool? = nil
     /// True when this entry is an OPERATIONAL POINT, not a passenger station: RFI's
     /// list carries "PM …" (posto di movimento), "PC …" (posto di comunicazione),
-    /// "… PES" and a "BIVIO …" among its 2435 entries. They exist so a name still
+    /// "… PES" and a "BIVIO …" among its entries (21 of them in the 2026-08-31
+    /// snapshot). They exist so a name still
     /// resolves to an entity, but a passenger never boards there.
     ///
     /// Consequences, both deliberate: excluded from board-destination matching
@@ -68,25 +69,32 @@ extension Station {
 }
 
 extension Station {
+    // Names below are RFI's OFFICIAL names, verbatim and UPPERCASE, matching the
+    // shared artifact (`rfi-stations.tsv`). Ids are the registry slug the artifact
+    // derives from that name — the same string the backend keys its registry by.
+    // See the naming policy in docs/12_DECISIONS.md.
+
     nonisolated static let bolognaCentrale = Station(
         id: "bologna-centrale",
-        name: "Bologna Centrale",
+        name: "BOLOGNA CENTRALE",
         city: "Bologna",
-        displayName: "Bologna Centrale",
+        displayName: "BOLOGNA CENTRALE",
         countryCode: "IT",
         timezone: "Europe/Rome",
         providerCodes: ProviderCodes(rfi: "BO_C", viaggiatreno: "S05043")
     )
 
+    /// id realigned to the registry slug in B3-full (was "firenze-smn", which the slug
+    /// rule does not produce from the official name).
     nonisolated static let firenzeSMN = Station(
-        id: "firenze-smn", name: "Firenze Santa Maria Novella", city: "Firenze",
-        displayName: "Firenze Santa Maria Novella", countryCode: "IT",
+        id: "firenze-santa-maria-novella", name: "FIRENZE SANTA MARIA NOVELLA", city: "Firenze",
+        displayName: "FIRENZE SANTA MARIA NOVELLA", countryCode: "IT",
         timezone: "Europe/Rome", providerCodes: ProviderCodes(rfi: "FI_SMN", viaggiatreno: "S06421")
     )
 
     nonisolated static let milanoPortaGaribaldi = Station(
-        id: "milano-porta-garibaldi", name: "Milano Porta Garibaldi", city: "Milano",
-        displayName: "Milano Porta Garibaldi", countryCode: "IT",
+        id: "milano-porta-garibaldi", name: "MILANO PORTA GARIBALDI", city: "Milano",
+        displayName: "MILANO PORTA GARIBALDI", countryCode: "IT",
         timezone: "Europe/Rome", providerCodes: ProviderCodes(rfi: "MI_PG", viaggiatreno: "S01645")
     )
 
@@ -95,22 +103,23 @@ extension Station {
     /// policy in docs/12_DECISIONS.md. Renamed in place (one id per station, never a
     /// duplicate entity).
     nonisolated static let veneziaSLucia = Station(
-        id: "venezia-s-lucia", name: "Venezia S.Lucia", city: "Venezia",
-        displayName: "Venezia S.Lucia", countryCode: "IT",
+        id: "venezia-s-lucia", name: "VENEZIA S.LUCIA", city: "Venezia",
+        displayName: "VENEZIA S.LUCIA", countryCode: "IT",
         timezone: "Europe/Rome", providerCodes: ProviderCodes(rfi: "VE_SL", viaggiatreno: "S02593")
     )
 
+    /// id realigned to the registry slug in B3-full (was "reggio-emilia-av").
     nonisolated static let reggioEmiliaAV = Station(
-        id: "reggio-emilia-av", name: "Reggio Emilia AV Mediopadana", city: "Reggio Emilia",
-        displayName: "Reggio Emilia AV Mediopadana", countryCode: "IT",
+        id: "reggio-emilia-av-mediopadana", name: "REGGIO EMILIA AV MEDIOPADANA", city: "Reggio Emilia",
+        displayName: "REGGIO EMILIA AV MEDIOPADANA", countryCode: "IT",
         timezone: "Europe/Rome", providerCodes: ProviderCodes(rfi: "RE_AV", viaggiatreno: "S05311")
     )
 
     /// Padova — used by the RFI Quadro Orario scheduled-timetable spike.
     /// `providerCodes.rfi` carries the RFI Quadro Orario station id (1861).
     nonisolated static let padova = Station(
-        id: "padova", name: "Padova", city: "Padova",
-        displayName: "Padova", countryCode: "IT",
+        id: "padova", name: "PADOVA", city: "Padova",
+        displayName: "PADOVA", countryCode: "IT",
         timezone: "Europe/Rome", providerCodes: ProviderCodes(rfi: "1861", viaggiatreno: "S02430")
     )
 

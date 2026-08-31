@@ -29,7 +29,19 @@ Le app ufficiali o generaliste spesso offrono molte funzioni, ma l'informazione 
 
 ## Obiettivo MVP
 
-Realizzare una prima app iOS SwiftUI che:
+**0. Inquadramento — Binario1 è un CONSULTO DEL TABELLONE DI STAZIONE.** Il gesto
+centrale del prodotto è: l'utente cerca una stazione e ne consulta il tabellone, arrivi
+o partenze. **Binario1 non pianifica viaggi**: non cerca soluzioni A→B, non propone
+itinerari, non calcola coincidenze. Ogni funzionalità va letta in questa chiave — se ha
+senso solo per pianificare un viaggio, è fuori inquadramento.
+
+Questo punto viene prima degli altri perché li vincola. Più avanti si legge che l'app
+"non vuole essere un generico travel planner": quella formulazione in negativo si è
+rivelata **troppo debole** — è stata letta come una preferenza di tono invece che come
+un confine di scope, ed è all'origine dell'idea che la ricerca tratta A→B (B2) fosse fra
+gli obiettivi. Non lo è mai stata.
+
+Realizzare una app iOS SwiftUI che:
 
 1. mostra un tabellone arrivi/partenze per una stazione;
 2. usa una UI fedele ai tabelloni ferroviari italiani;
@@ -65,12 +77,18 @@ Nella prima versione non implementare:
 - login utente;
 - notifiche push reali;
 - geolocalizzazione automatica;
-- widget iOS;
-- Live Activities;
 - Apple Watch;
 - integrazione diretta con sorgenti non ufficiali dentro l'app;
 - scraping lato client;
-- promesse di precisione assoluta rispetto ai monitor fisici in stazione.
+- promesse di precisione assoluta rispetto ai monitor fisici in stazione;
+- **ricerca tratta A→B / journey planning (B2): RIMOSSA dallo scope, non rinviata.**
+  Non è una milestone in attesa e non va riproposta come "prossima". Discende
+  direttamente dall'inquadramento al punto 0 (vedi `12_DECISIONS.md` e la nota di
+  aggiornamento in `16_GTFS_SPIKE.md`).
+
+**Non più non-obiettivi** (aggiornato 2026-08-31): **widget iOS** e **Live Activities**
+erano in questo elenco e ne sono usciti — sono il prossimo blocco di lavoro, con i
+mockup M1 approvati e 4 correzioni M1-fix pendenti.
 
 ## Target utenti
 
@@ -210,12 +228,18 @@ Il rischio estetico è trasformarla in una normale app trasporti. L'MVP deve pro
 - Monitoraggio errori.
 - Fallback su cache.
 
-### Milestone 4 — UX avanzata
+### Milestone 4 — Widget e Live Activity
 
+Aggiornata al 2026-08-31 con ciò che viene davvero dopo.
+
+- Widget iOS e Live Activity: mockup **M1 approvati**, 4 correzioni **M1-fix** pendenti.
 - Stazioni preferite.
-- Dettaglio treno.
-- Notifiche locali/push.
-- Geofence stazione.
+- ~~Geofence stazione.~~ **Rimosso**: contraddice i non-obiettivi di questo stesso
+  documento ("nessuna geolocalizzazione automatica") e l'inquadramento al punto 0.
+- ~~Notifiche locali/push.~~ **Non decise.** Restano fra i non-obiettivi finché non
+  c'è una decisione esplicita; non vanno pianificate come acquisite.
+- ~~Dettaglio treno.~~ Da ridecidere: un tabellone fisico non ha un "dettaglio treno".
+  Se resta in scope va rispecificato (vedi `01_MVP_SCOPE.md`).
 
 ## Nota legale/funzionale
 

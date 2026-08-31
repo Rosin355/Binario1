@@ -26,7 +26,8 @@ enum StationNameMatcher {
     /// Single-token expansions, applied token-wise.
     ///
     /// Every saint form collapses to the NEUTRAL token "S". RFI writes "S." for both
-    /// genders (231 of the 2435 official names), so expanding it to "SANTA" guessed a
+    /// genders (231 of the official names in the 2026-08-31 snapshot), so expanding it
+    /// to "SANTA" guessed a
     /// gender and guessed wrong on the masculine majority ("S.GIOVANNI" is *San*
     /// Giovanni) — and, worse, it made the 4 names RFI spells out in full ("SAN
     /// PAOLO") fail to match their own abbreviated form. Collapsing instead of

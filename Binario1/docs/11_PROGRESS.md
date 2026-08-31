@@ -2,6 +2,133 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-08-31 — Ticket B3-full: il catalogo stazioni diventa nazionale
+
+Stato: **implementato e verificato in locale.** iOS **169/169** (erano 156, +13),
+backend **deno test 41/41** (erano 29, +12). **Tocca `supabase/**`** → il push su `main`
+attiva la CI di deploy. Smoke test post-deploy da eseguire SOLO a CI verde.
+
+### L'artefatto condiviso
+`Binario1/Binario1/Resources/rfi-stations.tsv` — 2435 voci (`placeId` + nome ufficiale)
+estratte dal `<select name="PlaceId">` di `iechub.rfi.it/ArriviPartenze/`, la lista
+autorevole di RFI. Rigenerabile con `tools/generate-rfi-stations-tsv.mjs`. Il backend ne
+tiene una copia embedded (`rfi_stations_tsv.ts`) e un test la confronta **byte a byte**
+con quella iOS; senza `--allow-read` quel test fallisce invece di saltare, e la CI passa
+il flag. Normalizzazione tipografica soltanto: backtick → apostrofo, 10 voci, verificato
+che **0 righe differiscono dalla fonte per qualcos'altro**.
+
+### Il conteggio 2434 vs 2435: non era RFI, ero io
+Il ticket dava la discrepanza per deriva a monte ("RFI apre e chiude stazioni"), ed era
+una spiegazione ragionevole. **Non è quello che è successo qui.** La prima estrazione ha
+prodotto 2434 perché il pattern era ancorato su `<option value=`, mentre l'opzione
+preselezionata della pagina porta `selected="selected"` **prima** di `value`: la voce
+persa era **MILANO CENTRALE** (placeId 1728), una delle stazioni più grandi d'Italia,
+sparita senza alcun errore. Il conteggio reale al 2026-08-31 è **2435**, identico a
+quello del C4: la lista non era cambiata affatto. Probabile che anche il "2434" scritto
+in `registry.ts` il 18/08 avesse la stessa causa.
+Il generatore ora confronta le righe estratte con i tag `<option>` del `<select>` e
+**fallisce** se non coincidono. Il principio dello snapshot datato resta giusto e
+applicato.
+
+**La lezione vera è più scomoda, ed è annotata su richiesta dell'utente.** La
+spiegazione "RFI apre e chiude stazioni, il conteggio si muove" era plausibile, veniva
+dall'esterno, ed era **sbagliata in questo caso**. Stava per chiudere l'indagine: il
+2434 aveva già una causa accettata e credibile, quindi non c'era ragione di guardare
+oltre. Il difetto è emerso per un'altra strada — una delle 17 voci del catalogo non si
+trovava più nell'elenco, e MILANO CENTRALE è troppo grande perché la sua assenza sia
+credibile.
+Il pattern da riconoscere: **una spiegazione plausibile fornita dall'esterno può
+chiudere un'indagine su un bug reale**, tanto più quando riguarda un numero che nessuno
+verifica a mano. Il correttivo non è diffidare delle spiegazioni, ma non usarne nessuna
+al posto di una verifica: qui bastava contare i tag `<option>`, che è esattamente il
+controllo ora in produzione nel generatore.
+
+### Grafia dei nomi — decisione di prodotto, non tecnica
+Chiesto e deciso: **maiuscolo verbatim RFI**. Title-case-are 2435 nomi italiani non è
+formattazione ma invenzione — 233 con particelle, 232 con abbreviazioni puntate, 47 con
+apostrofo-per-accento. Conseguenza accettata: ricerca e tratte salvate mostrano il
+maiuscolo. Il match non ne risente (`canonical` maiuscolizza comunque).
+`stations.json` è diventato un **overlay curato** (città, providerCodes, alias); i nomi
+e gli id vengono solo dall'artefatto. Le 17 voci preesistenti mappano **tutte 1:1** su
+una voce RFI per sola maiuscolizzazione: nessuna si è duplicata.
+
+### Due id riallineati, un debito estinto
+`firenze-smn` → `firenze-santa-maria-novella` e `reggio-emilia-av` →
+`reggio-emilia-av-mediopadana`: la regola di slug non produceva i vecchi id. Rinominati
+in place (nessuna persistenza contiene id di stazione — le tratte salvate memorizzano i
+nomi). E **il debito di disambiguazione Abano è estinto**: RFI 364 "ABANO TERME" entra
+in catalogo, quindi gli alias `Abano`/`Abano Terme` sono stati rimossi da Terme Euganee
+**prima**, come 12_DECISIONS prescriveva. L'asserzione del C4 si inverte, di nuovo per
+progetto.
+
+### Prestazioni: gli indici non erano opzionali
+`search` rifoldava 2435 nomi a ogni battuta e `station(named:)` ricanonicalizzava 2435
+voci **per ogni riga di tabellone** — su 40 righe ~100k canonicalizzazioni per refresh.
+Il catalogo ora costruisce gli indici (fold e forma canonica) una volta all'init.
+
+### Il wrap del titolo spezza sul trattino
+RFI ha nomi che sono un unico composto trattinato senza spazi
+(`MONTECALVO-BUONALBERGO-CASALBORE`, 32 caratteri): arrivavano interi alla riga primaria
+come una sola parola. Con la rottura sul trattino le righe primarie oltre soglia passano
+**da 49 a 0** — misurato, non stimato. I separatori dentro la riga restano verbatim (solo
+quello sul punto di rottura si perde), altrimenti `ABANO-MONTEGROTTO` diventerebbe
+`ABANO MONTEGROTTO`.
+
+### Correzione a due numeri del ticket
+- I casi di riga primaria che finisce su un token di testa sono **5**, non 9, e sono
+  `SAN PAOLO`, `SAN GOTTARDO`, `SAN POLO MATESE`, `SAN FAUSTINO-CASIGLIANO`, `SU CANALE`
+  — nomi che *iniziano* con la particella, non del tipo "BORGO A". La regola richiesta è
+  implementata comunque (la primaria assorbe la parte seguente) ed è quella giusta a
+  prescindere dal conteggio.
+- Le righe primarie "entro 2 caratteri dalla soglia dei 19" sono **0** con la rottura sul
+  trattino: la soglia non viene mai avvicinata. Il test di confine copre quindi i 10 nomi
+  più lunghi (37 caratteri il massimo) e ogni primaria fra 17 e 19 caratteri.
+Entrambi i numeri del ticket derivavano probabilmente da un modello in cui la riga
+primaria è riempita golosamente fino a una larghezza, invece che determinata dallo split.
+Il modello implementato è quello che riproduce esattamente il 49 → 0.
+
+### Backend: registry da Map, guardrail su stazione sintetica
+Registry costruito dall'artefatto embedded e indicizzato in `Map` all'init; una
+collisione di slug **fa fallire l'init** invece di far sparire una stazione in silenzio.
+`servedByLiveBoard` deriva dalla presenza nel registry → copertura totale. Poiché non
+esistono più stazioni non servite reali, il guardrail "nessun fetch fuori dal registry →
+stato onesto" è testato con un **registry-fixture che omette deliberatamente una voce**:
+l'invariante non è indebolita, è cambiato il soggetto.
+
+### Anti-contaminazione: da tre stazioni a un campione
+`rowIDsNeverIntersectAcrossASampleOfStations` porta l'invariante più importante del
+progetto su un campione deterministico di 40 stazioni distribuite su tutto l'artefatto:
+ogni stazione mostra esattamente le proprie righe, e nessuna coppia condivide un id.
+Deterministico di proposito — un campione casuale renderebbe un fallimento irriproducibile.
+
+### Cleanup: chiusi i due debiti del C3
+`changeStation()` e `selectableStations` rimossi dal view model e da `AppEnvironment`; il
+test di regressione del fix race riscritto su `selectStation(_:)`, che percorre lo stesso
+`invalidateSelection()`. `allowsStationChange` non è più `selectableStations.count > 1`:
+con la copertura nazionale quella condizione non può più essere falsa, e una condizione
+che non può fallire nasconde ciò che doveva proteggere.
+
+### Verifica campionaria sul monitor live (Passo 3)
+75 stazioni sondate (69 passeggeri + 6 punti operativi), stratificate su hub curati,
+distribuzione uniforme sull'alfabeto e punti operativi. Parser reale del backend
+(`rfi.ts`) importato, non reimplementato.
+**Coerenza 92,8% (64/69). Zero non-200, zero incompatibilità di struttura.**
+Le 5 stazioni restanti rispondono 200 con **zero righe perché RFI stessa scrive "DATI NON
+DISPONIBILI"** nella pagina (BOLOGNA FIERE, CORNINO, MONTECASTELLI, RIGOROSO,
+S.SEBASTIANO PO): stato onesto a monte, non un difetto nostro.
+Distribuzione righe servite: min 0, p25 5, mediana 12, p75 26, max 40 — il campione
+copre davvero le taglie. Àncore: PADOVA 40, MILANO CENTRALE 40, TERME EUGANEE 16,
+VIGODARZERE 12, ABANO TERME 9.
+
+### Un difetto che sembrava esserci e non c'era
+Il primo giro del campione dava 76,8% con 11 stazioni "a struttura diversa": tutte con
+righe vuote. La pagina RFI **padda la tabella a un minimo di ~15 slot** con righe
+interamente vuote, e il mio script contava le righe grezze del parser. `index.ts` le
+scarta già (`.filter(r => r.scheduledTime.length > 0)`), quindi all'app non arrivano mai.
+Corretto lo script per misurare ciò che il handler **serve**: 92,8%, 0 anomalie di
+struttura. Stavo per segnalare come difetto un comportamento corretto.
+
+
 ## 2026-08-28 — Ticket C4: il match fra nomi di stazione diventa uguaglianza canonica
 
 Stato: **implementato e verificato in locale.** Suite **156** in `Binario1Tests` (erano
@@ -19,7 +146,7 @@ Correzione autonoma e spedibile per conto suo, con un diff isolato invece che de
 cambiamento da 2435 stazioni.
 
 ### La misura che ha guidato la decisione
-Elenco autorevole RFI (`<select name="PlaceId">` del monitor, 2435 voci, estratto il
+Elenco autorevole RFI (`<select name="PlaceId">` del monitor, 2435 voci nello snapshot estratto il
 2026-08-28, HTML salvato dal browser perché l'egress verso `iechub.rfi.it` è negato in
 sessione). Sotto la vecchia regola ≥2 token: **53 coppie collidenti**, grado massimo 7
 (`S.GIORGIO`), 45 su 53 con un membro corto di 2 token. Sotto l'uguaglianza canonica:
@@ -2673,3 +2800,89 @@ Stato: completata. Prossima milestone: **Viaggi Tab**.
 
 ### Prossimo
 - **Viaggi Tab** (non iniziare finché la home non è stabilizzata).
+
+---
+
+# STATO ALLA FINE DELLA FASE
+
+Aggiornato al 2026-08-31, chiusura del B3-full. Questa sezione è in fondo di proposito:
+è una fotografia, non una voce di cronologia. Va riscritta, non accodata.
+
+## Cosa è in produzione
+
+- **Tabellone di stazione live, copertura nazionale.** iOS → Edge Function `board` →
+  monitor RFI → JSON normalizzato → iOS. Nessun parsing di sorgenti nell'app in
+  produzione. Arrivi e partenze, stesso contratto.
+- **Catalogo stazioni nazionale** dall'artefatto condiviso `rfi-stations.tsv` (2435 voci
+  nello snapshot del 2026-08-31), nomi ufficiali RFI verbatim, 21 punti operativi
+  esclusi da ricerca e da matching destinazioni.
+- **Backend protetto**: app token (`X-Binario-App-Token`) enforced, rate limit
+  best-effort per istanza, diagnostics ridotte in production. Nessun secret nel repo.
+- **Guardrail sorgente a 3 rami intatto**: DEBUG e TestFlight → backend live; Release
+  App Store → `.mock`, senza token nel plist.
+- **Ricerca stazione, tratte salvate persistite localmente, prossimo treno reale** nelle
+  tratte salvate (o stato onesto, mai un segnaposto).
+- **Localizzazione IT/EN** in sync. I nomi di stazione restano **dati**, non traduzioni.
+
+## Debito aperto
+
+- **142 warning di migrazione Swift 6** (7 nel target app, 135 nel target test),
+  preesistenti e mascherati dalle build incrementali. Nessuno è stato introdotto dal
+  B3-full; nessuno è stato risolto. Vanno affrontati in un ticket dedicato, non
+  di sfuggita: toccano file che i ticket recenti non hanno motivo di aprire.
+- **Due fixture di test non allineati.** Le fixture del parser RFI esistono in due copie
+  (iOS `Binario1Tests/Fixtures/rfi-*.sample.html` e backend
+  `supabase/functions/board/rfi_fixtures.ts`) che **devono** restare identiche e oggi
+  non hanno un test che lo verifichi — a differenza dell'artefatto stazioni, che dal
+  B3-full ce l'ha. La cura è la stessa: un test di identità byte a byte. Finché manca,
+  le due copie possono divergere in silenzio.
+- **La semantica di `Viaggi` è da decidere.** Oggi è un archivio di tratte salvate con
+  il prossimo treno reale risolto dal tabellone dell'origine. Restano aperte: cosa
+  significa una tratta quando l'origine non è la stazione che l'utente sta consultando;
+  se le tratte debbano avere una direzione o essere simmetriche; se "Dalle tue
+  abitudini" debba restare l'euristica attuale (il più imminente fra i risolti) o
+  diventare qualcos'altro. È una domanda di prodotto, non un difetto: non va risolta
+  scrivendo codice finché non è decisa.
+- **Rate limit non distribuito**: il limiter è in-memory per istanza, quindi non è un
+  limite globale. Sufficiente per l'uso attuale, da rifare prima di un traffico serio.
+- **`updatedAt` del monitor non catturato** dal parser (gap noto e già asserito come
+  tale nei test del backend).
+
+## Cosa viene dopo
+
+- **Widget e Live Activity.** I mockup **M1 sono approvati**; restano pendenti le
+  **4 correzioni M1-fix**. È il prossimo blocco di lavoro.
+  Nota: `00_PDR.md` elenca ancora widget e Live Activities fra i *non-obiettivi MVP* —
+  contraddizione reale da sanare quando si revisiona il PRD (vedi la proposta in coda
+  al ticket B3-full).
+- **Osservabilità delle destinazioni non risolte** (proposta del C4, non implementata):
+  contare nel blocco `diagnostics` le destinazioni che non agganciano alcuna entità del
+  catalogo, così i `boardAliases` mancanti si ricavano dal traffico reale invece che per
+  ipotesi. Con l'uguaglianza canonica un match mancato è **silenzioso**, e con la
+  copertura nazionale la superficie è tutta l'Italia: senza questo, non lo sapremo mai.
+- **Rilevare che lo snapshot delle stazioni è invecchiato** — vedi sotto.
+
+## Come accorgersi che l'artefatto stazioni è invecchiato
+
+Problema che si ripresenterà: `rfi-stations.tsv` è uno snapshot datato, e nessuno si
+accorge da solo che RFI ha aperto o chiuso una fermata. **Non implementato**, proposta da
+valutare, in ordine di costo crescente:
+
+1. **Il più economico, e probabilmente sufficiente.** Un job schedulato (GitHub Actions,
+   settimanale) che riesegue `tools/generate-rfi-stations-tsv.mjs` e apre una PR se il
+   diff non è vuoto. Il diff È il segnale, e arriva già in forma recensibile: si vede
+   quali stazioni sono entrate o uscite, e la si accetta o no. Nessun codice nuovo in
+   produzione, nessun controllo a runtime.
+2. **Dal traffico reale, a costo quasi zero.** Il backend risponde già 404
+   `unknown_station` a uno slug che non conosce. Contare quei 404 per slug nelle
+   diagnostics dà, gratis, l'elenco delle stazioni che i client chiedono e il registry
+   non ha — cioè esattamente le voci nuove di RFI, viste dall'uso invece che da un
+   polling. Si sposa bene con l'osservabilità delle destinazioni non risolte sopra:
+   stessa idea, stesso posto.
+3. **Un avviso di scadenza.** L'header dell'artefatto porta già `# Extracted:`; un test
+   può fallire (o solo avvisare) quando la data supera N mesi. Onesto ma cieco: dice che
+   lo snapshot è vecchio, non che sia *sbagliato*. Utile solo come rete di sicurezza
+   sotto (1).
+
+Da NON fare: verificare l'elenco RFI a runtime dall'app, o far dipendere un test della
+suite dalla rete. La suite deve restare deterministica e offline.

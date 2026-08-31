@@ -26,7 +26,6 @@ struct RootTabView: View {
         catalog: DefaultStationCatalog.shared,                 // alias-aware destination matching
         // Live: only the stations the backend registry serves (derived from the
         // catalog flag, not a hand-kept list); other stations → honest unavailable.
-        selectableStations: AppEnvironment.selectableStations,
         liveServedStationIDs: AppEnvironment.liveServedStationIDs
     )
     @State private var tripsViewModel = TripsViewModel(

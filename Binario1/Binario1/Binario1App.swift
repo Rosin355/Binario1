@@ -110,37 +110,23 @@ enum AppEnvironment {
         }
     }
 
-    /// Whether the header `Cambia` action may switch stations. A single fixed
+    /// Whether the header `Cambia` action may open the station picker. A single fixed
     /// station source (Padova scheduled demo, RFI live spike, local fixture) MUST stay
     /// locked, otherwise the station title could disagree with the board rows.
-    /// `.backendLivePadova` (B3-lite) allows changing station, but ONLY across the
-    /// stations the live backend actually serves (`selectableStations`).
-    /// `.remoteWithMockFallback` is reserved for a future multi-station remote.
+    ///
+    /// B3-full: this used to read `selectableStations.count > 1`, a leftover from the
+    /// carousel that C3 replaced with the search sheet. The condition was already
+    /// conceptually stale then — with a picker over the whole catalog, "how many
+    /// stations are served" is the wrong question — and with national coverage it is
+    /// trivially true, which is worse: a condition that can no longer be false hides
+    /// what it was meant to protect. What actually matters is whether the source is
+    /// multi-station at all, so that is what it now says.
     static var allowsStationChange: Bool {
         switch sourceMode {
-        case .mock, .remoteWithMockFallback:
+        case .mock, .remoteWithMockFallback, .backendLivePadova:
             return true
-        case .backendLivePadova:
-            return selectableStations.count > 1
         case .scheduledPadova, .rfiLivePadova, .backendFixturePadova:
             return false
-        }
-    }
-
-    /// Stations the header `Cambia` action may cycle through.
-    ///  • live backend → the stations the backend registry actually SERVES, derived
-    ///    from the catalog's `servedByLiveBoard` flag (never a hand-duplicated list);
-    ///  • mock → the demo carousel;
-    ///  • single-station sources → just that station.
-    static var selectableStations: [Station] {
-        switch sourceMode {
-        case .mock, .remoteWithMockFallback:
-            return Station.demoStations
-        case .backendLivePadova:
-            let served = DefaultStationCatalog.shared.liveServed
-            return served.isEmpty ? [initialStation] : served
-        case .scheduledPadova, .rfiLivePadova, .backendFixturePadova:
-            return [initialStation]
         }
     }
 
@@ -156,8 +142,10 @@ enum AppEnvironment {
     /// one dataset under a DIFFERENT station's name. So those sources collapse to the
     /// single station they actually stand for — honest in every configuration.
     ///
-    /// Never empty, never "all stations". The Partenze demo carousel is unaffected:
-    /// it keeps using `selectableStations` / `liveServedStationIDs` as before.
+    /// Never empty. Since B3-full the live registry covers the whole artifact, so for
+    /// the live source this set legitimately IS the whole catalog — the backend really
+    /// does serve every one of them. The guardrail it enforces is unchanged: a station
+    /// OUTSIDE the served set must never become openable.
     static var boardStationIDs: Set<String> {
         liveServedStationIDs ?? [initialStation.id]
     }
@@ -180,7 +168,6 @@ enum AppEnvironment {
             savedJourneys: HomeSavedJourneys.current(),
             savedJourneysProvider: { HomeSavedJourneys.current() },
             catalog: DefaultStationCatalog.shared,
-            selectableStations: [station],
             liveServedStationIDs: boardStationIDs
         )
     }
