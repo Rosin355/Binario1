@@ -89,6 +89,12 @@ scritto**, e tutte le 2435 voci RFI (0 collisioni).
 nessuna asserzione di logica è caduta.** I 2 rossi erano asserzioni di test rimaste al
 nome pre-rinomina, corrette nel commit successivo (vedi sotto).
 
+**Run di conferma su `079b0f6`**: **156/156 verdi in `Binario1Tests`**, incluse le due
+asserzioni corrette. I 2 rossi residui sono in `Binario1UITests` e **non sono
+asserzioni**: sono "System Failures" del runner del simulatore (`Binario1UITests-Runner
+encountered an error — The LLDB RPC server has crashed`), cioè infrastruttura di test,
+non prodotto. C4 chiuso verde.
+
 ### I 2 rossi: comportamento corretto, asserzioni vecchie
 `cercaSaveAddsValidRouteToStore` e `savedFromCercaAppearsInTripsAfterReload` salvavano
 `"Padova → Venezia Santa Lucia"` e si aspettavano di rileggere `"Venezia Santa Lucia"`.
@@ -108,6 +114,35 @@ Il ticket li dava per fuori scope, ma erano già stati **risolti il 2026-07-15**
 voce di quella data: due bug distinti, `StubURLProtocol` e il mapper RFI). Non è che non
 girino più: girano e passano. Il conteggio lo conferma — 157 + 2 = 159, cioè l'intero
 piano a 2 target, senza rossi storici fra i falliti.
+
+### Due debiti emersi lavorando, da non perdere
+
+**1. I "7 test rossi storici" non esistevano più, e li abbiamo portati a torto.** Il
+ticket C4 (e prima il B3-full, e i ticket ancora precedenti) li elencava fra le cose
+fuori scope. Erano invece già stati risolti il **2026-07-15** — la voce di quella data lo
+dice a chiare lettere ("123/123 test passano, prima volta senza rossi"). L'informazione è
+rimasta nei ticket per inerzia, dopo essere diventata falsa. Ha avuto un costo reale:
+per tutta questa sessione i conteggi della suite sono stati letti attraverso una
+correzione di 7 che non serviva, ed è stata una delle ragioni per cui il "151" del primo
+run locale è sembrato ambiguo invece che immediatamente diagnostico. **Non ripetere il
+debito nei prossimi ticket: la suite non ha rossi storici.**
+
+**2. 142 warning di migrazione Swift 6, preesistenti e mascherati dai build
+incrementali.** Emersi al primo clean build fatto in questa sessione: 7 nel target app,
+135 nel target di test. Sono diagnostiche di concorrenza — "Main actor-isolated property
+X cannot be accessed from outside of the actor; this is an error in the Swift 6 language
+mode", "Expression is 'async' but is not marked with 'await'", conformances
+`Equatable`/`Decodable` main actor-isolated — su file che il C4 non tocca
+(`TripsViewModel`, `SavedJourneyCardView`, `BackendBoardDTO`, `BoardSourceKind`,
+`DelayVisualState`). Il progetto è su `SWIFT_VERSION = 5.0` con
+`SWIFT_APPROACHABLE_CONCURRENCY = YES` e `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, che
+emettono queste diagnostiche **per ogni file compilato**: un build incrementale ne
+ricompila pochi e ne mostra ~4, un clean build li mostra tutti.
+
+Il punto che conta: **sono errori, non warning, appena si passa a `SWIFT_VERSION = 6`.**
+È debito tecnico reale con una scadenza, e un build incrementale continuerà a nasconderlo.
+Merita un ticket suo — non è del C4 e non è del B3-full. Come contromisura minima, un
+clean build periodico (o in CI) è ciò che impedisce al conteggio di tornare invisibile.
 
 ### Nota per il B3-full (dal rischio 2)
 Con centinaia di stazioni servite, ognuna può stampare forme abbreviate non censite, e
