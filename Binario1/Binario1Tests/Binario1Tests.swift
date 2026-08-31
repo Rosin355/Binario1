@@ -2388,12 +2388,19 @@ struct Binario1Tests {
     @Test func cercaSaveAddsValidRouteToStore() {
         let store = freshStore("binario1.tests.cerca-save")
         let vm = CercaViewModel(savedStore: store)
+        // The user types the COMMON name; what gets persisted is the OFFICIAL one.
+        // That is the catalog contract (docs/12_DECISIONS.md, B1: "salva il displayName
+        // CANONICO"), and after the C4 rename the official name is "Venezia S.Lucia".
+        // The typed form still resolves, through the entry's searchAliases.
         #expect(vm.saveRoute("Padova → Venezia Santa Lucia", now: Self.romeDate(2026, 6, 17, 10, 0)) == .saved)
         let saved = store.load()
         #expect(saved.count == 1)
         #expect(saved.first?.origin == "Padova")
-        #expect(saved.first?.destination == "Venezia Santa Lucia")
+        #expect(saved.first?.destination == "Venezia S.Lucia")   // official, not as typed
+        // Recognised as already saved from the typed form too: the neutral saint token
+        // canonicalizes "Venezia Santa Lucia" and "Venezia S.Lucia" to the same id.
         #expect(vm.isRouteSaved("Padova → Venezia Santa Lucia") == true)
+        #expect(vm.isRouteSaved("Padova → Venezia S.Lucia") == true)
     }
 
     @MainActor
@@ -2432,7 +2439,9 @@ struct Binario1Tests {
         let service = MockTripsService(); service.artificialDelay = .zero
         let trips = TripsViewModel(service: service, savedStore: store)
         await trips.load()
-        #expect(trips.savedJourneys.contains { $0.origin == "Padova" && $0.destination == "Venezia Santa Lucia" })
+        // Viaggi shows the OFFICIAL name, whatever the user typed in Cerca — the route
+        // was canonicalized on save (see `cercaSaveAddsValidRouteToStore`).
+        #expect(trips.savedJourneys.contains { $0.origin == "Padova" && $0.destination == "Venezia S.Lucia" })
     }
 
     @MainActor

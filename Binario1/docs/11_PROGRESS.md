@@ -4,8 +4,9 @@ Cronologia sintetica delle milestone. Tenere conciso.
 
 ## 2026-08-28 — Ticket C4: il match fra nomi di stazione diventa uguaglianza canonica
 
-Stato: **implementato, suite NON eseguita in questa sessione** (nessuna toolchain Swift
-nel container remoto — vedi "Verifica" sotto). Suite attesa **156** (erano 148, +8).
+Stato: **implementato e verificato in locale.** Suite **156** in `Binario1Tests` (erano
+148, +8), 159 nel piano a 2 target. Due asserzioni rimaste al nome pre-rinomina corrette
+in un secondo commit sul branch — vedi "Verifica".
 **Nessun file `supabase/**` toccato** → la CI di deploy non si attiva.
 
 ### Perché un ticket a sé, prima del B3-full
@@ -75,13 +76,38 @@ comportamento di una tratta salvata su nome NON canonico, e copertura della tabe
 espansione — che con la regola stretta è portante, quindi ridurla deve rompere la suite
 invece di far fallire i match in silenzio.
 
-### Verifica — leggere prima di fidarsi
-**La suite non è stata eseguita**: il container remoto non ha `swift`, `swiftc` né
-`xcodebuild`. Al posto dell'esecuzione, la logica di `canonical`/`matches` è stata
-replicata riga per riga in un oracolo JS e verificata su: le 12 asserzioni positive e le
-17 negative della suite, le 53 coppie **estratte dal file di test appena scritto**, e
-tutte le 2435 voci RFI (0 collisioni). Resta da eseguire `xcodebuild test` in locale: il
-rischio residuo è di **compilazione**, non di logica.
+### Verifica
+Il container remoto non ha `swift`, `swiftc` né `xcodebuild`, quindi la suite **non è
+stata eseguita in sessione**. Al posto dell'esecuzione, la logica di `canonical`/`matches`
+è stata replicata riga per riga in un oracolo JS e verificata su: le 12 asserzioni
+positive e le 17 negative della suite, le 53 coppie **estratte dal file di test appena
+scritto**, e tutte le 2435 voci RFI (0 collisioni).
+
+**Eseguita poi in locale** (clean build, iPhone 17, iOS 26.2, commit `5817582`):
+**157 passati, 2 falliti**, cioè 159 = 156 + 3 UI test come previsto. La previsione
+"il rischio è di compilazione, non di logica" ha retto: **il codice ha compilato e
+nessuna asserzione di logica è caduta.** I 2 rossi erano asserzioni di test rimaste al
+nome pre-rinomina, corrette nel commit successivo (vedi sotto).
+
+### I 2 rossi: comportamento corretto, asserzioni vecchie
+`cercaSaveAddsValidRouteToStore` e `savedFromCercaAppearsInTripsAfterReload` salvavano
+`"Padova → Venezia Santa Lucia"` e si aspettavano di rileggere `"Venezia Santa Lucia"`.
+Verificato leggendo il percorso invece di assumerlo: `saveRoute` → `canonicalName` →
+`catalog.station(named:)?.displayName`. L'utente digita il nome COMUNE, il catalogo lo
+risolve via `searchAliases`, e ciò che viene persistito è il nome UFFICIALE. È il
+contratto documentato in 12_DECISIONS (B1, "salva il displayName CANONICO"), non un
+difetto di `saveRoute`: i due rossi sono la **prova che la rinomina funziona da capo a
+fondo**. Se avessero letto `"Venezia Santa Lucia"`, quello sì sarebbe stato il bug.
+Corrette le due asserzioni al nome ufficiale, con il commento che spiega il contratto.
+Nessun'altra asserzione era sullo stesso percorso: le altre 40+ occorrenze del vecchio
+nome nei test costruiscono `SavedJourney` direttamente (nessuna canonicalizzazione) o
+usano cataloghi di test locali, e infatti erano verdi.
+
+### I "7 test rossi storici" non esistono più
+Il ticket li dava per fuori scope, ma erano già stati **risolti il 2026-07-15** (vedi la
+voce di quella data: due bug distinti, `StubURLProtocol` e il mapper RFI). Non è che non
+girino più: girano e passano. Il conteggio lo conferma — 157 + 2 = 159, cioè l'intero
+piano a 2 target, senza rossi storici fra i falliti.
 
 ### Nota per il B3-full (dal rischio 2)
 Con centinaia di stazioni servite, ognuna può stampare forme abbreviate non censite, e
