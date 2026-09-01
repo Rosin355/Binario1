@@ -58,19 +58,70 @@ enum StationsArtifact {
 
     // MARK: - Operational points
 
-    /// Prefixes/suffixes RFI uses for OPERATIONAL POINTS — places on the network that
-    /// are not passenger stations: `PM …` (posto di movimento), `PC …` (posto di
-    /// comunicazione), `BIVIO …`, and the `… PES` suffix.
+    /// The OPERATIONAL POINTS — places on the network that are not passenger stations,
+    /// so they are excluded from search and from destination matching (a board never
+    /// prints one as a destination, and opening a board for one is a promise we cannot
+    /// keep). Identified by catalog id, VERIFIED ONE BY ONE against RFI itself.
     ///
     /// The classification is OURS, not RFI's, so it lives in code rather than being
     /// baked into the copy of RFI's list — the artifact stays a faithful projection of
-    /// the source. A test pins the entries it selects, so a change in the rule (or in
-    /// the list) has to be looked at rather than absorbed.
-    private static let operationalPrefixes = ["PM ", "PC ", "BIVIO "]
-    private static let operationalSuffix = " PES"
+    /// the source. A test pins the entries it selects, so a change in the list has to be
+    /// looked at rather than absorbed.
+    ///
+    /// What changed in B4 is that this is now a VERIFIED LIST instead of a rule over the
+    /// name. RFI's `PM `/`PC `/`BIVIO `/` PES` markers do NOT mean "not a passenger
+    /// station": the old prefix rule selected 21 entries of which **10 were real
+    /// passenger stations with a live board and a platform**. It was right for 11 of 12
+    /// `PM …` and wrong for every single `PC …`, `BIVIO …` and `… PES`. See
+    /// docs/12_DECISIONS.md — "i nomi RFI sono etichette di visualizzazione, non un
+    /// sistema di tipi".
+    ///
+    /// HOW TO RE-VERIFY AN ENTRY, or vet a candidate — no code required:
+    ///
+    ///     curl -s "https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?arrivals=False&placeId=<placeId>"
+    ///
+    ///   • ~5 KB, carries "DATI NON DISPONIBILI", renders NO <thead>/<tbody>
+    ///       → operational point. Belongs in this set.
+    ///   • renders a departures table with rows
+    ///       → PASSENGER STATION. Does NOT belong here, whatever the name looks like.
+    ///
+    /// The signal is sound in ONE DIRECTION ONLY. "Has a board" proves a passenger
+    /// station; "has no board" does NOT prove an operational point — roughly 15% of the
+    /// whole catalog answers DATI NON DISPONIBILI (suspended lines, seasonal service,
+    /// stations RFI does not monitor live), and sampled ones resolve to real passenger
+    /// stations on ViaggiaTreno. So this set may still MISS operational points whose name
+    /// looks ordinary; finding those needs RFI's official "località di servizio" register,
+    /// not this test. **Never add an id here on "no board" alone** — the name and the
+    /// behaviour must agree.
+    ///
+    /// Timing is not a confound: RFI pads a small board up to a minimum of ~15 rows by
+    /// reaching further into the future, so a quiet hour does not empty a real board.
+    /// Checked against 15 known-small passenger stations; 0 answered DATI NON DISPONIBILI.
+    ///
+    /// Verified 2026-09-01, 15:00–16:10 Europe/Rome: every id below answered DATI NON
+    /// DISPONIBILI with 0 rows, and every one is a `PM …` (posto di movimento) in RFI's
+    /// own naming — name and behaviour agree, which is the bar for membership.
+    /// `PM ISPRA` is deliberately ABSENT: same prefix, but it serves a real board.
+    private static let operationalPointIDs: Set<String> = [
+        "pm-chambave",
+        "pm-eccellente",
+        "pm-feroleto-antico-pianopoli",
+        "pm-gabella-grande",
+        "pm-isola-capo-rizzuto",
+        "pm-montalto-rose",
+        "pm-montjovet",
+        "pm-quart",
+        "pm-s-leonardo-di-cutro",
+        "pm-s-mauro-la-bruca",
+        "pm-thurio",
+    ]
 
-    static func isOperationalPoint(name: String) -> Bool {
-        operationalPrefixes.contains { name.hasPrefix($0) } || name.hasSuffix(operationalSuffix)
+    /// True when the catalog id is a verified operational point.
+    ///
+    /// Takes an ID, not a name, deliberately: the previous signature invited exactly the
+    /// bug this replaces — deducing a property from how RFI spells something.
+    static func isOperationalPoint(id: String) -> Bool {
+        operationalPointIDs.contains(id)
     }
 
     // MARK: - Parsing
@@ -130,8 +181,9 @@ enum StationsArtifact {
     /// off per station without touching call sites.
     static func stations(from entries: [Entry]) -> [Station] {
         entries.map { entry in
-            Station(
-                id: slug(for: entry.name),
+            let id = slug(for: entry.name)
+            return Station(
+                id: id,
                 name: entry.name,
                 city: nil,
                 displayName: entry.name,
@@ -139,7 +191,7 @@ enum StationsArtifact {
                 timezone: "Europe/Rome",
                 providerCodes: nil,
                 servedByLiveBoard: true,
-                operationalPoint: isOperationalPoint(name: entry.name) ? true : nil
+                operationalPoint: isOperationalPoint(id: id) ? true : nil
             )
         }
     }

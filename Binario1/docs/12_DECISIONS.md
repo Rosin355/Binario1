@@ -206,6 +206,66 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   per questa stazione". Cambio stazione e stato onesto **azzerano le righe** precedenti.
 - **404 `unknown_station` è un caso previsto**, non un errore da mostrare grezzo.
 
+## I nomi RFI sono etichette di visualizzazione, non un sistema di tipi (B4)
+
+> **La lezione più trasferibile di questa serie di ticket.** Vale oltre il caso che l'ha
+> generata: ogni volta che abbiamo dedotto una **proprietà** da una **stringa** scritta da
+> RFI, ci siamo sbagliati. Tre volte, in tre ticket diversi, su tre proprietà diverse.
+
+| Ticket | La regola "ovvia" | Come si è rotta |
+|---|---|---|
+| **C4** | due nomi coincidono se uno è sottoinsieme di token dell'altro | 53 collisioni reali sull'elenco RFI, **8 su stazioni già spedite** (`VENEZIA MESTRE` contro le tre `GAZZERA`/`OLIMPIA`/`OSPEDALE`) |
+| **B4** | il prefisso del nome dice **che cosa** è la voce (`PM `/`PC `/`BIVIO `/` PES` = punto operativo) | **10 voci su 21 erano stazioni passeggeri vere**, con tabellone e binario |
+| **18** | la grafia stampata identifica la fermata | la **stessa** fermata ha grafie diverse su board diversi (`BATTAGLIA T.` da Padova, `BATTAGLIA TERME` da Terme Euganee) |
+
+- **Il nome è ciò che RFI stampa, non ciò che la voce è.** RFI compone i nomi per farli
+  stare in una colonna e per farsi capire da un operatore, non per farci fare parsing.
+  Prefissi, abbreviazioni e troncamenti sono scelte tipografiche, e cambiano per contesto.
+- **La regola pratica**: una proprietà si **verifica contro il comportamento della fonte**,
+  poi si **congela in una lista esplicita**, e un **test la fissa**. Mai dedotta dalla
+  stringa a runtime. Una lista di 11 voci verificate è più onesta di una regola di due
+  righe che ne sbaglia 10.
+- **Il costo di sbagliare non è simmetrico.** Dedurre da un nome produce errori
+  *silenziosi*: nessuno si accorge che Caldiero manca dalla ricerca finché non è un
+  pendolare di Caldiero a cercarla. Una lista sbagliata, invece, è visibile in review.
+
+### Il caso B4, per esteso
+
+- **La classificazione per prefisso di nome era SBAGLIATA e ha prodotto un bug in
+  produzione.** `StationsArtifact.isOperationalPoint(name:)` marcava come punto operativo
+  ogni voce con prefisso `PM `/`PC `/`BIVIO ` o suffisso ` PES`, escludendola **dalla
+  ricerca e dal matching delle destinazioni**. Delle 21 selezionate, **10 sono stazioni
+  passeggeri reali**: RFI serve loro un tabellone di partenze con righe e binario. Un
+  pendolare di Caldiero non trovava la propria stazione, perché RFI la scrive
+  `PC CALDIERO`. È l'opposto di ciò che il B3-full doveva ottenere.
+- **La regola era giusta solo per `PM `** (11 su 12, l'eccezione è `PM ISPRA`) e **sbagliata
+  per ogni singola voce** `PC ` (3/3), `BIVIO ` (1/1) e ` PES` (5/5).
+- **Sostituita da una lista verificata di 11 id**, non da una regola migliore. La
+  classificazione resta **nostra e nel codice** — l'artefatto TSV rimane una proiezione
+  fedele della lista RFI, e `stations.json` resta metadata passeggeri curata. La firma è
+  ora `isOperationalPoint(id:)`: prende un id, non un nome, perché la vecchia firma
+  invitava proprio l'errore che sostituisce.
+- **Criterio di verifica, valido in UNA SOLA DIREZIONE.** Sul monitor RFI di un `placeId`:
+  pagina da ~5 KB con `DATI NON DISPONIBILI` e senza `<thead>`/`<tbody>` → punto operativo;
+  tabellone con righe → **stazione passeggeri**.
+  - **«ha un tabellone ⇒ è una stazione»**: solido. È su questo che poggiano i 10.
+  - **«non ha tabellone ⇒ è un punto operativo»**: **NON valido**. Circa il **15% del
+    catalogo** risponde `DATI NON DISPONIBILI` (linee sospese, servizio stagionale,
+    stazioni che RFI non monitora in live) e un campione di quelle risulta fatto di
+    stazioni passeggeri vere su ViaggiaTreno. **Mai aggiungere un id alla lista sulla sola
+    assenza di tabellone**: nome e comportamento devono concordare.
+  - L'ora del giorno non è un fattore confondente: RFI **riempie i tabelloni piccoli fino a
+    un minimo di ~15 righe** sconfinando nel futuro, quindi un'ora tranquilla non svuota un
+    tabellone reale (verificato su 15 stazioni piccole, 0 falsi allarmi).
+- **Debito noto e dichiarato**: la lista può ancora MANCARE punti operativi dal nome
+  ordinario. Non è misurabile col test sopra, e nessun segnale lessicale aiuta (nei 2414
+  nomi non marcati non esiste **nessuna** occorrenza di `BIVIO`/`PM`/`PC`/`PES`). Servirebbe
+  l'anagrafica ufficiale RFI delle *località di servizio*: spike accettato, non pianificato.
+- **Il test fissa entrambi i lati** — gli 11 come insieme esatto, i 10 come cercabili per
+  la query che un utente digita davvero ("caldiero") — più una **non-regressione**: gli
+  insiemi "nome marcato" e "flag attivo" **devono differire**, perché la loro uguaglianza
+  *è* il bug.
+
 ## Match fra nomi di stazione: uguaglianza canonica, mai sottoinsieme (C4)
 
 - **Due nomi di stazione coincidono solo se le loro forme canoniche sono UGUALI.** La
@@ -237,11 +297,17 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   la propria forma abbreviata. Non indovinare è meglio che indovinare male. Il token
   neutro rende visibili 2 collisioni che il codice prima non vedeva (`BIELLA S.PAOLO` e
   `S.PAOLO SOLBRITO` contro `SAN PAOLO`): sono reali, e la regola stretta le scioglie.
-- **I punti operativi non sono capolinea.** Le voci `PM …` / `PC …` / `… PES` / `BIVIO …`
-  (21 nello snapshot del 2026-08-31) portano `operationalPoint: true` e sono escluse **sia dal matching delle
-  destinazioni sia dalla ricerca**, ma `station(named:)` continua a risolverle: un nome
-  non perde mai la sua entità. Aprire il tabellone di un posto di movimento sarebbe una
-  promessa non mantenuta; il flag lo impedisce alla radice.
+- **I punti operativi non sono capolinea.** Portano `operationalPoint: true` e sono esclusi
+  **sia dal matching delle destinazioni sia dalla ricerca**, ma `station(named:)` continua
+  a risolverli: un nome non perde mai la sua entità. Aprire il tabellone di un posto di
+  movimento sarebbe una promessa non mantenuta; il flag lo impedisce alla radice.
+  > **SUPERATO NEL MODO DI SELEZIONARLI (B4, 2026-09-01).** Qui si leggeva che le voci
+  > `PM …`/`PC …`/`… PES`/`BIVIO …` — 21 nello snapshot del 2026-08-31 — *sono* i punti
+  > operativi. **Non lo sono: 10 di quelle 21 sono stazioni passeggeri vere**, e escluderle
+  > era un bug in produzione. Il flag e le sue conseguenze restano validi; a cambiare è
+  > **come si stabilisce chi lo porta** — non più il prefisso del nome, ma una lista di 11
+  > id verificati contro il monitor RFI. Vedi "I nomi RFI sono etichette di
+  > visualizzazione, non un sistema di tipi (B4)".
 - **La tolleranza sui nomi vecchi si sposta dove è ispezionabile.** Un'origine salvata
   sotto una grafia precedente ("Montegrotto Terme") continua ad agganciare, ma via
   `searchAliases` risolti dal catalogo — una lista esplicita e recensibile — invece che

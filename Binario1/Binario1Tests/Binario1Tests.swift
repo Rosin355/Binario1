@@ -1562,30 +1562,33 @@ struct Binario1Tests {
     }
 
     /// An operational point (PM / PC / PES) is never a printed terminus, so it must
-    /// never answer for a board destination — otherwise "NAPOLI AFRAGOLA PES" would be
-    /// a candidate for a row reading "NAPOLI AFRAGOLA". Synthetic entry: C4 introduces
-    /// the flag, B3-full populates the 21 real ones.
+    /// never answer for a board destination — a posto di movimento is not a terminus.
+    /// Synthetic entry: C4 introduces the flag, B4 populates the 11 VERIFIED ones.
+    ///
+    /// The example is `PM THURIO`, a verified operational point. It used to be
+    /// "NAPOLI AFRAGOLA PES", which B4 proved is a real passenger station with a live
+    /// board — a fine synthetic fixture, but misleading documentation.
     @Test func anOperationalPointIsNeverABoardDestination() {
-        let pes = Station(id: "napoli-afragola-pes", name: "Napoli Afragola PES", city: "Napoli",
-                          displayName: "Napoli Afragola PES", countryCode: "IT",
-                          timezone: "Europe/Rome", providerCodes: nil, boardAliases: nil,
-                          searchAliases: nil, servedByLiveBoard: nil, operationalPoint: true)
-        #expect(pes.isOperationalPoint)
+        let pm = Station(id: "pm-thurio", name: "PM Thurio", city: nil,
+                         displayName: "PM Thurio", countryCode: "IT",
+                         timezone: "Europe/Rome", providerCodes: nil, boardAliases: nil,
+                         searchAliases: nil, servedByLiveBoard: nil, operationalPoint: true)
+        #expect(pm.isOperationalPoint)
         // Not even its own exact name matches — it is excluded as a KIND of entry.
-        #expect(!StationNameMatcher.matches(station: pes, boardName: "NAPOLI AFRAGOLA PES"))
-        #expect(!StationNameMatcher.matches(station: pes, boardName: "NAPOLI AFRAGOLA"))
+        #expect(!StationNameMatcher.matches(station: pm, boardName: "PM THURIO"))
+        #expect(!StationNameMatcher.matches(station: pm, boardName: "THURIO"))
         // The same station without the flag would match its own name: the guard is
-        // what makes the difference, not the name.
-        var passenger = pes
+        // the FLAG, never the spelling of the name — see B4.
+        var passenger = pm
         passenger.operationalPoint = nil
-        #expect(StationNameMatcher.matches(station: passenger, boardName: "NAPOLI AFRAGOLA PES"))
+        #expect(StationNameMatcher.matches(station: passenger, boardName: "PM THURIO"))
     }
 
     /// Option B, both halves: an operational point is excluded from what the user can
     /// pick, but `station(named:)` still resolves it, so a name never loses its entity.
     @Test func anOperationalPointIsUnsearchableButStillResolvesByName() {
-        let pm = Station(id: "pm-ispra", name: "PM Ispra", city: nil,
-                         displayName: "PM Ispra", countryCode: "IT", timezone: "Europe/Rome",
+        let pm = Station(id: "pm-thurio", name: "PM Thurio", city: nil,
+                         displayName: "PM Thurio", countryCode: "IT", timezone: "Europe/Rome",
                          providerCodes: nil, boardAliases: nil, searchAliases: nil,
                          servedByLiveBoard: nil, operationalPoint: true)
         let padova = Station(id: "padova", name: "Padova", city: "Padova", displayName: "Padova",
@@ -1593,9 +1596,9 @@ struct Binario1Tests {
         let catalog = DefaultStationCatalog(stations: [pm, padova])
         #expect(catalog.all.count == 2)                       // still in the catalog
         #expect(catalog.searchable.map(\.id) == ["padova"])   // but never offered
-        #expect(catalog.search("ispra").isEmpty)
+        #expect(catalog.search("thurio").isEmpty)
         #expect(catalog.search("").map(\.id) == ["padova"])   // idle list too
-        #expect(catalog.station(named: "PM Ispra")?.id == "pm-ispra")   // name → entity
+        #expect(catalog.station(named: "PM Thurio")?.id == "pm-thurio")  // name → entity
     }
 
     /// RISK 3, pinned instead of implicit. `CercaViewModel.saveRoute` stores the text
@@ -3085,33 +3088,91 @@ struct Binario1Tests {
         #expect(padova?.displayName == "PADOVA")
     }
 
-    /// The 21 operational points RFI carries are flagged, excluded from search and from
-    /// destination matching, yet still resolvable as entities.
-    @Test func operationalPointsAreFlaggedExcludedButStillResolvable() {
+    /// B4 — the ELEVEN verified operational points, pinned as a set in BOTH directions
+    /// so a regenerated artifact can neither add nor drop one in silence. They stay
+    /// excluded from search and from destination matching, yet resolvable as entities.
+    @Test func theVerifiedOperationalPointsAreFlaggedExcludedButStillResolvable() {
         let catalog = DefaultStationCatalog.shared
         guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
-        let points = catalog.all.filter(\.isOperationalPoint)
-        #expect(!points.isEmpty)
-        for point in points {
-            let n = point.displayName
-            #expect(n.hasPrefix("PM ") || n.hasPrefix("PC ") || n.hasPrefix("BIVIO ")
-                    || n.hasSuffix(" PES"), "\(n) was flagged but does not look operational")
-        }
-        // Known members, from RFI's list.
-        for name in ["PM CHAMBAVE", "PC CALDIERO", "NAPOLI AFRAGOLA PES", "BIVIO D'AURISINA"] {
-            let station = catalog.station(named: name)
-            #expect(station?.isOperationalPoint == true, "\(name) is not flagged")
-            // Still an entity: a name never loses its identity…
-            #expect(station != nil)
+
+        // Verified 2026-09-01 against RFI: each answers "DATI NON DISPONIBILI", 0 rows.
+        // Re-verification recipe in StationsArtifact.operationalPointIDs.
+        let expected: Set<String> = [
+            "pm-chambave", "pm-eccellente", "pm-feroleto-antico-pianopoli",
+            "pm-gabella-grande", "pm-isola-capo-rizzuto", "pm-montalto-rose",
+            "pm-montjovet", "pm-quart", "pm-s-leonardo-di-cutro",
+            "pm-s-mauro-la-bruca", "pm-thurio",
+        ]
+        #expect(Set(catalog.all.filter(\.isOperationalPoint).map(\.id)) == expected)
+
+        for id in expected.sorted() {
+            let station = catalog.all.first { $0.id == id }
+            #expect(station != nil, "\(id) vanished from the catalog")
+            // A name never loses its entity…
+            #expect(catalog.station(named: station?.displayName ?? "")?.id == id)
         }
         // …but never a search result, and never a board destination.
         #expect(!catalog.searchable.contains { $0.isOperationalPoint })
-        let afragolaPES = catalog.station(named: "NAPOLI AFRAGOLA PES")!
-        #expect(!StationNameMatcher.matches(station: afragolaPES, boardName: "NAPOLI AFRAGOLA PES"))
-        for query in ["PM CHAMBAVE", "chambave", "afragola pes", "bivio"] {
+        let thurio = catalog.station(named: "PM THURIO")!
+        #expect(!StationNameMatcher.matches(station: thurio, boardName: "PM THURIO"))
+        for query in ["PM THURIO", "thurio", "chambave", "montjovet"] {
             #expect(!catalog.search(query, limit: 50).contains { $0.isOperationalPoint },
                     "query \"\(query)\" surfaced an operational point")
         }
+    }
+
+    /// B4 — the TEN entries the old prefix rule got wrong. Every one of them serves a
+    /// real RFI departures board with platforms, so every one is a passenger station:
+    /// unflagged, searchable, and findable by the name a commuter would actually type.
+    ///
+    /// This is the regression that shipped: a commuter at Caldiero could not find their
+    /// own station, because RFI spells it "PC CALDIERO".
+    @Test func stationsWithARealBoardAreNotClassifiedOperational() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+
+        // official name → what a user types
+        let restored = [
+            ("PC CALDIERO", "caldiero"), ("PC DOLCE'", "dolce"), ("PC MEANA", "meana"),
+            ("BIVIO D'AURISINA", "aurisina"), ("EUROPA PES", "europa"),
+            ("OGNINA PES", "ognina"), ("VALLE DI MADDALONI PES", "maddaloni"),
+            ("VIGNA CLARA PES", "vigna clara"), ("PM ISPRA", "ispra"),
+            ("NAPOLI AFRAGOLA PES", "afragola pes"),
+        ]
+        for (name, query) in restored {
+            guard let station = catalog.station(named: name) else {
+                Issue.record("\(name) is not in the catalog"); continue
+            }
+            #expect(!station.isOperationalPoint, "\(name) is still flagged operational")
+            #expect(catalog.searchable.contains { $0.id == station.id },
+                    "\(name) is missing from search")
+            #expect(catalog.search(query, limit: 50).contains { $0.id == station.id },
+                    "typing \"\(query)\" does not find \(name)")
+        }
+    }
+
+    /// B4 non-regression: the classification must NOT be derivable from the name.
+    ///
+    /// RFI uses `PM `/`PC `/`BIVIO `/` PES` for passenger stations too, so the set of
+    /// name-marked entries and the set of flagged ones MUST differ. Their equality is
+    /// precisely the bug — if this fails, the prefix shortcut has crept back in.
+    @Test func operationalClassificationIsNotDerivedFromTheName() {
+        let catalog = DefaultStationCatalog.shared
+        guard catalog.all.count > DefaultStationCatalog.embeddedFallback.count else { return }
+
+        func looksOperational(_ n: String) -> Bool {
+            n.hasPrefix("PM ") || n.hasPrefix("PC ") || n.hasPrefix("BIVIO ") || n.hasSuffix(" PES")
+        }
+        let nameMarked = Set(catalog.all.filter { looksOperational($0.displayName) }.map(\.id))
+        let flagged = Set(catalog.all.filter(\.isOperationalPoint).map(\.id))
+
+        #expect(nameMarked != flagged, "classification has fallen back to a rule over the name")
+        // At least the ten verified ones are name-marked yet correctly NOT flagged.
+        #expect(nameMarked.subtracting(flagged).count >= 10)
+        // Conversely, nothing is flagged that RFI does not itself mark: name and
+        // behaviour must agree before an id joins the set. A property of the current
+        // verified list, not a rule that produces it.
+        #expect(flagged.isSubset(of: nameMarked))
     }
 
     // MARK: - B3-full: search as a PROPERTY over the whole catalog

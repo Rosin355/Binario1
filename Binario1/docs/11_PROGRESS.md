@@ -2,6 +2,81 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-09-01 — Ticket B4: 10 stazioni passeggeri erano escluse dalla ricerca (BUG IN PRODUZIONE)
+
+Stato: **corretto, suite verde 172/172** app test (erano 170: +3 nuovi, −1 sostituito),
+più UI test. Solo iOS: `operationalPoint` **non esiste in `supabase/**`**, quindi nessun
+deploy e **nessuna CI**. Non committato — diff in revisione.
+
+### Il bug
+`StationsArtifact.isOperationalPoint(name:)` classificava come punto operativo ogni voce
+con prefisso `PM `/`PC `/`BIVIO ` o suffisso ` PES`, **escludendola da ricerca e da
+matching delle destinazioni**. Delle 21 selezionate, **10 sono stazioni passeggeri vere**:
+RFI serve loro un tabellone di partenze con righe e binario. **Un pendolare di Caldiero non
+trovava la propria stazione**, perché RFI la scrive `PC CALDIERO`. Era l'opposto di ciò che
+il B3-full doveva ottenere, ed era in produzione da quel ticket.
+
+La regola era giusta **solo per `PM `** (11/12; l'eccezione è `PM ISPRA`) e sbagliata per
+**ogni singola voce** `PC ` (3/3), `BIVIO ` (1/1), ` PES` (5/5).
+
+### La correzione
+Regola per prefisso → **lista di 11 id verificati uno per uno** contro il monitor RFI.
+Firma ora `isOperationalPoint(id:)`, non `(name:)`: la vecchia invitava proprio l'errore
+che sostituisce. La classificazione resta **nostra e nel codice** — il TSV resta proiezione
+fedele di RFI, `stations.json` resta metadata passeggeri curata. Il commento sulla lista
+porta **la ricetta per rifare la verifica**, non solo la data.
+
+Tornano cercabili: `PC CALDIERO`, `PC DOLCE'`, `PC MEANA`, `BIVIO D'AURISINA`, `EUROPA PES`,
+`OGNINA PES`, `VALLE DI MADDALONI PES`, `VIGNA CLARA PES`, `PM ISPRA`, `NAPOLI AFRAGOLA PES`.
+
+### Il criterio, e il suo limite
+Monitor RFI del `placeId`: pagina ~5 KB con `DATI NON DISPONIBILI` e senza `<thead>` →
+punto operativo; tabellone con righe → stazione passeggeri. **Vale in una sola direzione**:
+"ha un tabellone ⇒ è una stazione" è solido, "non ha tabellone ⇒ è un punto operativo"
+**no**. Non è un artefatto dell'ora: RFI riempie i tabelloni piccoli fino a **~15 righe**
+sconfinando nel futuro (0 falsi allarmi su 15 stazioni piccole reali).
+
+### Informazione di PRODOTTO, non solo tecnica
+Su un campione casuale di 60 stazioni, **il 15% del catalogo nazionale risponde `DATI NON
+DISPONIBILI`** — proiezione **~362 stazioni** (IC95 144–580). Non sono punti operativi: 8
+delle 9 campionate sono stazioni passeggeri vere note a ViaggiaTreno (`MILANO ROMOLO`,
+`LONGOBARDI`, `CAROVILLI-ROCCASICURA`, …). Sono linee sospese, servizio stagionale, o
+stazioni che RFI semplicemente non monitora in live.
+
+**Cambia cosa possiamo promettere sulla copertura**: "catalogo nazionale, 2435 stazioni"
+non significa "tabellone live per 2435 stazioni". Per circa una su sette la risposta onesta
+resta lo stato "non disponibile".
+
+**`servedByLiveBoard` RESTA COM'È — deciso, non rimandato.** Il flag è `true` per ogni voce
+dell'artefatto. Marcare le ~362 richiederebbe di sapere quali sono, e per saperlo
+servirebbero **2435 chiamate**: l'opposto della regola che ci siamo dati (verifica una
+volta, offline, mai a runtime). È lo **stato onesto a runtime** a dire la verità, ed è il
+comportamento corretto: l'utente trova la stazione, apre il tabellone, legge "non
+disponibile". Nessun debito aperto qui.
+
+**Il problema si sposta sui TESTI DELLO STORE.** Scrivere "tutte le stazioni italiane"
+prometterebbe qualcosa che per una stazione su sette non è vero — e una promessa nella
+descrizione App Store non ha uno stato onesto che la corregga. La formulazione onesta è più
+vicina a:
+
+> "Cerca fra tutte le stazioni della rete RFI; il tabellone live è disponibile dove RFI lo
+> pubblica."
+
+Serve quando scriveremo la descrizione App Store. Vale anche per screenshot e keyword: la
+copertura da vendere è quella della **ricerca**, non quella del **live**.
+
+### Test
+Fissano **entrambi i lati**, così una rigenerazione dell'artefatto non riclassifica in
+silenzio: gli 11 come **insieme esatto**, i 10 come cercabili **con la query che un utente
+digita davvero** ("caldiero" → `PC CALDIERO`), più una **non-regressione**: gli insiemi
+"nome marcato" e "flag attivo" devono differire, perché la loro uguaglianza *è* il bug.
+Aggiornati anche i due test sintetici che usavano `napoli-afragola-pes` e `pm-ispra` come
+esempi di punto operativo: ora usano `PM THURIO`, che lo è davvero.
+
+### Aperto, non pianificato
+Spike sull'anagrafica ufficiale RFI delle *località di servizio*, unica via per trovare
+punti operativi dal nome ordinario: **accettato come ticket futuro**.
+
 ## 2026-09-01 — Spike fermate intermedie (solo esplorazione)
 
 Stato: **chiuso con raccomandazione.** Nessun codice di prodotto toccato, nessun servizio,

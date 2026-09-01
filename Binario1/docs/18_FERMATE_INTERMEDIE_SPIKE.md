@@ -332,8 +332,8 @@ classificato punto operativo e quindi escluso dal matching.
 > **Non è un buco del catalogo: è un difetto della classificazione, e non è isolato.**
 > Approfondito dopo la prima stesura: il monitor di `PC CALDIERO` serve **15 righe reali
 > di partenza con binario**, ed è una stazione passeggeri a tutti gli effetti. Verificati
-> tutti e 21 i punti operativi: **9 sono falsi positivi**. Dettaglio e criterio di
-> verifica nel prerequisito **P3** della raccomandazione.
+> tutti e 21 i punti operativi: **10 sono falsi positivi**. Dettaglio, criterio di verifica
+> e limiti nel prerequisito **P3** della raccomandazione. Corretto nel ticket B4.
 
 ### Il catalogo attuale non basta — misurato
 
@@ -673,8 +673,14 @@ S.DONA&#39;&#39;&#39;&#39; DI PIAVE   →  dopo unescape:  S.DONA'''' DI PIAVE
 Il nome vero è `S.DONA' DI PIAVE`. Senza un collasso degli apostrofi ripetuti quel nome
 non aggancerà mai nulla, e il fallimento è invisibile.
 
-**P3 — La classificazione dei punti operativi ha 9 falsi positivi su 21.**
-Il caso Caldiero non è isolato: verificato aprendo il monitor RFI di tutti i 21 punti
+**P3 — La classificazione dei punti operativi ha 10 falsi positivi su 21.**
+
+> **CORRETTO E RISOLTO.** La prima stesura diceva **9** e presentava il criterio "0 righe"
+> come riusabile senza qualificarne la direzione. Entrambe le cose erano imprecise; sotto
+> il testo corretto. Il difetto è stato promosso a ticket **B4** e **corretto lo stesso
+> giorno** — vedi `11_PROGRESS.md` e `12_DECISIONS.md`.
+
+Il caso Caldiero non è isolato: verificato aprendo il monitor RFI di **tutti** i 21 punti
 operativi e contando le righe reali di partenza.
 
 | `placeId` | Nome in catalogo | Righe | Esempio |
@@ -688,31 +694,58 @@ operativi e contando le righe reali di partenza.
 | 1505 | `PM ISPRA` | 15 | BUS → SESTO CALENDE |
 | 3276 | `VALLE DI MADDALONI PES` | 15 | REG 21197 → BENEVENTO, bin. 1 |
 | 2627 | `VIGNA CLARA PES` | 15 | REG 5987 → ROMA S.PIETRO, bin. 1 |
+| **3611** | **`NAPOLI AFRAGOLA PES`** | **34** | MET 21487 → CAPUA, bin. 6 |
 
-Gli altri 12 (tutti `PM …` tranne `PM ISPRA`) restituiscono **0 righe**: la controprova
-funziona, `PM THURIO` è davvero un posto di movimento. Le destinazioni dei 9 sono
-geograficamente coerenti coi rispettivi nomi (Caldiero→Verona, Ognina/Europa→Catania,
-Vigna Clara→Roma S.Pietro), quindi non sono pagine di errore.
+`NAPOLI AFRAGOLA PES` era sfuggito alla prima passata: è l'unico dei 21 con una gemella in
+catalogo, quindi non era nel lotto degli "orfani" che avevo testato. Ha un tabellone da
+**34 righe**.
 
-**Cosa significa**: la regola di classificazione è **per prefisso/suffisso di stringa**
-(`PM ` / `PC ` / `BIVIO ` / ` PES`, in `StationsArtifact.isOperationalPoint`), ma RFI usa
-quei prefissi anche per **stazioni passeggeri reali**, dove i treni fermano e c'è un
-binario. Oggi quelle 9 sono `operationalPoint: true`, quindi **escluse dalla ricerca e dal
+Gli altri **11** restituiscono **0 righe**: la controprova funziona, `PM THURIO` è davvero
+un posto di movimento. Le destinazioni dei 10 sono geograficamente coerenti coi rispettivi
+nomi (Caldiero→Verona, Ognina/Europa→Catania, Vigna Clara→Roma S.Pietro), quindi non sono
+pagine di errore.
+
+**La regola non è imprecisa: è sbagliata su 3 prefissi su 4.**
+
+| Marcatore | Con tabellone | Punto operativo vero |
+|---|---|---|
+| `PM ` | 1 | **11** |
+| `PC ` | **3** | 0 |
+| `BIVIO ` | **1** | 0 |
+| ` PES` | **5** | 0 |
+
+Solo `PM ` funziona (11/12, l'eccezione è `PM ISPRA`). `PC `, `BIVIO ` e ` PES` sono **0 su
+9**. Oggi quei 10 sono `operationalPoint: true`, quindi **esclusi dalla ricerca e dal
 matching delle destinazioni**. Per le fermate intermedie l'effetto sarebbe peggiore: una
 fermata a Caldiero verrebbe scartata come "non è una stazione", producendo esattamente il
 falso negativo che il punto 4 vieta.
 
-Due note per chi lo sistemerà:
+Due note per chi lo legge dopo:
 - Il prefisso resta parte del nome ufficiale: la stazione **si chiama** `PC CALDIERO` nella
   lista RFI, e non esiste una voce `CALDIERO` separata (verificato: 20 dei 21 nomi non
   hanno un gemello passeggeri in catalogo). Non è un duplicato da deduplicare.
 - ViaggiaTreno conosce come stazioni passeggeri autonome `CALDIERO|S02437`,
-  `ISPRA|S01121`, `VALLE DI MADDALONI|S09304` — utile come seconda conferma indipendente,
-  con la cautela che l'`autocompletaStazione` di VT include anche le voci `PES` e quindi
-  non è un oracolo "solo passeggeri".
-- **Il criterio empirico che ha funzionato**, riusabile: un punto operativo vero ha un
-  monitor con **0 righe**; una stazione passeggeri ne ha. È una verifica da fare una volta,
-  offline, non a runtime.
+  `ISPRA|S01121`, `VALLE DI MADDALONI|S09304` — seconda conferma indipendente, con la
+  cautela che l'`autocompletaStazione` di VT include anche le voci `PES` e quindi non è un
+  oracolo "solo passeggeri".
+
+**Il criterio empirico, e il suo limite — vale in UNA SOLA DIREZIONE.**
+
+- **«ha un tabellone ⇒ è una stazione passeggeri»** — solido. È su questo che poggiano i 10.
+  Rafforzato da due controlli: 15 stazioni piccole ma certamente passeggeri danno **0 falsi
+  allarmi**, e RFI **riempie i tabelloni piccoli fino a un minimo di ~15 righe** sconfinando
+  nel futuro, quindi un'ora tranquilla non svuota un tabellone reale.
+- **«non ha tabellone ⇒ è un punto operativo»** — **NON valido**, e la prima stesura non lo
+  diceva. Su un campione casuale di 60 stazioni **non** marcate, **9 (15%)** rispondono
+  `DATI NON DISPONIBILI`, e **8 di quelle 9** ViaggiaTreno le conosce come stazioni
+  passeggeri con codice proprio (`S.LIBERATO`, `SIMERI CRICHI`, `MILANO ROMOLO`, `PIANFEI`,
+  `RIGOROSO`, `RANCHI`, `CAROVILLI-ROCCASICURA`, `LONGOBARDI`). "Nessun tabellone" mescola
+  punti operativi, linee sospese, servizio stagionale e stazioni che RFI non monitora live.
+
+Conseguenza: il criterio serve a **smarcare**, non a **marcare**. Cercare punti operativi
+non marcati richiede l'anagrafica ufficiale RFI delle *località di servizio* — non questo
+test. Nessun segnale lessicale aiuta: nei 2414 nomi non marcati non c'è **nessuna**
+occorrenza di `BIVIO`/`PM`/`PC`/`PES`.
 
 ### Perché non le altre
 
@@ -747,11 +780,13 @@ Due note per chi lo sistemerà:
    lo so", non rompersi.
 3. **Il blocco vive in un popup**, più ornamentale delle celle della tabella: RFI può
    ridisegnarlo senza toccare il tabellone.
-4. **Stazioni passeggeri classificate come punti operativi** — **9 su 21**, verificate una
-   per una (prerequisito **P3**). Finché non è corretto, una fermata a Caldiero, Vigna
-   Clara, Ognina o Valle di Maddaloni verrebbe scartata come "non è una stazione": un
-   falso negativo prodotto da noi, non dalla fonte. Il catalogo resta comunque un elenco
-   di `PlaceId` del monitor, non un'anagrafica di fermate passeggeri.
+4. **Stazioni passeggeri classificate come punti operativi** — **10 su 21**, verificate una
+   per una (prerequisito **P3**). **Risolto nel ticket B4** il 2026-09-01: senza quel fix
+   una fermata a Caldiero, Vigna Clara, Ognina o Valle di Maddaloni verrebbe scartata come
+   "non è una stazione", un falso negativo prodotto da noi e non dalla fonte. Resta aperto
+   il rischio speculare — punti operativi dal nome ordinario che il criterio non trova — e
+   il catalogo resta comunque un elenco di `PlaceId` del monitor, non un'anagrafica di
+   fermate passeggeri.
 5. **Stazioni estere fuori portata per costruzione** (12 nomi misurati): per un EC o un RJ
    la coda del percorso non sarà mai risolvibile. Va accettato, non tamponato.
 
@@ -800,10 +835,14 @@ modificato.
 - **Nessuna prova di carico né rate limit** su RFI: la strada C non aggiunge chiamate,
   quindi non cambia il profilo — ma non l'ho misurato.
 - **Il conteggio dei falsi positivi (P3) vale per i 21 nomi selezionati dalla regola
-  attuale.** Ho verificato che i 9 hanno un board di partenza reale, non il contrario: non
-  ho controllato se esistano stazioni passeggeri mancanti dal catalogo per altre ragioni,
-  né ho ispezionato i loro board arrivi. Anche questo è uno snapshot: se RFI rinomina una
-  voce, il set cambia.
+  vecchia.** Ho verificato che i 10 hanno un board di partenza reale, non il contrario:
+  la direzione inversa **non è dimostrabile con questo test** (vedi P3), quindi non so
+  quanti punti operativi dal nome ordinario restino non marcati. Non ho ispezionato i loro
+  board arrivi. Anche questo è uno snapshot: se RFI rinomina una voce, il set cambia.
+- **Le ~362 stazioni senza tabellone live** (stima dal campione, IC95 144–580) sono un
+  problema **diverso e aperto**: non sono punti operativi da smarcare, sono stazioni vere
+  che RFI non monitora. Per loro la risposta corretta resta lo stato onesto. Non le tocca
+  né questo spike né B4.
 - Non ho verificato se il blocco esista sulle stazioni molto piccole con poche righe oltre
   alle due provate (Abano 15, Terme Euganee 17), né su stazioni di sola fermata.
 - **Non ho valutato la UI**: dove e come mostrare una fermata filtrata è fuori dal mandato.
