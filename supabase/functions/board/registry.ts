@@ -9,8 +9,9 @@
 // no id here is ever guessed — the previous hand-maintained literal has been
 // replaced, not extended. See docs/12_DECISIONS.md.
 //
-// The artifact is a DATED SNAPSHOT: RFI opens and closes stations, so the entry
-// count moves between extractions. Never assert the count — assert properties.
+// The artifact is a DATED SNAPSHOT: nothing guarantees RFI's list is stable, so
+// the entry count is not a constant to rely on. Never assert the count — assert
+// properties.
 
 import { RFI_STATIONS_TSV } from "./rfi_stations_tsv.ts";
 

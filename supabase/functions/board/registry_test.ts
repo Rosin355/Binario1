@@ -2,10 +2,10 @@
 // No network. Run: `deno test`.
 //
 // The registry is now built from the shared TSV artifact, which is a DATED
-// SNAPSHOT of RFI's own list: RFI opens and closes stations, so the entry count
-// moves between extractions. These tests therefore assert PROPERTIES —
+// SNAPSHOT of RFI's own list: nothing guarantees that list is stable, so the entry
+// count is not a constant to rely on. These tests therefore assert PROPERTIES —
 // injectivity, key↔slug alignment, known anchors — and never the count, which
-// would turn the suite red the day RFI opens a stop.
+// would prove nothing while it passes and break on any upstream change.
 
 import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {

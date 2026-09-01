@@ -4,9 +4,10 @@ Cronologia sintetica delle milestone. Tenere conciso.
 
 ## 2026-08-31 — Ticket B3-full: il catalogo stazioni diventa nazionale
 
-Stato: **implementato e verificato in locale.** iOS **169/169** (erano 156, +13),
-backend **deno test 41/41** (erano 29, +12). **Tocca `supabase/**`** → il push su `main`
-attiva la CI di deploy. Smoke test post-deploy da eseguire SOLO a CI verde.
+Stato: **CHIUSA E VERIFICATA END-TO-END.** iOS **170/170** (erano 156, +14),
+backend **deno test 41/41** (erano 29, +12). Committata in `31cc991` (iOS) + `8518a71`
+(registry+CI) + `a39f65b` (nota simulatore), merge fast-forward su `main`. CI di deploy
+**verde (run #4, 32s)** e **smoke test post-deploy superato**.
 
 ### L'artefatto condiviso
 `Binario1/Binario1/Resources/rfi-stations.tsv` — 2435 voci (`placeId` + nome ufficiale)
@@ -107,6 +108,74 @@ test di regressione del fix race riscritto su `selectStation(_:)`, che percorre 
 `invalidateSelection()`. `allowsStationChange` non è più `selectableStations.count > 1`:
 con la copertura nazionale quella condizione non può più essere falsa, e una condizione
 che non può fallire nasconde ciò che doveva proteggere.
+
+### Smoke test post-deploy — superato
+
+Eseguito contro la produzione dopo la CI verde, confrontato con la baseline misurata
+prima del deploy. Il token è stato letto dal file gitignored dentro un file di config
+curl a `chmod 600`, cancellato all'uscita: mai in stdout, mai negli argomenti di
+processo, mai in un messaggio d'errore.
+
+**Le tre stazioni già servite non sono cambiate** — è la prova che la copertura
+nazionale non ha spostato ciò che già funzionava:
+`padova` 200 · `PADOVA` · placeId 2000 · 40 righe;
+`roma-termini` 200 · `ROMA TERMINI` · 2416 · 40 righe;
+`terme-euganee-abano-montegrotto` 200 · nome ufficiale · 2829 · 13 righe.
+
+**Le stazioni nuove passano da 404 a 200**, ciascuna col proprio placeId:
+`abano-terme` (364, 6 righe), `vigodarzere` (3062, 11), `milano-centrale` (1728, 40) —
+quest'ultima è la voce che l'estrattore aveva perso, e ora serve dalla produzione.
+
+Invariati: `padova&type=arrivals` → 200; slug inesistente e slug pre-rinomina
+(`montegrotto-terme`) → 404 `unknown_station`; senza token → 401 `unauthorized`;
+con token errato → 401.
+
+Tutte le risposte `source.kind=rfiLive`, `isFallback=false`, `isStale=false`: dati veri,
+nessuna fixture. Righe complete (orario, categoria, numero, destinazione, binario) e
+nessuna stringa sorgente non normalizzata (`Categoria …`, entità HTML).
+
+**L'invariante anti-contaminazione verificata in produzione**, non solo nei test:
+intersezione degli id riga fra tutte le coppie delle 6 stazioni = **0**. Il caso più
+istruttivo del campione: il treno REG 17088 compare sia a `terme-euganee` (18:06) sia a
+`abano-terme` (18:11) — lo stesso treno reale che passa per due stazioni vicine, con id
+riga distinti. È esattamente il comportamento voluto, ed è la dimostrazione che gli id
+sono scoped alla stazione.
+
+### Conflict copy di iCloud: un difetto invisibile al diff e assente dal remoto
+
+Pattern da riconoscere, non aneddoto — si ripresenterà finché il repo sta dov'è.
+
+**Il setup che lo causa.** Il progetto vive su un path **iCloud Drive** (`~/Desktop/…`)
+con full-sync attivo (`com.apple.CloudDocs`). Ogni operazione git che riscrive molti
+file — `checkout`, `merge`, `reset` — è per iCloud una raffica di cancella-e-ricrea, e
+può produrre **conflict copy** chiamate `nome 2.ext`.
+
+**Perché diventa un errore di compilazione.** Il progetto usa *synchronized file group*:
+ogni `.swift` presente nella cartella entra nel target automaticamente, senza comparire
+nel `.pbxproj`. Una conflict copy di un file sorgente è quindi una **seconda
+dichiarazione dello stesso tipo**, compilata insieme all'originale.
+
+**Perché è particolarmente insidioso.** Le conflict copy sono **non tracciate**: `git
+status` le mostra solo come untracked, il diff non le contiene, il remoto non le ha e la
+CI resta verde. Il risultato è che **solo la tua macchina non compila**, mentre ogni
+indicatore condiviso dice che va tutto bene. Aggravante: l'errore può non manifestarsi
+subito, perché una build precedente all'apparizione della copia passa regolarmente —
+quindi l'ultimo "verde" che ricordi è reale e fuorviante insieme.
+
+- **Sintomo**: `Invalid redeclaration of 'X'` (spesso con un `ambiguous use of …` a
+  ruota) su un tipo che nel repo esiste **una volta sola**.
+- **Controllo**: `find . -name "* 2.*"` dalla radice del repo.
+- **Rimedio**: verificare che la copia sia identica all'originale (`diff -q`) e solo
+  allora cancellarla. Se differisce, va letta prima: potrebbe contenere lavoro reale.
+
+**Occorrenza reale (2026-08-31, fine B3-full)**: dopo `git checkout main` +
+`merge --ff-only`, iCloud ha creato 6 conflict copy — esattamente i 6 file NUOVI del
+ticket, mai uno dei modificati. L'archive per TestFlight falliva con
+`Invalid redeclaration of 'StationsArtifact'`; git era pulito, la CI verde, il deploy in
+produzione corretto. Tutte e 6 erano byte-identiche agli originali.
+
+**Mitigazione strutturale**: spostare il repository fuori da iCloud Drive. **Non fatto —
+è una decisione dell'utente**, annotata qui perché la nota serva quando la si prenderà.
 
 ### Flakiness del runner simulatore (ambiente, non codice)
 

@@ -8,9 +8,9 @@
 //  `supabase/functions/board/rfi_stations_tsv.ts`; a backend test asserts the two
 //  never drift.
 //
-//  The artifact is a DATED SNAPSHOT, not a perpetual truth: RFI opens and closes
-//  stations, so the entry count moves between extractions. Nothing here — and no
-//  test — may assert the count. Regenerate with
+//  The artifact is a DATED SNAPSHOT, not a perpetual truth: nothing guarantees
+//  RFI's list is stable, so the entry count is not a constant to rely on. Nothing
+//  here — and no test — may assert it; assert properties instead. Regenerate with
 //  `node tools/generate-rfi-stations-tsv.mjs`; never hand-edit.
 //
 //  Station NAMES are RFI's, verbatim and UPPERCASE, exactly as the authoritative
