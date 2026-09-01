@@ -2,6 +2,73 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-09-01 — Spike fermate intermedie (solo esplorazione)
+
+Stato: **chiuso con raccomandazione.** Nessun codice di prodotto toccato, nessun servizio,
+nessuna UI. Esito completo in
+[18_FERMATE_INTERMEDIE_SPIKE.md](18_FERMATE_INTERMEDIE_SPIKE.md).
+
+### La scoperta
+Le fermate di ogni treno **sono già nell'HTML che scarichiamo**: cella 8 `RDettagli`,
+blocco *Fermate successive* → `FERMA A:ABANO T. (16:48) - TERME EUGANEE (16:53) - …`.
+`rfi.ts:233` già lo nomina per scartarlo (`detailsNote` legge solo *Informazioni*).
+Il bottone `apriFermateSuccessive` è JS su un div inline: **0 chiamate aggiuntive**.
+
+### Misure (5 board reali, 14:53–15:05 del 01/09/2026)
+- **Copertura partenze 100%** (97/97 righe), tutte le categorie e **tutti i vettori,
+  Italo compreso (11/11)** — la lacuna che aveva ucciso ViaggiaTreno nello spike 17.
+- **Copertura arrivi 0%**: sugli arrivi la cella è vuota (`aria-label="Nessuna"`). Il
+  filtro per fermata è possibile **solo sul lato partenze**.
+- **Join**: nessuna chiave necessaria, il blocco è nello stesso `<tr>`. 97/97 coerenti.
+- **Costo**: 0 chiamate; il testo pesa l'1,8–2,2% della pagina; parse 7 ms.
+- **Orari PROGRAMMATI, non live**: treni 8418 (Padova) e 9588 (Roma T.) passati da 0 a 5
+  min di ritardo con lista fermate **identica**; 0 variazioni su 37 treni in 9 minuti.
+  Mostrarli come "arrivo previsto" sarebbe fabbricazione. L'orario è l'**arrivo**
+  (2 min di scarto dalla partenza, verificato su 17084 e 3980).
+
+### Il vincolo che decide: i nomi
+291 nomi stampati distinti contro le 2435 voci del catalogo, per uguaglianza canonica
+(regola C4): **66,3% risolvono, 33,7% no, 0 ambigui**. I falliti sono abbreviazioni
+(`ABANO T.`), contrazioni (`VE MESTRE` ×18, `FIRENZE SMN`), troncamenti a 16 char e 12
+stazioni estere. **Nessuna regola meccanica li salva**: un match di prefisso renderebbe
+`VENEZIA M.` ambiguo fra 4 stazioni Mestre e `MARINO` fra 2 — la collisione che C4 ha
+rimosso. Peggio: **la forma stampata cambia a seconda del board** (treno 17019 →
+`BATTAGLIA T.` da Padova e Abano, `BATTAGLIA TERME` da Terme Euganee).
+
+Conseguenza registrata nel 18: il vocabolario alias va chiavato sulla **coppia
+(stazione osservata, fermata)**, non sulla fermata — ed è questo a rendere la copertura
+dichiarata l'unica forma corretta della funzione, non una precauzione.
+
+### Tre prerequisiti per il ticket di implementazione
+- **P1** — i `boardAliases` attuali sono tarati sui **capolinea**, non sulle fermate
+  intermedie: 6 stazioni su 17 non agganciano, e `Firenze S.M.N.` non aggancia
+  `FIRENZE SMN`. Serve un campo separato, non un allargamento.
+- **P2** — RFI serve l'apostrofo **quadruplo-escapato** (`S.DONA&#39;&#39;&#39;&#39;`):
+  senza collasso degli apostrofi ripetuti quel nome non aggancia mai.
+- **P3** — la classificazione dei punti operativi (per prefisso `PM `/`PC `/`BIVIO `/
+  suffisso ` PES`) ha **9 falsi positivi su 21**: `PC CALDIERO`, `PC DOLCE'`, `PC MEANA`,
+  `BIVIO D'AURISINA`, `EUROPA PES`, `OGNINA PES`, `VALLE DI MADDALONI PES`,
+  `VIGNA CLARA PES`, `PM ISPRA` servono **board di partenza reali con binario**. Oggi
+  sono esclusi da ricerca e matching. Criterio di verifica riusabile: un punto operativo
+  vero ha un monitor con **0 righe** (controprova `PM THURIO`), una stazione passeggeri no.
+
+### Raccomandazione
+**Strada C (RFI), ma a copertura dichiarata per stazione verificata**, mai universale.
+Il caso del brief funziona oggi: da Padova, filtrando `TERME EUGANEE` (alias già in
+`stations.json`), escono 4 treni reali — di cui **2 RV per Bologna**, che la conoscenza
+statica di linea avrebbe perso. Condizione non negoziabile: **un mancato aggancio è
+"non lo so", mai "non ferma"** — un filtro che tace produrrebbe falsi negativi, cioè
+fabbricazione in negativo. ViaggiaTreno **scartata come fonte** (0/11 Italo, 74 chiamate
+per tabellone, termini che vietano il deep linking) ma **promossa a strumento offline**
+per generare il vocabolario: l'allineamento RFI↔VT ha prodotto 92 coppie
+stampato→ufficiale in una passata. GTFS resta chiusa; novità registrata: il NAP ora
+espone a catalogo un dataset nazionale *OAP Trenitalia — NeTEx L1*, **senza asset
+scaricabile**.
+
+### Nota
+`15_DATA_SOURCE_DECISION.md`, citato nel brief, **non esiste nel repo** (mancano 14 e 15).
+Il fatto che serviva è però verificato nello spike 17: `soluzioniViaggioNew` → HTTP 404.
+
 ## 2026-08-31 — Ticket B3-full: il catalogo stazioni diventa nazionale
 
 Stato: **CHIUSA E VERIFICATA END-TO-END.** iOS **170/170** (erano 156, +14),
