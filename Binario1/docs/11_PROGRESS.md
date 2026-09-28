@@ -3153,6 +3153,10 @@ Aggiornato al 2026-08-31, chiusura del B3-full. Questa sezione è in fondo di pr
   (aggiornamenti push ActivityKit, motivato dal limite di prodotto scritto in
   `12_DECISIONS.md`) e il **widget home screen**. `00_PDR.md` non elenca più widget e
   Live Activities fra i non-obiettivi dal 2026-08-31.
+- **HDR1 — Il tabellone live non mostra l'orario di lettura del backend**
+  ("Backend · RFI online" senza timestamp), mentre la Live Activity mostra "letto
+  HH:mm". Allineare: stessa etichetta e stessa fonte del timestamp. Modifica a una
+  view + stringhe, con test.
 - **Osservabilità delle destinazioni non risolte** (proposta del C4, non implementata):
   contare nel blocco `diagnostics` le destinazioni che non agganciano alcuna entità del
   catalogo, così i `boardAliases` mancanti si ricavano dal traffico reale invece che per
