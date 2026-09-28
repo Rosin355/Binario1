@@ -6,7 +6,9 @@ Cronologia sintetica delle milestone. Tenere conciso.
 
 Stato: **corretto, suite verde 172/172** app test (erano 170: +3 nuovi, −1 sostituito),
 più UI test. Solo iOS: `operationalPoint` **non esiste in `supabase/**`**, quindi nessun
-deploy e **nessuna CI**. Non committato — diff in revisione.
+deploy e **nessuna CI**.
+
+Verificato su device il 2026-09-27: PC CALDIERO mostra tabellone reale con righe e binari. B4 chiuso.
 
 ### Il bug
 `StationsArtifact.isOperationalPoint(name:)` classificava come punto operativo ogni voce
