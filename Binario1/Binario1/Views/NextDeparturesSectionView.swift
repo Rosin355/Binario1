@@ -15,6 +15,9 @@ struct NextDeparturesSectionView: View {
     /// Optional title override (e.g. "Programmed departures" for an out-of-window
     /// scheduled demo). Defaults to the board's "Next departures/arrivals" title.
     var titleKey: LocalizedStringKey? = nil
+    /// Rows that can be followed as a Live Activity, and what tapping one does.
+    var followableRowIDs: Set<TrainBoardRow.ID> = []
+    var onSelectRow: ((TrainBoardRow) -> Void)? = nil
 
     var body: some View {
         if !rows.isEmpty {
@@ -28,6 +31,7 @@ struct NextDeparturesSectionView: View {
                             boardType: boardType,
                             isImminent: row.id == imminentRowID
                         )
+                        .followable(followableRowIDs.contains(row.id) ? onSelectRow.map { action in { action(row) } } : nil)
                         if index < rows.count - 1 {
                             Rectangle()
                                 .fill(BoardColors.gridLine)

@@ -232,7 +232,11 @@ Il rischio estetico è trasformarla in una normale app trasporti. L'MVP deve pro
 
 Aggiornata al 2026-08-31 con ciò che viene davvero dopo.
 
-- Widget iOS e Live Activity: mockup **M1 approvati**, 4 correzioni **M1-fix** pendenti.
+- **Live Activity sul treno seguito: LA1 fatto (2026-09-28)**, aggiornamenti solo locali
+  (app in primo piano) e staleness visibile. Le 4 correzioni M1-fix sono diventate le
+  regole di design in `12_DECISIONS.md`. **LA2 = aggiornamenti push ActivityKit**: non
+  deciso, e finché non lo è le notifiche push restano fra i non-obiettivi.
+- Widget iOS (home screen): da fare.
 - Stazioni preferite.
 - ~~Geofence stazione.~~ **Rimosso**: contraddice i non-obiettivi di questo stesso
   documento ("nessuna geolocalizzazione automatica") e l'inquadramento al punto 0.

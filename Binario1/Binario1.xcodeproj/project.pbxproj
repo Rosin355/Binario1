@@ -6,7 +6,20 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		CD1A92EC306AC36100DA52AA /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CD1A92EB306AC36100DA52AA /* WidgetKit.framework */; };
+		CD1A92EE306AC36100DA52AA /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CD1A92ED306AC36100DA52AA /* SwiftUI.framework */; };
+		CD1A92FB306AC36300DA52AA /* Binario1LiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CD1A92E9306AC36100DA52AA /* Binario1LiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		CD1A92F9306AC36300DA52AA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CDDAFCB02FDDA6C9005B2B00 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CD1A92E8306AC36100DA52AA;
+			remoteInfo = Binario1LiveActivityExtension;
+		};
 		CDDAFCC62FDDA6CB005B2B00 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CDDAFCB02FDDA6C9005B2B00 /* Project object */;
@@ -23,16 +36,56 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		CD1A92FC306AC36300DA52AA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CD1A92FB306AC36300DA52AA /* Binario1LiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		BA10C0F100000000005B2B00 /* Binario1.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Binario1.debug.xcconfig; sourceTree = "<group>"; };
 		BA10C0F200000000005B2B00 /* Binario1Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Binario1Secrets.example.xcconfig; sourceTree = "<group>"; };
 		BA10C0F300000000005B2B00 /* Binario1.testflight.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Binario1.testflight.xcconfig; sourceTree = "<group>"; };
+		CD1A92E9306AC36100DA52AA /* Binario1LiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Binario1LiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CD1A92EB306AC36100DA52AA /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		CD1A92ED306AC36100DA52AA /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		CDDAFCB82FDDA6C9005B2B00 /* Binario1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Binario1.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CDDAFCC52FDDA6CB005B2B00 /* Binario1Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Binario1Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CDDAFCCF2FDDA6CB005B2B00 /* Binario1UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Binario1UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CD1A9300306AC36300DA52AA /* Exceptions for "Binario1LiveActivity" folder in "Binario1LiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = CD1A92E8306AC36100DA52AA /* Binario1LiveActivityExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		CD1A92EF306AC36100DA52AA /* Binario1LiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CD1A9300306AC36300DA52AA /* Exceptions for "Binario1LiveActivity" folder in "Binario1LiveActivityExtension" target */,
+			);
+			path = Binario1LiveActivity;
+			sourceTree = "<group>";
+		};
+		CD1A9303306AC48500DA52AA /* Binario1Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Binario1Shared;
+			sourceTree = "<group>";
+		};
 		CDDAFCBA2FDDA6C9005B2B00 /* Binario1 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Binario1;
@@ -51,6 +104,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		CD1A92E6306AC36100DA52AA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CD1A92EE306AC36100DA52AA /* SwiftUI.framework in Frameworks */,
+				CD1A92EC306AC36100DA52AA /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CDDAFCB52FDDA6C9005B2B00 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -85,13 +147,25 @@
 			path = Config;
 			sourceTree = "<group>";
 		};
+		CD1A92EA306AC36100DA52AA /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				CD1A92EB306AC36100DA52AA /* WidgetKit.framework */,
+				CD1A92ED306AC36100DA52AA /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		CDDAFCAF2FDDA6C9005B2B00 = {
 			isa = PBXGroup;
 			children = (
+				CD1A9303306AC48500DA52AA /* Binario1Shared */,
 				BA10C0F000000000005B2B00 /* Config */,
 				CDDAFCBA2FDDA6C9005B2B00 /* Binario1 */,
 				CDDAFCC82FDDA6CB005B2B00 /* Binario1Tests */,
 				CDDAFCD22FDDA6CB005B2B00 /* Binario1UITests */,
+				CD1A92EF306AC36100DA52AA /* Binario1LiveActivity */,
+				CD1A92EA306AC36100DA52AA /* Frameworks */,
 				CDDAFCB92FDDA6C9005B2B00 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -102,6 +176,7 @@
 				CDDAFCB82FDDA6C9005B2B00 /* Binario1.app */,
 				CDDAFCC52FDDA6CB005B2B00 /* Binario1Tests.xctest */,
 				CDDAFCCF2FDDA6CB005B2B00 /* Binario1UITests.xctest */,
+				CD1A92E9306AC36100DA52AA /* Binario1LiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -109,6 +184,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		CD1A92E8306AC36100DA52AA /* Binario1LiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CD1A9301306AC36300DA52AA /* Build configuration list for PBXNativeTarget "Binario1LiveActivityExtension" */;
+			buildPhases = (
+				CD1A92E5306AC36100DA52AA /* Sources */,
+				CD1A92E6306AC36100DA52AA /* Frameworks */,
+				CD1A92E7306AC36100DA52AA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CD1A92EF306AC36100DA52AA /* Binario1LiveActivity */,
+				CD1A9303306AC48500DA52AA /* Binario1Shared */,
+			);
+			name = Binario1LiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = Binario1LiveActivityExtension;
+			productReference = CD1A92E9306AC36100DA52AA /* Binario1LiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		CDDAFCB72FDDA6C9005B2B00 /* Binario1 */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CDDAFCD92FDDA6CB005B2B00 /* Build configuration list for PBXNativeTarget "Binario1" */;
@@ -116,12 +214,15 @@
 				CDDAFCB42FDDA6C9005B2B00 /* Sources */,
 				CDDAFCB52FDDA6C9005B2B00 /* Frameworks */,
 				CDDAFCB62FDDA6C9005B2B00 /* Resources */,
+				CD1A92FC306AC36300DA52AA /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				CD1A92FA306AC36300DA52AA /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
+				CD1A9303306AC48500DA52AA /* Binario1Shared */,
 				CDDAFCBA2FDDA6C9005B2B00 /* Binario1 */,
 			);
 			name = Binario1;
@@ -187,6 +288,9 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					CD1A92E8306AC36100DA52AA = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					CDDAFCB72FDDA6C9005B2B00 = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -218,11 +322,19 @@
 				CDDAFCB72FDDA6C9005B2B00 /* Binario1 */,
 				CDDAFCC42FDDA6CB005B2B00 /* Binario1Tests */,
 				CDDAFCCE2FDDA6CB005B2B00 /* Binario1UITests */,
+				CD1A92E8306AC36100DA52AA /* Binario1LiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		CD1A92E7306AC36100DA52AA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CDDAFCB62FDDA6C9005B2B00 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -247,6 +359,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		CD1A92E5306AC36100DA52AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CDDAFCB42FDDA6C9005B2B00 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -271,6 +390,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		CD1A92FA306AC36300DA52AA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CD1A92E8306AC36100DA52AA /* Binario1LiveActivityExtension */;
+			targetProxy = CD1A92F9306AC36300DA52AA /* PBXContainerItemProxy */;
+		};
 		CDDAFCC72FDDA6CB005B2B00 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = CDDAFCB72FDDA6C9005B2B00 /* Binario1 */;
@@ -284,6 +408,102 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		CD1A92FD306AC36300DA52AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5L72YV7W44;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Binario1LiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Binario1;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.romeshsinghabahu.Binario1.Binario1LiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CD1A92FE306AC36300DA52AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5L72YV7W44;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Binario1LiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Binario1;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.romeshsinghabahu.Binario1.Binario1LiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CD1A92FF306AC36300DA52AA /* TestFlight */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5L72YV7W44;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Binario1LiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Binario1;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.romeshsinghabahu.Binario1.Binario1LiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = TestFlight;
+		};
 		CDDAFCD72FDDA6CB005B2B00 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -704,6 +924,16 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		CD1A9301306AC36300DA52AA /* Build configuration list for PBXNativeTarget "Binario1LiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CD1A92FD306AC36300DA52AA /* Debug */,
+				CD1A92FE306AC36300DA52AA /* Release */,
+				CD1A92FF306AC36300DA52AA /* TestFlight */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		CDDAFCB32FDDA6C9005B2B00 /* Build configuration list for PBXProject "Binario1" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

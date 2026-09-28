@@ -206,6 +206,125 @@ Decisioni di prodotto/architettura non deducibili dal codice. Tenere conciso.
   per questa stazione". Cambio stazione e stato onesto **azzerano le righe** precedenti.
 - **404 `unknown_station` è un caso previsto**, non un errore da mostrare grezzo.
 
+## Live Activity sul treno seguito (LA1 — Milestone 4)
+
+Su una riga del tabellone **partenze live** l'utente sceglie "Segui questo treno": Dynamic
+Island e Lock Screen mostrano orario, categoria e numero, destinazione, ritardo se c'è e
+soprattutto il binario. Nient'altro. **Una sola attività alla volta** (seguirne un altro
+sostituisce), **solo partenze**. Fuori scope: widget home screen, push di cambio binario,
+fermate intermedie, tratte salvate come soggetto, Siri/App Intents.
+
+### A — Aggiornamenti SOLO LOCALI; il push è LA2
+
+- **L'app rilegge il tabellone ogni 60 s mentre è in primo piano**, e subito quando torna
+  attiva. **Fuori dal primo piano non aggiorna nulla.** Niente background refresh: iOS lo
+  concede quando vuole, anche mai, e prometterebbe un'affidabilità che non ha.
+- **La staleness è visibile senza l'app**: ogni aggiornamento imposta `staleDate` = lettura
+  + **3 minuti**. Scaduta, iOS passa `isStale` all'extension, che scrive
+  "non aggiornato · letto HH:mm" e disegna binario e ritardo **tratteggiati**. Mai un dato
+  vecchio con l'aspetto di uno fresco.
+- **Il limite di prodotto, dichiarato — è la motivazione di LA2.** Il binario viene spesso
+  assegnato 10–20 minuti prima della partenza. Con aggiornamenti solo locali quel
+  momento arriva sulla Lock Screen **solo se l'utente riapre l'app**. La Live Activity di
+  LA1 è un promemoria onesto che invecchia a vista, non un tracker in tempo reale.
+- **Perché non push subito**: richiede capability Push e chiave APNs (portale Apple),
+  la prima tabella DB del progetto per i token, un endpoint di registrazione, un poller
+  schedulato e la firma verso APNs — tutto in produzione, con deploy automatico su
+  `supabase/**` — più l'aggiornamento del PDR, dove le notifiche push sono un
+  non-obiettivo. È un ticket backend a sé.
+- **`ContentState` è già il futuro payload push**: i nomi delle proprietà sono le chiavi
+  JSON (`tracking`, `delayMinutes`, `isCancelled`, `platform`, `readAtUnix`) e un test le
+  fissa. `readAtUnix` è in **secondi dal 1970** di proposito: un `Date` verrebbe decodificato
+  rispetto al 2001, una trappola silenziosa per chi scriverà il mittente.
+
+### Identità del treno: il terzo asse (dopo stazione e modalità, C3)
+
+- **Chiave: `stationSlug` + partenze + numero treno + ora programmata `HH:mm`
+  (Europe/Rome).** Il numero è un identificativo, non un nome; l'ora programmata non si
+  muove col ritardo. La categoria **non** fa parte della chiave: è un'etichetta stampata.
+- **Non l'id riga del backend**, che porta la data del *fetch*: a cavallo di mezzanotte lo
+  stesso treno cambia id (debito in `11_PROGRESS.md`, LA1). La chiave lo aggira, non lo
+  corregge.
+- La chiave deve risolvere **esattamente una riga**. Più di una → "non lo so": non si
+  sceglie mai. Righe senza numero treno non si possono seguire.
+
+### Quando la chiave non risolve più: tre casi, due stati
+
+- **La stazione non risponde, o il dato non è fidato** (errore, tabellone non
+  disponibile, cache vecchia del backend `isStale`/`isFallback`, risposta non
+  `.backendLive`): **nessun aggiornamento**. Restano gli ultimi valori con il loro orario;
+  la `staleDate` dice "non aggiornato". Un "non lo so" non diventa mai altro.
+- **Un tabellone fresco e live non elenca più il treno**: "non più sul tabellone ·
+  partenza prevista HH:mm" / "no longer on the board · scheduled HH:mm", con gli ultimi
+  valori visti tratteggiati (il ritardo visto resta visibile, così "prevista 14:32" con
+  "+20'" accanto non fa credere a una partenza avvenuta).
+- **"PARTITO" non esiste**: RFI toglie la riga, non scrive "partito". Dedurlo da due
+  segnali sarebbe un'inferenza presentata come fatto. "Partito" e "non più in tabellone"
+  collassano nello stesso stato, onesto per entrambi: l'orario sulla riga lascia
+  all'utente la deduzione.
+- **Fine dell'attività**: 15 minuti dopo l'ultima partenza attesa nota (programmata +
+  ultimo ritardo visto), **non** alla sparizione dal tabellone — un treno che RFI toglie
+  per un momento e rimette va ancora seguito. Oltre, vale il limite di 8 ore di iOS.
+
+### Timestamp: la NOSTRA lettura, non l'aggiornamento di RFI
+
+- Il parser non cattura l'`updatedAt` del monitor RFI: l'orario disponibile è il fetch
+  del backend. L'etichetta lo dice: **"letto HH:mm" / "checked HH:mm"**, e da stale
+  **"non aggiornato · letto HH:mm" / "not updated · checked HH:mm"**. Completo dove c'è
+  spazio, mai troncato (va a capo piuttosto).
+
+### B — Codice condiviso: la cartella `Binario1Shared/`
+
+- **Un synchronized root group incluso in entrambi i target.** La cartella dichiara da sé
+  cosa gira nell'extension, senza liste di membership da mantenere. Dentro: il contratto
+  (`FollowedTrainAttributes`), il modello di visualizzazione (`FollowedTrainDisplay`),
+  `BoardTheme.swift` (spostato con `git mv`, contenuto invariato), `DelayVisualState`
+  (estratto da `DelayBadgeView`: una sola politica di soglie) e le stringhe
+  `LiveActivity.xcstrings`.
+- **L'extension non riceve modelli di dominio**: non fa fetch, non ha token, non conosce la
+  modalità sorgente. Disegna solo ciò che l'app le passa. Framework o package sono stati
+  scartati: avrebbero spostato mezza app, inclusi parser, registry e catalogo.
+- **Stringhe in una tabella a parte (`LiveActivity`)**, non in un secondo
+  `Localizable.xcstrings`: due cataloghi con lo stesso nome nello stesso target
+  collidono. IT/EN in sync, un test lo verifica sul bundle.
+- **Isolamento**: l'extension compila con `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` come
+  l'app, così i file condivisi hanno la stessa semantica; i tipi del contratto sono
+  `nonisolated` perché ActivityKit li usa fuori dal main actor.
+- **Conflict copy iCloud**: una `nome 2.swift` in `Binario1Shared/` verrebbe compilata in
+  **entrambi** i target. Il controllo `find . -name "* 2.*"` prima di ogni commit resta
+  obbligatorio.
+
+### C — Release: il requisito è sul DATO, non sulla build
+
+- **Si può seguire un treno solo se la risposta mostrata è `.backendLive`, fresca e non
+  di fallback** — valutato per risposta, sia all'avvio sia a ogni aggiornamento. In Release
+  la risposta è `.mock`, quindi l'azione non compare. Copre anche il caso che un flag di
+  build non vedrebbe: in DEBUG il fallback alla fixture non alimenta mai una Live Activity.
+- `NSSupportsLiveActivities` sta in `Config/Binario1-Info.plist`, letto solo da Debug e
+  TestFlight: la Release **non dichiara** Live Activity. Seconda rete, stessa regola.
+- **Il guardrail a 3 rami è invariato** (sezione "Sorgente TestFlight vs Release"). Portare
+  la Release sul backend live è una decisione di go-to-market separata, non un effetto
+  collaterale di questo ticket.
+
+### Regole di design della Live Activity
+
+Pezzo di tabellone ritagliato nell'isola: nero graphite, LED ambra, cifre monospaziate,
+dot-matrix sull'orario grande (griglia di punti come `Shape`, perché un widget deve
+poterla disegnare; base `Text` sempre visibile come per il titolo stazione).
+
+- **Superfici**: compact = ora a sinistra, binario a destra, nient'altro; expanded =
+  categoria+numero, destinazione, ora, ritardo evidenziato, binario grande; Lock Screen =
+  riga completa del tabellone + stato.
+- **1. Coerenza interna del dato**: ogni superficie legge lo stesso `FollowedTrainDisplay`;
+  se il badge dice binario 6 nient'altro può dire 2.
+- **2. Timestamp completo dove c'è spazio**, mai troncato.
+- **3. Regge in monocromatico**: la Lock Screen può essere desaturata, quindi niente è
+  affidato al solo colore. Ritardo = chip **pieno** con testo "+N'" ed etichetta "RIT.";
+  binario = box **a contorno** con "BIN."; valori non confermati = contorni
+  **tratteggiati** e testo esplicito. Il colore rinforza, non porta il significato.
+- **4. Stato onesto ovunque**: binario assente "--", ritardo assente = nessun elemento
+  (mai "0'"), cancellato = parola, mai un valore inventato per riempire il layout.
+
 ## I nomi RFI sono etichette di visualizzazione, non un sistema di tipi (B4)
 
 > **La lezione più trasferibile di questa serie di ticket.** Vale oltre il caso che l'ha

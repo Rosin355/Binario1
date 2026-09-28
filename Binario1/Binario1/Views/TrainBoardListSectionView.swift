@@ -13,6 +13,10 @@ struct TrainBoardListSectionView: View {
     let boardType: BoardType
     var stationName: String = ""
     var selectedRowID: TrainBoardRow.ID?
+    /// Rows that can be followed as a Live Activity, and what tapping one does.
+    /// Empty / nil → rows are not tappable (previews, non-live sources).
+    var followableRowIDs: Set<TrainBoardRow.ID> = []
+    var onSelectRow: ((TrainBoardRow) -> Void)? = nil
 
     /// "Tutte le partenze da Padova" / "Tutti gli arrivi a Padova" (uppercased by the
     /// section header). Falls back to the plain title when no station name is given.
@@ -32,6 +36,7 @@ struct TrainBoardListSectionView: View {
                         boardType: boardType,
                         isSelected: row.id == selectedRowID
                     )
+                    .followable(followableRowIDs.contains(row.id) ? onSelectRow.map { action in { action(row) } } : nil)
                     if index < rows.count - 1 {
                         Rectangle().fill(BoardColors.gridLine).frame(height: 1)
                     }

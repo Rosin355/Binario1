@@ -46,6 +46,14 @@ struct RootTabView: View {
     /// stack and no back chevron — the user never leaves Partenze.
     @State private var showsStationPicker = false
 
+    /// The one followed train's Live Activity (LA1). Reads its board through the
+    /// same service factory as the tabellone; only fresh LIVE reads may update it.
+    @State private var followedTrainTracker = FollowedTrainTracker(
+        service: AppEnvironment.makeTrainBoardService(),
+        activities: LiveFollowedTrainActivities()
+    )
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var selectedTab: AppTab = .departures
     /// Bumped each time the Partenze tab is (re)selected → replays its intro animation.
     @State private var departuresAnimationToken = 0
@@ -88,6 +96,15 @@ struct RootTabView: View {
         }
         .tint(BoardColors.amber)
         .preferredColorScheme(.dark)
+        .environment(followedTrainTracker)
+        .task(id: scenePhase) {
+            // Local updates only (LA1): the followed train is re-read while the app is
+            // active and never otherwise. Leaving `.active` cancels the loop; the
+            // activity's staleDate then says "non aggiornato" on the lock screen.
+            if scenePhase == .active {
+                await followedTrainTracker.runWhileActive()
+            }
+        }
         .onChange(of: selectedTab) { _, newTab in
             // Replay the intro title animation on (re)entry — no data reload.
             if newTab == .departures { departuresAnimationToken += 1 }

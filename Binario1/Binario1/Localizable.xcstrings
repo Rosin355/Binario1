@@ -294,6 +294,22 @@
         }
       }
     },
+    "action.ok" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      }
+    },
     "action.removeSavedJourney" : {
       "localizations" : {
         "en" : {
@@ -650,6 +666,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dati non disponibili. Riprova tra poco."
+          }
+        }
+      }
+    },
+    "follow.action.follow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow this train"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segui questo treno"
+          }
+        }
+      }
+    },
+    "follow.action.stop" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop following"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smetti di seguire"
+          }
+        }
+      }
+    },
+    "follow.dialog.message" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time, delay and platform on the Lock Screen. They update only while the app is open."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orario, ritardo e binario sulla schermata di blocco. Si aggiornano solo mentre l'app è aperta."
+          }
+        }
+      }
+    },
+    "follow.error.disabled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Activities are turned off. Turn them on in Settings › Binario1."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Activity disattivate. Attivale in Impostazioni › Binario1."
+          }
+        }
+      }
+    },
+    "follow.error.startFailed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't follow this train."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile seguire questo treno."
           }
         }
       }

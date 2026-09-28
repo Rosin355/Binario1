@@ -31,6 +31,10 @@ final class StationBoardViewModel {
     private(set) var sourceKind: BoardSourceKind = .mock
     /// Backend-reported fallback flag (alternate/last-known data), for the header.
     private(set) var sourceIsFallback = false
+    /// The response currently on screen, kept whole so "segui questo treno" judges
+    /// the SAME data the user is looking at (source kind, staleness, station, rows).
+    /// Cleared together with `rows` whenever the selection or the data is dropped.
+    private(set) var displayedResponse: StationBoardResponse?
 
     /// Data is considered stale if older than this.
     private let staleThreshold: TimeInterval = 3 * 60
@@ -206,6 +210,13 @@ final class StationBoardViewModel {
         return featured.count >= 3 ? featured[2].id : featured.last?.id
     }
 
+    /// What following `row` would start, or nil when it cannot honestly be followed
+    /// (not a fresh live departures read, no train number, already gone, ambiguous).
+    func followTarget(for row: TrainBoardRow) -> FollowedTrainTarget? {
+        guard boardType == .departures, let displayedResponse else { return nil }
+        return FollowedTrainEligibility.target(for: row, in: displayedResponse, now: now())
+    }
+
     // MARK: - Actions
 
     /// Loads the board. `force` (manual pull-to-refresh) bypasses the dedupe guard;
@@ -281,6 +292,7 @@ final class StationBoardViewModel {
                 print("[Board] board-type mismatch · requested=\(requestedType.rawValue) · responded=\(response.boardType.rawValue) → discarded")
                 #endif
                 rows = []
+                displayedResponse = nil
                 errorMessageKey = "error.dataUnavailable"
                 lastFetchKey = key
                 lastFetchAt = now()
@@ -294,6 +306,7 @@ final class StationBoardViewModel {
             scheduledWindow = response.scheduledWindow
             sourceKind = response.sourceKind
             sourceIsFallback = response.sourceIsFallback
+            displayedResponse = response
             errorMessageKey = nil
             isBoardUnavailableForStation = false
             lastFetchKey = key
@@ -312,6 +325,7 @@ final class StationBoardViewModel {
             errorMessageKey = "error.dataUnavailable"
             isBoardUnavailableForStation = false
             sourceIsStale = true
+            displayedResponse = nil
             lastFetchKey = key
             lastFetchAt = now()
         }
@@ -327,6 +341,7 @@ final class StationBoardViewModel {
     /// to a different station) and clear the raw-error message.
     private func markBoardUnavailable() {
         rows = []
+        displayedResponse = nil
         isBoardUnavailableForStation = true
         errorMessageKey = nil
         isLoading = false
@@ -366,6 +381,7 @@ final class StationBoardViewModel {
     private func invalidateSelection() {
         fetchGeneration += 1
         rows = []
+        displayedResponse = nil
         isBoardUnavailableForStation = false
         errorMessageKey = nil
         lastUpdated = nil

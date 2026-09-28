@@ -3,10 +3,15 @@
 <!-- DEBUG-only partial Info.plist. Xcode merges the generated keys (CFBundle*, scene
      manifest, etc.) on top of this file. The single custom key below is populated by
      build-setting substitution from Config/Binario1.debug.xcconfig (empty when the
-     gitignored local token file is absent). No secret lives in this committed file. -->
+     gitignored local token file is absent). No secret lives in this committed file.
+     NSSupportsLiveActivities lives here, not in the target build settings, so plain
+     Release (which never reads this file and runs on .mock) declares no Live Activity:
+     a Live Activity fed by mock data would be a lie on the lock screen. -->
 <plist version="1.0">
 <dict>
     <key>BINARIO_BOARD_APP_TOKEN</key>
     <string>$(BINARIO_BOARD_APP_TOKEN)</string>
+    <key>NSSupportsLiveActivities</key>
+    <true/>
 </dict>
 </plist>

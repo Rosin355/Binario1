@@ -103,9 +103,10 @@ Non più fuori scope (superate dai fatti):
 
 - ~~Backend reale.~~ **In produzione da 2026-06**: Edge Function `board` su Supabase,
   con app token e rate limit. È oggi la sorgente dati dell'app.
-- ~~Widget.~~ ~~Live Activities.~~ **Prossimo blocco di lavoro**: mockup M1 approvati,
-  4 correzioni M1-fix pendenti. (`00_PDR.md` li elenca ancora fra i non-obiettivi: è la
-  contraddizione da sanare nella revisione del PRD.)
+- ~~Widget.~~ ~~Live Activities.~~ **Milestone 4 — Widget e Live Activity** (`00_PDR.md`,
+  dove non figurano più fra i non-obiettivi dal 2026-08-31). La Live Activity sul treno
+  seguito è il ticket LA1 (2026-09-28, aggiornamenti solo locali); il push è LA2. Il
+  widget home screen resta da fare.
 - ~~Pubblicazione App Store.~~ Non ancora fatta, ma non più esclusa per principio: la
   build Release è configurata (`.mock`, senza token) proprio per poterci arrivare.
 

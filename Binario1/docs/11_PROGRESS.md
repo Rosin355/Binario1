@@ -2,6 +2,72 @@
 
 Cronologia sintetica delle milestone. Tenere conciso.
 
+## 2026-09-28 — Ticket LA1: Live Activity sul treno seguito (Milestone 4)
+
+Stato: **implementato, suite verde: 195 app test + 3 UI test (205 esecuzioni)**. Prima
+del ticket: 172 app test + 3 UI test (182 esecuzioni); +23 test nuovi in
+`FollowedTrainTests.swift`. Solo iOS: **nessun `supabase/**`, nessuna CI**. Primo target
+nuovo del progetto (`Binario1LiveActivityExtension`, creato in Xcode dal template).
+Decisioni A/B/C e regole di design in `12_DECISIONS.md` ("Live Activity sul treno
+seguito").
+
+### Cosa fa
+Tocco su una riga del tabellone **partenze live** → "Segui questo treno" → Dynamic Island
+(compact: ora | binario; expanded: categoria+numero, destinazione, ora dot-matrix, ritardo,
+binario grande) e Lock Screen (riga completa + stato). Una sola attività alla volta.
+Il dialog dichiara il limite: "Si aggiornano solo mentre l'app è aperta".
+
+### Le tre decisioni, in una riga ciascuna
+- **A**: aggiornamenti **solo locali** (ogni 60 s in primo piano), `staleDate` a 3 minuti.
+  `ContentState` progettato come futuro payload push (LA2), chiavi fissate da un test.
+- **B**: cartella `Binario1Shared/` in entrambi i target; l'extension disegna soltanto.
+- **C**: il requisito è sul **dato** (risposta `.backendLive`, fresca, non di fallback):
+  in Release (`.mock`) e sul fallback alla fixture in DEBUG non si può seguire nulla. Il
+  guardrail a 3 rami non cambia.
+
+### Verificato nel simulatore (iPhone 17 Pro, iOS 26.3, backend live Padova)
+- Seguito `REG 17231` per Venezia S.Lucia: isola compatta `18:41 | 5`; espansa con
+  `+5'` pieno e `BIN. 5` a contorno; Lock Screen con "letto 18:35".
+- **Staleness senza l'app**: con l'app in background, passata la `staleDate` la Lock
+  Screen è diventata "non aggiornato · letto 18:35" con chip e binario tratteggiati.
+- Treno senza ritardo: nessun elemento ritardo (non "0'").
+- Due correzioni visive trovate così: destinazione troncata sulla Lock Screen (ora fino a
+  due righe) e chip del ritardo contro l'angolo arrotondato dell'isola espansa.
+- **Non verificati dal vivo**: lo stato "non più sul tabellone" (richiede che RFI tolga
+  il treno durante l'osservazione; coperto dai test) e la resa desaturata della Lock
+  Screen (la gerarchia è costruita su forma e testo, non sul colore; va guardata sul
+  device).
+
+### Debito annotato, NON corretto in LA1: l'id riga porta la data del FETCH
+`supabase/functions/board/index.ts:248` compone l'id riga come
+`categoria-numero-<data del fetch, Europe/Rome>T<ora programmata>`. La data non è quella
+del servizio.
+- **Riproduzione** (dalla lettura del codice, non da un test): un treno delle 23:55 in
+  ritardo, letto alle 23:50 del 28/09, ha id `REG-17088-2026-09-28T23:55`. Riletto alle
+  00:01 del 29/09 è `REG-17088-2026-09-29T23:55`: **lo stesso treno cambia identità**.
+- **Conseguenza anche lato iOS**: `BackendBoardMapper.time` colloca l'orario `HH:mm` sul
+  giorno della lettura, quindi alle 00:01 quel treno delle 23:55 risulta **fra quasi 24
+  ore**. Finisce in fondo al tabellone ordinato e può sbagliare "prossimo treno" e
+  spotlight; tutto ciò che si aggancia all'id (selezione, transizioni) riparte da zero.
+- La Live Activity lo **aggira** con una chiave sua (stazione + numero + ora programmata),
+  che non contiene date. Il difetto resta dove vive; va trattato in un ticket dedicato.
+
+### Correzione di una premessa del piano
+Il piano diceva che l'header del tabellone usa "AGG." per lo stesso timestamp. **Falso**:
+sul percorso live (DEBUG/TestFlight) l'header mostra "Backend · RFI online" **senza
+orario**; "Aggiornato %@" compare solo con `.mock` e con l'adapter RFI diretto di DEBUG,
+e la chiave `label.updatedShort` ("AGG.") non è usata da nessuna view. L'allineamento
+"solo stringhe" approvato non è quindi applicabile: mostrare "letto HH:mm" nell'header
+live è una modifica di view. **Non fatto; decisione aperta.**
+
+### Altro
+- `BoardTheme.swift` spostato in `Binario1Shared/` (contenuto invariato);
+  `DelayVisualState` estratto da `DelayBadgeView.swift` nello stesso posto.
+- `NSSupportsLiveActivities` solo in `Config/Binario1-Info.plist` (Debug/TestFlight):
+  verificato sulle tre build, presente in Debug e TestFlight, **assente in Release**.
+- Durante la verifica il simulatore ha smesso di lanciare l'app (`simctl launch` in
+  timeout): stessa famiglia di flakiness già annotata, risolta con `simctl shutdown all`.
+
 ## 2026-09-01 — Ticket B4: 10 stazioni passeggeri erano escluse dalla ricerca (BUG IN PRODUZIONE)
 
 Stato: **corretto, suite verde 172/172** app test (erano 170: +3 nuovi, −1 sostituito),
@@ -3076,14 +3142,17 @@ Aggiornato al 2026-08-31, chiusura del B3-full. Questa sezione è in fondo di pr
   limite globale. Sufficiente per l'uso attuale, da rifare prima di un traffico serio.
 - **`updatedAt` del monitor non catturato** dal parser (gap noto e già asserito come
   tale nei test del backend).
+- **L'id riga porta la data del FETCH, non quella del servizio** (vedi LA1): a cavallo
+  di mezzanotte lo stesso treno cambia identità. La Live Activity lo aggira con una
+  chiave sua; il difetto resta dove vive, nel backend.
 
 ## Cosa viene dopo
 
-- **Widget e Live Activity.** I mockup **M1 sono approvati**; restano pendenti le
-  **4 correzioni M1-fix**. È il prossimo blocco di lavoro.
-  Nota: `00_PDR.md` elenca ancora widget e Live Activities fra i *non-obiettivi MVP* —
-  contraddizione reale da sanare quando si revisiona il PRD (vedi la proposta in coda
-  al ticket B3-full).
+- **Milestone 4 — Widget e Live Activity.** La Live Activity sul treno seguito è fatta
+  in LA1 (aggiornamenti solo locali, vedi la voce del 2026-09-28). Restano: **LA2**
+  (aggiornamenti push ActivityKit, motivato dal limite di prodotto scritto in
+  `12_DECISIONS.md`) e il **widget home screen**. `00_PDR.md` non elenca più widget e
+  Live Activities fra i non-obiettivi dal 2026-08-31.
 - **Osservabilità delle destinazioni non risolte** (proposta del C4, non implementata):
   contare nel blocco `diagnostics` le destinazioni che non agganciano alcuna entità del
   catalogo, così i `boardAliases` mancanti si ricavano dal traffico reale invece che per
