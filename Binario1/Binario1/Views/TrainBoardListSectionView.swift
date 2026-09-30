@@ -13,10 +13,14 @@ struct TrainBoardListSectionView: View {
     let boardType: BoardType
     var stationName: String = ""
     var selectedRowID: TrainBoardRow.ID?
-    /// Rows that can be followed as a Live Activity, and what tapping one does.
-    /// Empty / nil → rows are not tappable (previews, non-live sources).
-    var followableRowIDs: Set<TrainBoardRow.ID> = []
-    var onSelectRow: ((TrainBoardRow) -> Void)? = nil
+    /// What following a row would start, or nil when it cannot honestly be followed.
+    /// Nil closure → rows are not tappable (previews, non-live sources).
+    var followTarget: ((TrainBoardRow) -> FollowedTrainTarget?)? = nil
+    /// The one row currently showing the follow dialog (shared with the featured
+    /// section: only one dialog may be armed board-wide).
+    var followCandidate: Binding<FollowCandidate?> = .constant(nil)
+    var followTracker: FollowedTrainTracker? = nil
+    var onFollowError: () -> Void = {}
 
     /// "Tutte le partenze da Padova" / "Tutti gli arrivi a Padova" (uppercased by the
     /// section header). Falls back to the plain title when no station name is given.
@@ -36,7 +40,13 @@ struct TrainBoardListSectionView: View {
                         boardType: boardType,
                         isSelected: row.id == selectedRowID
                     )
-                    .followable(followableRowIDs.contains(row.id) ? onSelectRow.map { action in { action(row) } } : nil)
+                    .followableRow(
+                        anchorID: "list-\(row.id)",
+                        target: followTarget?(row),
+                        candidate: followCandidate,
+                        tracker: followTracker,
+                        onFollowError: onFollowError
+                    )
                     if index < rows.count - 1 {
                         Rectangle().fill(BoardColors.gridLine).frame(height: 1)
                     }

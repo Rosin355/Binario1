@@ -15,9 +15,13 @@ struct NextDeparturesSectionView: View {
     /// Optional title override (e.g. "Programmed departures" for an out-of-window
     /// scheduled demo). Defaults to the board's "Next departures/arrivals" title.
     var titleKey: LocalizedStringKey? = nil
-    /// Rows that can be followed as a Live Activity, and what tapping one does.
-    var followableRowIDs: Set<TrainBoardRow.ID> = []
-    var onSelectRow: ((TrainBoardRow) -> Void)? = nil
+    /// What following a row would start, or nil when it cannot honestly be followed.
+    var followTarget: ((TrainBoardRow) -> FollowedTrainTarget?)? = nil
+    /// The one row currently showing the follow dialog (shared with the full list:
+    /// only one dialog may be armed board-wide).
+    var followCandidate: Binding<FollowCandidate?> = .constant(nil)
+    var followTracker: FollowedTrainTracker? = nil
+    var onFollowError: () -> Void = {}
 
     var body: some View {
         if !rows.isEmpty {
@@ -31,7 +35,13 @@ struct NextDeparturesSectionView: View {
                             boardType: boardType,
                             isImminent: row.id == imminentRowID
                         )
-                        .followable(followableRowIDs.contains(row.id) ? onSelectRow.map { action in { action(row) } } : nil)
+                        .followableRow(
+                            anchorID: "featured-\(row.id)",
+                            target: followTarget?(row),
+                            candidate: followCandidate,
+                            tracker: followTracker,
+                            onFollowError: onFollowError
+                        )
                         if index < rows.count - 1 {
                             Rectangle()
                                 .fill(BoardColors.gridLine)

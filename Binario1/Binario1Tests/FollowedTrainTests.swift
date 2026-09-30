@@ -344,6 +344,41 @@ struct FollowedTrainTests {
         #expect(!it.isEmpty)
         #expect(it == (try keys("en")))
     }
+
+    /// LA1 regression, found on iPhone reale: the follow-dialog title used to be a
+    /// plain string interpolation passed straight to `confirmationDialog`, and Xcode's
+    /// String Catalog extraction picked up the LITERAL AT THE CALL SITE as both the
+    /// catalog KEY and its default value — `"%@ %@ · %@"`, Italian-only
+    /// (`"state": "new"`), never reaching English. A destination name is data, never a
+    /// lookup key. `followableRow` now types the title as an explicit `String` to
+    /// force the non-localized overload.
+    ///
+    /// This is a SOURCE-level check, not a build-artifact one, and deliberately so: a
+    /// first version of this test read the compiled `Localizable.strings` catalog for
+    /// the exact offending key. Reintroducing the bug and rebuilding proved that test
+    /// could never go red under `xcodebuild`: the Swift compiler DOES extract
+    /// `"%@ %@ · %@"` (confirmed in the intermediate `.stringsdata`, at the exact
+    /// line/column of the call), but the step that merges a fresh extraction into the
+    /// checked-in `Localizable.xcstrings` — and from there into the compiled catalog —
+    /// only runs inside the Xcode.app IDE, never under `xcodebuild`. A test that can
+    /// only fail when someone happens to build in Xcode.app first is not coverage;
+    /// removed (see `12_DECISIONS.md` / `11_PROGRESS.md`, LA1).
+    ///
+    /// This check reads the real source file instead (repo-relative from `#filePath`,
+    /// not a bundle resource): `confirmationDialog`'s title argument must be a named,
+    /// explicitly `String`-typed local, never an inline interpolation. Runs the same
+    /// under `xcodebuild test` as in Xcode.app, and DOES go red if the interpolation
+    /// is reintroduced — verified by reintroducing it, rebuilding, and confirming this
+    /// exact assertion failed (24 passed / 1 failed), then restoring it.
+    @Test func followDialogTitleComesFromAnExplicitlyTypedStringLocal() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // FollowedTrainTests.swift → Binario1Tests/
+            .deletingLastPathComponent()   // Binario1Tests/ → project root
+            .appendingPathComponent("Binario1/Views/FollowableRowModifier.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        #expect(source.contains("let title: String ="))
+        #expect(source.contains(".confirmationDialog(title, isPresented:"))
+    }
 }
 
 // MARK: - Test doubles

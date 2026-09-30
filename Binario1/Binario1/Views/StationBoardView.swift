@@ -25,8 +25,10 @@ struct StationBoardView: View {
     /// The Live Activity tracker, injected by `RootTabView`. Absent (previews) → rows
     /// are not followable.
     @Environment(FollowedTrainTracker.self) private var tracker: FollowedTrainTracker?
-    /// The row the user tapped, waiting for "segui / smetti di seguire".
-    @State private var followCandidate: FollowedTrainTarget?
+    /// The one row currently showing "segui / smetti di seguire", identified by row
+    /// INSTANCE (see `FollowCandidate`) so the dialog anchors to exactly the row
+    /// tapped and never arms twice when the same train appears in both sections.
+    @State private var followCandidate: FollowCandidate?
     @State private var showsFollowError = false
 
     var body: some View {
@@ -75,27 +77,11 @@ struct StationBoardView: View {
         .sheet(isPresented: $showsInfo) {
             InfoView()
         }
-        .confirmationDialog(
-            followCandidate.map { "\($0.attributes.category) \($0.attributes.trainNumber) · \($0.attributes.destination)" } ?? "",
-            isPresented: Binding(get: { followCandidate != nil }, set: { if !$0 { followCandidate = nil } }),
-            titleVisibility: .visible,
-            presenting: followCandidate
-        ) { target in
-            if tracker?.isFollowing(target) == true {
-                Button("follow.action.stop", role: .destructive) {
-                    Task { await tracker?.stopFollowing() }
-                }
-            } else {
-                Button("follow.action.follow") {
-                    Task {
-                        await tracker?.follow(target)
-                        if tracker?.startErrorKey != nil { showsFollowError = true }
-                    }
-                }
-            }
-        } message: { _ in
-            Text("follow.dialog.message")
-        }
+        // The follow confirmation dialog itself is attached PER ROW (see
+        // `.followableRow` below): a dialog attached here, at the container, anchors
+        // its popover to the whole screen rather than the tapped row (LA1 device
+        // finding). Only the error alert stays here — alerts are centered, not
+        // anchored, so the container is fine for it.
         .alert(Text(LocalizedStringKey(tracker?.startErrorKey ?? "follow.error.startFailed")),
                isPresented: $showsFollowError) {
             Button("action.ok", role: .cancel) {}
@@ -137,8 +123,10 @@ struct StationBoardView: View {
                     boardType: viewModel.boardType,
                     imminentRowID: viewModel.imminentRowID,
                     titleKey: LocalizedStringKey(viewModel.featuredTitleKey),
-                    followableRowIDs: followableRowIDs,
-                    onSelectRow: selectForFollow
+                    followTarget: tracker != nil ? { viewModel.followTarget(for: $0) } : nil,
+                    followCandidate: $followCandidate,
+                    followTracker: tracker,
+                    onFollowError: { showsFollowError = true }
                 )
 
                 TrainBoardListSectionView(
@@ -146,8 +134,10 @@ struct StationBoardView: View {
                     boardType: viewModel.boardType,
                     stationName: viewModel.station.displayName,
                     selectedRowID: viewModel.imminentRowID,
-                    followableRowIDs: followableRowIDs,
-                    onSelectRow: selectForFollow
+                    followTarget: tracker != nil ? { viewModel.followTarget(for: $0) } : nil,
+                    followCandidate: $followCandidate,
+                    followTracker: tracker,
+                    onFollowError: { showsFollowError = true }
                 )
             }
             .padding(.horizontal, 14)
@@ -156,16 +146,6 @@ struct StationBoardView: View {
         }
         .scrollIndicators(.hidden)
         .refreshable { await viewModel.refresh(force: true) }
-    }
-
-    /// Rows that can honestly be followed right now (fresh live departures only).
-    private var followableRowIDs: Set<TrainBoardRow.ID> {
-        guard tracker != nil else { return [] }
-        return Set(viewModel.rows.filter { viewModel.followTarget(for: $0) != nil }.map(\.id))
-    }
-
-    private func selectForFollow(_ row: TrainBoardRow) {
-        followCandidate = viewModel.followTarget(for: row)
     }
 
     private var loadingState: some View {
