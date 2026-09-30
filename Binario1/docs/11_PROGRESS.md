@@ -4,12 +4,17 @@ Cronologia sintetica delle milestone. Tenere conciso.
 
 ## 2026-09-28 — Ticket LA1: Live Activity sul treno seguito (Milestone 4)
 
-Stato: **implementato, suite verde: 195 app test + 3 UI test (205 esecuzioni)**. Prima
-del ticket: 172 app test + 3 UI test (182 esecuzioni); +23 test nuovi in
-`FollowedTrainTests.swift`. Solo iOS: **nessun `supabase/**`, nessuna CI**. Primo target
+Stato: **implementato, suite verde: 196 app test + 3 UI test (206 esecuzioni)**. Prima
+del ticket: 172 app test + 3 UI test (182 esecuzioni); +24 test nuovi in
+`FollowedTrainTests.swift` (23 dell'implementazione + 1 di regressione sul bug del
+titolo trovato in verifica). Solo iOS: **nessun `supabase/**`, nessuna CI**. Primo target
 nuovo del progetto (`Binario1LiveActivityExtension`, creato in Xcode dal template).
 Decisioni A/B/C e regole di design in `12_DECISIONS.md` ("Live Activity sul treno
 seguito").
+
+**Non esiste CI iOS**: l'unico workflow è il deploy della Supabase function (push su
+main, path `supabase/**`). Il gate del codice iOS è la suite completa locale verde sul
+commit finale.
 
 ### Cosa fa
 Tocco su una riga del tabellone **partenze live** → "Segui questo treno" → Dynamic Island
@@ -37,6 +42,52 @@ Il dialog dichiara il limite: "Si aggiornano solo mentre l'app è aperta".
   il treno durante l'osservazione; coperto dai test) e la resa desaturata della Lock
   Screen (la gerarchia è costruita su forma e testo, non sul colore; va guardata sul
   device).
+
+### Verifica su iPhone reale (28/09) e due difetti trovati e corretti
+
+Device test su iPhone reale il 28/09: Live Activity creata dal tabellone live di
+Padova, lock screen corretta (orario, categoria, numero, destinazione, binario, letto
+HH:mm). Stato stale verificato: lettura 19:17, alle 19:22 con telefono bloccato e app
+non in esecuzione la lock screen mostra "non aggiornato · letto 19:17" con box binario
+tratteggiato; orario programmato invariato. Trovati e corretti: dialog "Segui" ancorato
+al contenitore invece che alla riga; titolo del dialog trattato come chiave
+localizzata. **Ancoraggio confermato su iPhone reale** (non solo nel simulatore).
+
+- **Ancoraggio.** Il `.confirmationDialog` viveva su `StationBoardView.body` (il
+  contenitore in cima), quindi il suo popover veniva ancorato allo schermo intero, non
+  alla riga toccata — su device toccando `REG 17107` per Rovigo (quarta riga) la
+  freccia compariva sulla riga `20:09 Bologna`. Spostato riga per riga: ogni
+  `TrainBoardRowView`/`FeaturedTrainRowView` porta ora il proprio
+  `.confirmationDialog` (`followableRow(anchorID:target:candidate:tracker:onFollowError:)`
+  in `FollowableRowModifier.swift`), identificato da un `anchorID` per SEZIONE + id riga
+  (`FollowCandidate`), non solo per treno: la sezione "Prossime partenze" e "Tutte le
+  partenze" possono mostrare lo stesso treno in due righe fisiche quando lo spotlight è
+  personalizzato, e senza questa distinzione entrambe le copie si sarebbero armate
+  insieme. Verificato nel simulatore toccando una riga in alto, una al centro e una in
+  fondo alla lista (scorsa fino all'ultima voce): in tutti e tre i casi la freccia punta
+  esattamente alla riga toccata.
+  **Nota per il verificatore**: sul simulatore il dialog compare come **popover con
+  freccia**, non come action sheet a tutta larghezza — stesso comportamento osservato
+  su device, non una discrepanza simulatore/device.
+- **Titolo come chiave di localizzazione.** Il titolo era costruito con
+  un'interpolazione di stringa passata direttamente a `confirmationDialog`
+  (`"\(categoria) \(numero) · \(destinazione)"`), e l'estrazione di Xcode lo aveva
+  raccolto in `Localizable.xcstrings` come chiave-modello `"%@ %@ · %@"`, solo in
+  italiano (`"state": "new"`, mai raggiunta dall'inglese) — la destinazione di un treno
+  è un dato, non una chiave. Corretto dichiarando il titolo come `String` esplicita
+  (forza l'overload non localizzato di `confirmationDialog`, non serve
+  `Text(verbatim:)`).
+  **Il merge delle stringhe estratte nel catalogo avviene solo in Xcode.app, non con
+  `xcodebuild`: i test sul catalogo compilato non rilevano chiavi spurie.** Un primo
+  test leggeva `Localizable.strings` compilato e asseriva l'assenza della chiave
+  `"%@ %@ · %@"`; reintroducendo il bug e ricompilando con `xcodebuild`, quel test
+  restava verde — il compilatore Swift estrae davvero la chiave (confermato nello
+  `.stringsdata` intermedio, alla riga/colonna esatta della chiamata), ma il passaggio
+  che la fonde nel catalogo compilato gira solo dentro l'IDE. **Rimosso**: un test che
+  fallisce solo se si compila da Xcode.app non è copertura. Per le stringhe si usa
+  invece un **check sul sorgente** (`followDialogTitleComesFromAnExplicitlyTypedStringLocal`
+  in `FollowedTrainTests.swift`), verificato **rosso** col bug reintrodotto (24
+  passati, 1 fallito) e verde dopo il ripristino.
 
 ### Debito annotato, NON corretto in LA1: l'id riga porta la data del FETCH
 `supabase/functions/board/index.ts:248` compone l'id riga come
@@ -402,6 +453,12 @@ verde senza toccare una riga di codice.
 **Come distinguerlo da un rosso vero**: un fallimento di test riporta il nome del test e
 un conteggio di passati > 0; questo riporta 0 passati e 0 falliti. Se il conteggio è
 0/0, la diagnosi è l'ambiente — non cercare la causa nel diff.
+
+**Regola aggiunta in LA1, dopo un quasi-incidente**: un `xcodebuild test` interrotto a
+metà da uno shutdown del simulatore lascia il processo vivo ma orfano (nessun device
+booted sotto di sé), e il run successivo può competere per lo stesso device. **Un solo
+`xcodebuild test` alla volta; prima di un `simctl shutdown` verificare che nessun run
+sia in corso** (`ps aux | grep "xcodebuild test"`).
 
 ### Verifica campionaria sul monitor live (Passo 3)
 75 stazioni sondate (69 passeggeri + 6 punti operativi), stratificate su hub curati,
@@ -3157,6 +3214,8 @@ Aggiornato al 2026-08-31, chiusura del B3-full. Questa sezione è in fondo di pr
   ("Backend · RFI online" senza timestamp), mentre la Live Activity mostra "letto
   HH:mm". Allineare: stessa etichetta e stessa fonte del timestamp. Modifica a una
   view + stringhe, con test.
+- **CI iOS con `xcodebuild test` su GitHub Actions** (valutare costo runner macOS): oggi
+  non esiste, il gate è solo la suite locale sul commit finale.
 - **Osservabilità delle destinazioni non risolte** (proposta del C4, non implementata):
   contare nel blocco `diagnostics` le destinazioni che non agganciano alcuna entità del
   catalogo, così i `boardAliases` mancanti si ricavano dal traffico reale invece che per
